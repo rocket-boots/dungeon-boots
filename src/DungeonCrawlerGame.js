@@ -14,7 +14,7 @@ window.THREE = THREE;
 const { Vector3, Object3D } = THREE;
 const { Z } = ArrayCoords;
 const { PI } = Math;
-const TAU = PI * 2;
+// const TAU = PI * 2;
 
 const VISUAL_BLOCK_SIZE = 20;
 const HALF_BLOCK_SIZE = VISUAL_BLOCK_SIZE / 2;
@@ -109,7 +109,7 @@ class DungeonCrawlerGame {
 		let thing; // mesh, plane, sprite, etc.
 		let color;
 		if (block.texture) {
-			const imageUrl = `/images/${block.texture || 'zero.png'}`;
+			const imageUrl = `./images/${block.texture || 'zero.png'}`;
 			texture = new THREE.TextureLoader().load(imageUrl);
 			texture.magFilter = THREE.NearestFilter;
 			texture.minFilter = THREE.LinearMipMapLinearFilter;

@@ -6,18 +6,22 @@
   "type": "module",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "serve": "vite",
-    "build": "vite build"
+    "serve": "npx http-server",
+    "rollup": "rollup --config rollup.config.mjs",
+    "build": "npm run rollup",
+    "watch": "rollup --config rollup.config.mjs -w"
   },
   "author": "Luke Nickerson",
   "license": "MIT",
-  "devDependencies": {
-    "rocket-boots-eslint": "github:rocket-boots/rocket-boots-eslint",
-    "vite": "^4.2.1"
-  },
   "dependencies": {
     "keyboard-commander": "github:rocket-boots/keyboard-commander",
     "rocket-boots-three-toolbox": "github:rocket-boots/rocket-boots-three-toolbox",
     "three": "^0.150.1"
+  },
+  "devDependencies": {
+    "http-server": "^14.1.1",
+    "rocket-boots-eslint": "github:rocket-boots/rocket-boots-eslint",
+    "rollup": "^3.20.2",
+    "rollup-plugin-node-resolve": "^5.2.0"
   }
 }
