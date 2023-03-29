@@ -1,0 +1,19 @@
+body {
+	padding: 0;
+	margin: 0;
+	background: #333;
+	color: white;
+}
+
+main {
+	position: absolute;
+	z-index: 1;
+	width: 100vw;
+	height: 100vh;
+}
+
+#map {
+	white-space: pre;
+	font-family: 'Courier New', Courier, monospace;
+	color: rgba(255, 255, 255, 0.5);
+}
