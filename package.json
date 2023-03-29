@@ -1,0 +1,23 @@
+{
+  "name": "dungeon-boots",
+  "version": "0.1.0",
+  "description": "",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "serve": "vite",
+    "build": "vite build"
+  },
+  "author": "Luke Nickerson",
+  "license": "MIT",
+  "devDependencies": {
+    "rocket-boots-eslint": "github:rocket-boots/rocket-boots-eslint",
+    "vite": "^4.2.1"
+  },
+  "dependencies": {
+    "keyboard-commander": "github:rocket-boots/keyboard-commander",
+    "rocket-boots-three-toolbox": "github:rocket-boots/rocket-boots-three-toolbox",
+    "three": "^0.150.1"
+  }
+}
