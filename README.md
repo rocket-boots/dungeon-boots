@@ -18,7 +18,7 @@
 
 ## Try it out
 
-Example: https://rocket-boots.github.io/dungeon-boots/dist/
+Example: https://rocket-boots.github.io/dungeon-boots/
 
 ## Credits
 
