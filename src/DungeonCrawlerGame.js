@@ -109,7 +109,7 @@ class DungeonCrawlerGame {
 		let thing; // mesh, plane, sprite, etc.
 		let color;
 		if (block.texture) {
-			const imageUrl = `./images/${block.texture || 'zero.png'}`;
+			const imageUrl = `/images/${block.texture || 'zero.png'}`;
 			texture = new THREE.TextureLoader().load(imageUrl);
 			texture.magFilter = THREE.NearestFilter;
 			texture.minFilter = THREE.LinearMipMapLinearFilter;

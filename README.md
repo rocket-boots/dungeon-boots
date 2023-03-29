@@ -5,6 +5,7 @@
 
 1. Provide a framework to make quick games for jams such as annual The Dungeon Crawlers Jam
 	- Be web/JavaScript-based
+	- Be easy to modify, easily extendable
 2. Satisfy the Definition of a "Dungeon Crawler", aka. DRPG, as outlined here: https://www.dungeoncrawlers.org/definition/
 	- First-person exploration
 	- Grid-based
