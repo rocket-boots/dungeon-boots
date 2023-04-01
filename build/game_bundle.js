@@ -51044,7 +51044,7 @@
 	const WEST = 3;
 	const X = 0;
 	const Y = 1;
-	const Z$1 = 2;
+	const Z = 2;
 	const DIRECTION_NAMES = Object.freeze(['North', 'East', 'South', 'West']);
 	const DIRECTIONS = Object.freeze([NORTH, EAST, SOUTH, WEST]);
 	const RADIANS = Object.freeze([0, Math.PI * 0.5, Math.PI, Math.PI * 1.5]);
@@ -51065,7 +51065,7 @@
 			const strafeDirection = (facing === NORTH || facing === EAST) ? 1 : -1;
 			newCoords[forwardAxis] += (forward * forwardDirection);
 			newCoords[strafeAxis] += (strafe * strafeDirection);
-			newCoords[Z$1] += up;
+			newCoords[Z] += up;
 			return newCoords;
 		}
 
@@ -51088,7 +51088,7 @@
 	// Indices
 	ArrayCoords.X = X;
 	ArrayCoords.Y = Y;
-	ArrayCoords.Z = Z$1;
+	ArrayCoords.Z = Z;
 	ArrayCoords.NORTH = NORTH;
 	ArrayCoords.EAST = EAST;
 	ArrayCoords.SOUTH = SOUTH;
@@ -51096,10 +51096,16 @@
 	ArrayCoords.DIRECTIONS = DIRECTIONS;
 	window.ArrayCoords = ArrayCoords;
 
-	class PlayerCharacter {
-		constructor(player) {
-			this.player = player;
-			this.coords = [0, 0, 0];
+	class Actor {
+		constructor(blob, startAt = []) {
+			this.blob = blob;
+			const [mapKey, x, y, z] = startAt;
+			this.mapKey = mapKey;
+			this.coords = [x, y, z];
+		}
+
+		switchMap(mapKey) {
+			this.mapKey = mapKey;
 		}
 
 		moveTo(coords) {
@@ -51112,16 +51118,25 @@
 
 	const MAX_COMMAND_QUEUE_SIZE = 3;
 
-	/** A Player and the blob of characters they control */
-	class PlayerBlob {
-		constructor() {
+	/** A blob of characters that can interact with the world */
+	class ActorBlob {
+		constructor(ActorClass, startAt = []) {
 			this.blob = [
-				new PlayerCharacter(this),
+				new (ActorClass || Actor)(this, startAt),
 			];
 			this.facing = 0;
 			// Ready for next turn?
 			this.ready = false;
 			this.commandQueue = [];
+			this.blobId = Number(new Date()).toString(36) + Math.round(Math.random() * 99999).toString(36);
+		}
+
+		switchMap(mapKey) {
+			this.blob.forEach((pc) => pc.switchMap(mapKey));
+		}
+
+		getMapKey() {
+			return this.getLeader().mapKey;
 		}
 
 		getCoords() {
@@ -51170,6 +51185,19 @@
 		}
 	}
 
+	class PlayerCharacter extends Actor {
+		constructor(playerBlob, startAt = []) {
+			super(playerBlob, startAt);
+		}
+	}
+
+	/** A Player and the blob of characters they control */
+	class PlayerBlob extends ActorBlob {
+		constructor(startAt = []) {
+			super(PlayerCharacter, startAt);
+		}
+	}
+
 	// import { clamp } from 'three/src/math/mathutils.js';
 	const clamp = (v, min = 0, max = 1) => v < min ? min : v > max ? max : v;
 
@@ -51198,95 +51226,72 @@
 	};
 
 	class VoxelWorld {
-		constructor(world = {}, blockTypes) {
-			this.above = [
-				[
-					'###################',
-					'###################',
-					'###### ############',
-					'###################',
-					'###################',
-					'###################',
-					'########## ########',
-				],
-				[
-					'##########1########',
-					'###    ##| | #    #',
-					'#   #         ## #',
-					'# # #       ## ##C#',
-					'### ###C    ## #  #',
-					'###   ####        #',
-					'###################',
-				],
-				[
-					'##########2       #',
-					'################# #',
-					'########## ########',
-					'########## ########',
-					'###        ## ####',
-					'###   ####     ####',
-					'########## ########',
-				],
-			];
-			this.below = [
-				null,
-				[
-					'###################',
-					'###################',
-					'###### ############',
-					'###################',
-					'###################',
-					'###################',
-					'########## ########',
-				],
-			];
+		constructor(worldMaps = {}, blockTypes = {}) {
+			this.worldMaps = worldMaps;
 			this.beyondAbove = '#';
 			this.beyondBelow = '#';
 			this.blockTypes = blockTypes || DEFAULT_BLOCK_TYPES;
 		}
 
-		getFloor(z = 0) {
+		getWorldMap(mapKey) {
+			const worldMap = this.worldMaps[mapKey];
+			if (!worldMap) throw new Error(`No world map: ${mapKey}`);
+			// if (!(worldMap.map instanceof Array)) {
+			// throw new Error(`World map ${mapKey} does not contain 'map' array`);
+			// }
+			return worldMap;
+		}
+
+		getFloor(mapKey, z = 0) {
 			const isBelow = (z < 0);
 			// One array for +z, one for -z
-			const obj = (isBelow) ? this.below : this.above;
-			const zIndex = Math.abs(z);
-			return obj[zIndex];
+			const worldMap = this.getWorldMap(mapKey);
+			if (worldMap.below) {
+				const obj = (isBelow) ? worldMap.below : worldMap.above || worldMap.map;
+				const zIndex = Math.abs(z);
+				return obj[zIndex];
+			}
+			const obj = worldMap.above || worldMap.map;
+			if (z < 0) throw new Error(`Map ${mapKey} does not support below 0 z`);
+			return obj[z];
 		}
 
-		getFloorClone(z = 0) {
-			return JSON.parse(JSON.stringify(this.getFloor(z)));
+		getFloorClone(mapKey, z = 0) {
+			return JSON.parse(JSON.stringify(this.getFloor(mapKey, z)));
 		}
 
-		getFloorSize(z = 0) {
-			const floor = this.getFloor(z);
+		getFloorSize(mapKey, z = 0) {
+			const floor = this.getFloor(mapKey, z);
 			return [
 				floor[0].length, // Just look at the first row; assumes they're all the same
 				floor.length,
 			];
 		}
 
-		getFloorCenter(z = 0) {
-			const [maxX, maxY] = this.getFloorSize(z);
+		getFloorCenter(mapKey, z = 0) {
+			const [maxX, maxY] = this.getFloorSize(mapKey, z);
 			return [Math.floor(maxX / 2), Math.floor(maxY / 2)];
 		}
 
-		getFloorBlocks(z = 0) {
-			const floor = this.getFloor(z);
+		getFloorBlocks(mapKey, z = 0) {
+			const floor = this.getFloor(mapKey, z);
 			if (!floor) return [];
 			const blocks = [];
 			floor.forEach((row, y) => {
 				row.split('').forEach((char, x) => {
 					const coords = [x, y, z];
-					const block = this.getBlockByType(char, coords);
+					const block = this.getBlockByType(mapKey, char, coords);
 					blocks.push(block);
 				});
 			});
 			return blocks;
 		}
 
-		getBlockByType(char, coords) {
+		getBlockByType(mapKey, char, coords) {
 			// Look up the basic block type and copy it
-			const block = { ...this.blockTypes[char] };
+			const worldMap = this.getWorldMap(mapKey);
+			const { blockTypes } = worldMap;
+			const block = { ...blockTypes[char] };
 			// If provided coords, then copy those
 			if (coords) block.coords = [...coords];
 			// And then figure out some procedural values
@@ -51310,8 +51315,9 @@
 			return block;
 		}
 
-		getBeyondBlock(isBelow, coords) {
+		getBeyondBlock(mapKey, isBelow, coords) {
 			const block = this.getBlockByType(
+				mapKey,
 				isBelow ? this.beyondBelow : this.beyondAbove,
 				coords,
 			);
@@ -51319,31 +51325,38 @@
 			return block;
 		}
 
-		getBlock(coords) {
+		getBlock(mapKey, coords) {
 			const [x = 0, y = 0, z = 0] = coords;
 			const isBelow = (z < 0);
 			// x and y are effectively indices in an array, so they can't be negative
 			if (x < 0 || y < 0) {
-				return this.getBeyondBlock(isBelow, coords);
+				return this.getBeyondBlock(mapKey, isBelow, coords);
 			}
-			const floor = this.getFloor(z);
+			const floor = this.getFloor(mapKey, z);
 			if (!floor) { // If nothing defined for that z level
-				return this.getBeyondBlock(isBelow, coords);
+				return this.getBeyondBlock(mapKey, isBelow, coords);
 			}
 			const row = floor[y];
 			if (!row) {
-				return this.getBeyondBlock(isBelow, coords);
+				return this.getBeyondBlock(mapKey, isBelow, coords);
 			}
 			const blockChar = row.charAt(x);
 			if (!blockChar) {
-				return this.getBeyondBlock(isBelow, coords);
+				return this.getBeyondBlock(mapKey, isBelow, coords);
 			}
-			return this.getBlockByType(blockChar, coords);
+			return this.getBlockByType(mapKey, blockChar, coords);
 		}
 
-		getBlockAtMoveCoordinates(coords, facing, forward = 0, strafe = 0, up = 0) {
+		getBlockAtMoveCoordinates(mapKey, coords, facing, forward = 0, strafe = 0, up = 0) {
 			const newCoords = ArrayCoords.getRelativeCoordsInDirection(coords, facing, forward, strafe, up);
-			return this.getBlock(newCoords);
+			return this.getBlock(mapKey, newCoords);
+		}
+	}
+
+	/** A blob of NPCs */
+	class NpcBlob extends ActorBlob {
+		constructor(startAt = []) {
+			super(Actor, startAt);
 		}
 	}
 
@@ -51352,11 +51365,12 @@
 
 	window.THREE = THREE;
 	const { Vector3, Object3D } = THREE;
-	const { Z } = ArrayCoords;
+	// const { Z } = ArrayCoords;
 	const { PI } = Math;
 	// const TAU = PI * 2;
 
 	const VISUAL_BLOCK_SIZE = 20;
+	// const HALF_BLOCK_SIZE = VISUAL_BLOCK_SIZE / 2;
 
 	const KB_MAPPING = {
 		w: 'forward',
@@ -51372,8 +51386,11 @@
 
 	class DungeonCrawlerGame {
 		constructor(options = {}) {
-			this.world = new VoxelWorld({}, options.blockTypes);
+			this.worldMaps = options.worldMaps;
+			this.startAt = options.startAt;
+			this.world = new VoxelWorld(this.worldMaps, options.blockTypes);
 			this.players = [];
+			this.npcs = [];
 			this.mainPlayerIndex = 0;
 			this.kbCommander = new KeyboardCommander(KB_MAPPING);
 			this.round = 0;
@@ -51396,7 +51413,7 @@
 
 		// ----------------------------------- Rendering
 
-		convertMapToRenderingVector3(mapCoords) {
+		convertMapToRenderingVector3(mapCoords) { // eslint-disable-line class-methods-use-this
 			const [x = 0, y = 0, z = 0] = mapCoords;
 			return new Vector3(
 				x * VISUAL_BLOCK_SIZE,
@@ -51412,16 +51429,15 @@
 			return vec3;
 		}
 
-		setupRendering() {
-			this.renderer = new Renderer();
-			this.renderer.setClearColor(this.clearColor);
+		setupScene() {
 			this.scene = new Scene();
 			this.camera = this.makeCamera();
 			this.makeLight();
 			// this.orbitControls = new OrbitControls(this.camera, this.renderer.domElement);
 
 			// Test code
-			// const geometry = new THREE.BoxGeometry(VISUAL_BLOCK_SIZE, VISUAL_BLOCK_SIZE, VISUAL_BLOCK_SIZE);
+			// const geometry = new THREE.BoxGeometry(
+			// VISUAL_BLOCK_SIZE, VISUAL_BLOCK_SIZE, VISUAL_BLOCK_SIZE);
 			// const material = new THREE.MeshPhongMaterial({ color: '#433F81' }); // 0x44aa88 });
 			// const mesh = new THREE.Mesh(geometry, material);
 			// this.scene.add(mesh);
@@ -51431,13 +51447,20 @@
 			this.addMapBlocks();
 		}
 
+		setupRendering() {
+			this.renderer = new Renderer();
+			this.renderer.setClearColor(this.clearColor);
+			this.setupScene();
+		}
+
 		addMapBlocks() {
 			const p = this.getMainPlayer();
 			const coords = p.getCoords();
-			const [pX, pY, pZ] = coords;
-			const floorBlocks = this.world.getFloorBlocks(pZ)
-				.concat(this.world.getFloorBlocks(pZ - 1))
-				.concat(this.world.getFloorBlocks(pZ + 1));
+			const [, , pZ] = coords;
+			const mapKey = p.getMapKey();
+			const floorBlocks = this.world.getFloorBlocks(mapKey, pZ)
+				.concat(this.world.getFloorBlocks(mapKey, pZ - 1))
+				.concat(this.world.getFloorBlocks(mapKey, pZ + 1));
 			floorBlocks.forEach((block) => this.addMapBlock(block));
 		}
 
@@ -51458,7 +51481,11 @@
 				color = new Color(r, g, b);
 			}
 			if (block.renderAs === 'box') {
-				const geometry = new BoxGeometry(VISUAL_BLOCK_SIZE, VISUAL_BLOCK_SIZE, VISUAL_BLOCK_SIZE);
+				const geometry = new BoxGeometry(
+					VISUAL_BLOCK_SIZE,
+					VISUAL_BLOCK_SIZE,
+					VISUAL_BLOCK_SIZE,
+				);
 				const materialOptions = { color };
 				if (block.texture) materialOptions.map = texture;
 				const material = new MeshStandardMaterial(materialOptions);
@@ -51490,7 +51517,8 @@
 			const p = this.getMainPlayer();
 			const coords = p.getCoords();
 			const [x, y, z] = coords;
-			const floor = this.world.getFloorClone(z);
+			const mapKey = p.getMapKey();
+			const floor = this.world.getFloorClone(mapKey, z);
 			const row = floor[y];
 			if (row) {
 				const rowArray = row.split('');
@@ -51571,7 +51599,7 @@
 			// this.camera.position.y = y;
 		}
 
-		makeCamera() {
+		makeCamera() { // eslint-disable-line class-methods-use-this
 			// const FOV = 75;
 			const FOV = 105;
 			const camera = new PerspectiveCamera(FOV, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -51607,13 +51635,19 @@
 		}
 
 		/** Make a new player blob, which arrives in the middle of the map */
-		makeNewPlayer() {
-			const p = new PlayerBlob();
-			const coords = this.world.getFloorCenter(1);
-			coords[Z] = 1;
-			p.moveTo(coords);
+		makeNewPlayer(startAt = this.startAt) {
+			const p = new PlayerBlob(startAt);
+			// const coords = this.world.getFloorCenter(mapKey, 1);
+			// coords[Z] = 1;
+			// p.moveTo(coords);
 			this.players.push(p);
 			return p;
+		}
+
+		makeNewNpc(startAt = this.startAt) {
+			const n = new NpcBlob(startAt);
+			this.npcs.push(n);
+			return n;
 		}
 
 		/** Take inputs commands and queue them for the main player */
@@ -51624,6 +51658,7 @@
 
 		doPlayerCommand(playerBlob, command) {
 			if (!command) return;
+			const mapKey = playerBlob.getMapKey();
 			if (TURN_COMMANDS.includes(command)) {
 				playerBlob.turn((command === 'turnLeft') ? -1 : 1);
 				return;
@@ -51638,9 +51673,14 @@
 				else if (command === 'strafeRight') strafe = 1;
 				else if (command === 'ascend') up = 1;
 				else if (command === 'descend') up = -1;
-				console.log('Desired Move', playerBlob.facing, forward, strafe, up);
+				console.log('Desired Move:', mapKey, 'facing', playerBlob.facing, 'forward', forward, 'strafe', strafe, 'up', up);
 				const block = this.world.getBlockAtMoveCoordinates(
-					playerBlob.getCoords(), playerBlob.facing, forward, strafe, up,
+					mapKey,
+					playerBlob.getCoords(),
+					playerBlob.facing,
+					forward,
+					strafe,
+					up,
 				);
 				if (block.blocked) {
 					console.log('\tBlocked at', JSON.stringify(block.coords), block);
@@ -51648,8 +51688,13 @@
 				}
 				let moveToCoords = block.coords;
 				if (block.teleport) {
-					moveToCoords = [block.teleport[1], block.teleport[2], block.teleport[3]];
-					playerBlob.turnTo(block.teleport[4]);
+					const [destMapKey, x, y, z, turn] = block.teleport;
+					moveToCoords = [x, y, z];
+					playerBlob.turnTo(turn);
+					if (destMapKey !== mapKey) {
+						playerBlob.switchMap(destMapKey);
+						this.setupScene();
+					}
 				}
 				console.log('\tMoving to', JSON.stringify(moveToCoords), block);
 				playerBlob.moveTo(moveToCoords);
@@ -51736,16 +51781,93 @@
 		'C': { name: 'cyclops', blocked: 1, renderAs: 'plane', texture: 'cyclops_new.png' },
 		'1': {
 			...teleportDoor,
-			teleport: ['cells', 11, 0, 2, 1],
+			teleport: ['temple', 11, 0, 2, 1],
 		},
 		'2': {
 			...teleportDoor,
-			teleport: ['cells', 10, 1, 1, 2],
+			teleport: ['temple', 10, 1, 1, 2],
+		},
+		'3': {
+			...teleportDoor,
+			teleport: ['arena', 10, 1, 1, 2],
+		},
+		'4': {
+			...teleportDoor,
+			teleport: ['temple', 10, 5, 1, 0],
+		},
+	};
+
+	var worldMaps = {
+		temple: {
+			blockTypes: BLOCK_TYPES,
+			map: [
+				[
+					'###################',
+					'###################',
+					'###### ############',
+					'###################',
+					'###################',
+					'###################',
+					'########## ########',
+				],
+				[
+					'##########1########',
+					'###    ##| | #    #',
+					'#   #         ## #',
+					'# # #       ## ##C#',
+					'### ###C    ## #  #',
+					'###   ####        #',
+					'##########3########',
+				],
+				[
+					'##########2       #',
+					'################# #',
+					'########## ########',
+					'########## ########',
+					'###        ## ####',
+					'###   ####     ####',
+					'########## ########',
+				],
+			],
+		},
+		arena: {
+			blockTypes: BLOCK_TYPES,
+			map: [
+				[
+					'###################',
+					'###################',
+					'###################',
+					'###################',
+					'###################',
+					'###################',
+					'###################',
+				],
+				[
+					' #########4####### ',
+					'##|             |##',
+					'#   C             #',
+					'# # C          ##C#',
+					'### C          #  #',
+					'###      C   C   ##',
+					' ################# ',
+				],
+				[
+					' ################# ',
+					'###################',
+					'#                 #',
+					'#                 #',
+					'#                 #',
+					'#                 #',
+					' ################# ',
+				],
+			],
 		},
 	};
 
 	const game = new DungeonCrawlerGame({
 		blockTypes: BLOCK_TYPES,
+		worldMaps,
+		startAt: ['temple', 8, 4, 1],
 		clearColor: '#221100',
 	});
 	window.document.addEventListener('DOMContentLoaded', () => {

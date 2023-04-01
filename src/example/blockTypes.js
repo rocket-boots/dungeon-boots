@@ -31,11 +31,19 @@ const BLOCK_TYPES = {
 	'C': { name: 'cyclops', blocked: 1, renderAs: 'plane', texture: 'cyclops_new.png' },
 	'1': {
 		...teleportDoor,
-		teleport: ['cells', 11, 0, 2, 1],
+		teleport: ['temple', 11, 0, 2, 1],
 	},
 	'2': {
 		...teleportDoor,
-		teleport: ['cells', 10, 1, 1, 2],
+		teleport: ['temple', 10, 1, 1, 2],
+	},
+	'3': {
+		...teleportDoor,
+		teleport: ['arena', 10, 1, 1, 2],
+	},
+	'4': {
+		...teleportDoor,
+		teleport: ['temple', 10, 5, 1, 0],
 	},
 };
 

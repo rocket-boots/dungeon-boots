@@ -1,8 +1,11 @@
 import DungeonCrawlerGame from '../DungeonCrawlerGame.js';
 import blockTypes from './blockTypes.js';
+import worldMaps from './worldMaps.js';
 
 const game = new DungeonCrawlerGame({
 	blockTypes,
+	worldMaps,
+	startAt: ['temple', 8, 4, 1],
 	clearColor: '#221100',
 });
 window.document.addEventListener('DOMContentLoaded', () => {

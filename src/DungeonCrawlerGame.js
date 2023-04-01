@@ -1,6 +1,7 @@
 // External modules
 import * as THREE from 'three';
-import { Scene, PerspectiveCamera, Euler, Quaternion } from 'three';
+import { Scene, PerspectiveCamera } from 'three';
+// import { Scene, PerspectiveCamera, Euler, Quaternion } from 'three';
 // import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { KeyboardCommander } from 'keyboard-commander';
 import Renderer from 'rocket-boots-three-toolbox/src/Renderer.js';
@@ -8,16 +9,17 @@ import Renderer from 'rocket-boots-three-toolbox/src/Renderer.js';
 import ArrayCoords from './ArrayCoords.js';
 import PlayerBlob from './PlayerBlob.js';
 import VoxelWorld from './VoxelWorld.js';
+import NpcBlob from './NpcBlob.js';
 // import Renderer from './Renderer.js';
 
 window.THREE = THREE;
 const { Vector3, Object3D } = THREE;
-const { Z } = ArrayCoords;
+// const { Z } = ArrayCoords;
 const { PI } = Math;
 // const TAU = PI * 2;
 
 const VISUAL_BLOCK_SIZE = 20;
-const HALF_BLOCK_SIZE = VISUAL_BLOCK_SIZE / 2;
+// const HALF_BLOCK_SIZE = VISUAL_BLOCK_SIZE / 2;
 
 const KB_MAPPING = {
 	w: 'forward',
@@ -33,8 +35,11 @@ const MOVE_COMMANDS = ['forward', 'back', 'strafeLeft', 'strafeRight'];
 
 class DungeonCrawlerGame {
 	constructor(options = {}) {
-		this.world = new VoxelWorld({}, options.blockTypes);
+		this.worldMaps = options.worldMaps;
+		this.startAt = options.startAt;
+		this.world = new VoxelWorld(this.worldMaps, options.blockTypes);
 		this.players = [];
+		this.npcs = [];
 		this.mainPlayerIndex = 0;
 		this.kbCommander = new KeyboardCommander(KB_MAPPING);
 		this.round = 0;
@@ -57,7 +62,7 @@ class DungeonCrawlerGame {
 
 	// ----------------------------------- Rendering
 
-	convertMapToRenderingVector3(mapCoords) {
+	convertMapToRenderingVector3(mapCoords) { // eslint-disable-line class-methods-use-this
 		const [x = 0, y = 0, z = 0] = mapCoords;
 		return new Vector3(
 			x * VISUAL_BLOCK_SIZE,
@@ -73,16 +78,15 @@ class DungeonCrawlerGame {
 		return vec3;
 	}
 
-	setupRendering() {
-		this.renderer = new Renderer();
-		this.renderer.setClearColor(this.clearColor);
+	setupScene() {
 		this.scene = new Scene();
 		this.camera = this.makeCamera();
 		this.makeLight();
 		// this.orbitControls = new OrbitControls(this.camera, this.renderer.domElement);
 
 		// Test code
-		// const geometry = new THREE.BoxGeometry(VISUAL_BLOCK_SIZE, VISUAL_BLOCK_SIZE, VISUAL_BLOCK_SIZE);
+		// const geometry = new THREE.BoxGeometry(
+		// VISUAL_BLOCK_SIZE, VISUAL_BLOCK_SIZE, VISUAL_BLOCK_SIZE);
 		// const material = new THREE.MeshPhongMaterial({ color: '#433F81' }); // 0x44aa88 });
 		// const mesh = new THREE.Mesh(geometry, material);
 		// this.scene.add(mesh);
@@ -92,13 +96,20 @@ class DungeonCrawlerGame {
 		this.addMapBlocks();
 	}
 
+	setupRendering() {
+		this.renderer = new Renderer();
+		this.renderer.setClearColor(this.clearColor);
+		this.setupScene();
+	}
+
 	addMapBlocks() {
 		const p = this.getMainPlayer();
 		const coords = p.getCoords();
-		const [pX, pY, pZ] = coords;
-		const floorBlocks = this.world.getFloorBlocks(pZ)
-			.concat(this.world.getFloorBlocks(pZ - 1))
-			.concat(this.world.getFloorBlocks(pZ + 1));
+		const [, , pZ] = coords;
+		const mapKey = p.getMapKey();
+		const floorBlocks = this.world.getFloorBlocks(mapKey, pZ)
+			.concat(this.world.getFloorBlocks(mapKey, pZ - 1))
+			.concat(this.world.getFloorBlocks(mapKey, pZ + 1));
 		floorBlocks.forEach((block) => this.addMapBlock(block));
 	}
 
@@ -119,7 +130,11 @@ class DungeonCrawlerGame {
 			color = new THREE.Color(r, g, b);
 		}
 		if (block.renderAs === 'box') {
-			const geometry = new THREE.BoxGeometry(VISUAL_BLOCK_SIZE, VISUAL_BLOCK_SIZE, VISUAL_BLOCK_SIZE);
+			const geometry = new THREE.BoxGeometry(
+				VISUAL_BLOCK_SIZE,
+				VISUAL_BLOCK_SIZE,
+				VISUAL_BLOCK_SIZE,
+			);
 			const materialOptions = { color };
 			if (block.texture) materialOptions.map = texture;
 			const material = new THREE.MeshStandardMaterial(materialOptions);
@@ -151,7 +166,8 @@ class DungeonCrawlerGame {
 		const p = this.getMainPlayer();
 		const coords = p.getCoords();
 		const [x, y, z] = coords;
-		const floor = this.world.getFloorClone(z);
+		const mapKey = p.getMapKey();
+		const floor = this.world.getFloorClone(mapKey, z);
 		const row = floor[y];
 		if (row) {
 			const rowArray = row.split('');
@@ -232,7 +248,7 @@ class DungeonCrawlerGame {
 		// this.camera.position.y = y;
 	}
 
-	makeCamera() {
+	makeCamera() { // eslint-disable-line class-methods-use-this
 		// const FOV = 75;
 		const FOV = 105;
 		const camera = new PerspectiveCamera(FOV, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -268,13 +284,19 @@ class DungeonCrawlerGame {
 	}
 
 	/** Make a new player blob, which arrives in the middle of the map */
-	makeNewPlayer() {
-		const p = new PlayerBlob();
-		const coords = this.world.getFloorCenter(1);
-		coords[Z] = 1;
-		p.moveTo(coords);
+	makeNewPlayer(startAt = this.startAt) {
+		const p = new PlayerBlob(startAt);
+		// const coords = this.world.getFloorCenter(mapKey, 1);
+		// coords[Z] = 1;
+		// p.moveTo(coords);
 		this.players.push(p);
 		return p;
+	}
+
+	makeNewNpc(startAt = this.startAt) {
+		const n = new NpcBlob(startAt);
+		this.npcs.push(n);
+		return n;
 	}
 
 	/** Take inputs commands and queue them for the main player */
@@ -285,6 +307,7 @@ class DungeonCrawlerGame {
 
 	doPlayerCommand(playerBlob, command) {
 		if (!command) return;
+		const mapKey = playerBlob.getMapKey();
 		if (TURN_COMMANDS.includes(command)) {
 			playerBlob.turn((command === 'turnLeft') ? -1 : 1);
 			return;
@@ -299,9 +322,14 @@ class DungeonCrawlerGame {
 			else if (command === 'strafeRight') strafe = 1;
 			else if (command === 'ascend') up = 1;
 			else if (command === 'descend') up = -1;
-			console.log('Desired Move', playerBlob.facing, forward, strafe, up);
+			console.log('Desired Move:', mapKey, 'facing', playerBlob.facing, 'forward', forward, 'strafe', strafe, 'up', up);
 			const block = this.world.getBlockAtMoveCoordinates(
-				playerBlob.getCoords(), playerBlob.facing, forward, strafe, up,
+				mapKey,
+				playerBlob.getCoords(),
+				playerBlob.facing,
+				forward,
+				strafe,
+				up,
 			);
 			if (block.blocked) {
 				console.log('\tBlocked at', JSON.stringify(block.coords), block);
@@ -309,8 +337,13 @@ class DungeonCrawlerGame {
 			}
 			let moveToCoords = block.coords;
 			if (block.teleport) {
-				moveToCoords = [block.teleport[1], block.teleport[2], block.teleport[3]];
-				playerBlob.turnTo(block.teleport[4]);
+				const [destMapKey, x, y, z, turn] = block.teleport;
+				moveToCoords = [x, y, z];
+				playerBlob.turnTo(turn);
+				if (destMapKey !== mapKey) {
+					playerBlob.switchMap(destMapKey);
+					this.setupScene();
+				}
 			}
 			console.log('\tMoving to', JSON.stringify(moveToCoords), block);
 			playerBlob.moveTo(moveToCoords);

@@ -1,14 +1,8 @@
-class PlayerCharacter {
-	constructor(player) {
-		this.player = player;
-		this.coords = [0, 0, 0];
-	}
+import Actor from './Actor.js';
 
-	moveTo(coords) {
-		const [x, y, z] = coords;
-		if (typeof x === 'number') this.coords[0] = x;
-		if (typeof y === 'number') this.coords[1] = y;
-		if (typeof z === 'number') this.coords[2] = z;
+class PlayerCharacter extends Actor {
+	constructor(playerBlob, startAt = []) {
+		super(playerBlob, startAt);
 	}
 }
 
