@@ -18,7 +18,17 @@
 
 ## Try it out
 
+### Online
+
 Example: https://rocket-boots.github.io/dungeon-boots/
+
+### Locally
+
+1. Download the repo or git clone it
+2. `npm i`
+3. `npm run serve`
+4. Open in your browser (e.g., `http://192.168.1.162:8080/`)
+5. If you're making code changes, then build with `npm run watch` or `npm run build`
 
 ## Credits
 
