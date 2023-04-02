@@ -51097,15 +51097,78 @@
 	window.ArrayCoords = ArrayCoords;
 
 	class Actor {
-		constructor(blob, startAt = []) {
+		constructor(blob) {
 			this.blob = blob;
+		}
+	}
+
+	// import { clamp } from 'three/src/math/mathutils.js';
+	const clamp = (v, min = 0, max = 1) => v < min ? min : v > max ? max : v;
+
+	class PseudoRandomizer {
+		constructor(seed) {
+			this.seed = seed || Math.round(Math.random() * 9999);
+		}
+
+		static getPseudoRand(seed) {
+			// http://stackoverflow.com/a/19303725/1766230
+			const x = Math.sin(seed) * 10000;
+			return x - Math.floor(x);
+		}
+
+		random(n) {
+			this.seed += 1;
+			const r = PseudoRandomizer.getPseudoRand(this.seed);
+			if (n) return Math.floor(r * n);
+			return r;
+		}
+	}
+
+	/** A block entity is jjust something that exists at a space in the grid/voxel world */
+	class BlockEntity {
+		constructor(startAt = [], blockLegend = {}) {
 			const [mapKey, x, y, z] = startAt;
 			this.mapKey = mapKey;
 			this.coords = [x, y, z];
+			this.blockId = Number(new Date()).toString(36) + Math.round(Math.random() * 99999).toString(36);
+			// Properties from legend
+			this.name = blockLegend.name;
+			this.blocked = blockLegend.blocked || 0;
+			this.renderAs = blockLegend.renderAs;
+			this.texture = blockLegend.texture;
+			this.textureRange = blockLegend.textureRange;
+			this.npc = blockLegend.npc;
+			// Procedural (seed-based) randomness
+			let seed = this.coords[0] + this.coords[1] + this.coords[2];
+			const getBlockRand = () => {
+				seed += 1;
+				return PseudoRandomizer.getPseudoRand(seed);
+			};
+			// Modify color
+			if (this.color) {
+				const i = Math.floor(getBlockRand() * 3);
+				const alterColor = (getBlockRand() / 15) - (getBlockRand() / 15);
+				this.color[i] = clamp(this.color[i] + alterColor, 0, 1);
+			}
+			// Modify texture for texture range
+			if (this.texture && this.textureRange) {
+				const n = this.textureRange[1] - this.textureRange[0];
+				const textureNum = this.textureRange[0] + Math.floor(getBlockRand() * n);
+				this.texture = this.texture.replace('.', `${textureNum}.`);
+				// this.color = '#ffffff';
+			}
 		}
 
 		switchMap(mapKey) {
 			this.mapKey = mapKey;
+		}
+
+		getMapKey() {
+			return this.mapKey;
+		}
+
+		getCoords() {
+			return [...this.coords];
 		}
 
 		moveTo(coords) {
@@ -51114,33 +51177,28 @@
 			if (typeof y === 'number') this.coords[1] = y;
 			if (typeof z === 'number') this.coords[2] = z;
 		}
+
+		move(relativeCoords) {
+			const newCoords = [0, 1, 2].forEach((i) => this.coords[i] + relativeCoords[i]);
+			this.moveTo(newCoords);
+		}
 	}
 
 	const MAX_COMMAND_QUEUE_SIZE = 3;
 
 	/** A blob of characters that can interact with the world */
-	class ActorBlob {
-		constructor(ActorClass, startAt = []) {
+	class ActorBlob extends BlockEntity {
+		constructor(ActorClass, startAt = [], blockLegend = {}) {
+			super(startAt, blockLegend);
 			this.blob = [
-				new (ActorClass || Actor)(this, startAt),
+				new (ActorClass || Actor)(this),
 			];
+			this.isActorBlob = true;
 			this.facing = 0;
 			// Ready for next turn?
 			this.ready = false;
 			this.commandQueue = [];
 			this.blobId = Number(new Date()).toString(36) + Math.round(Math.random() * 99999).toString(36);
-		}
-
-		switchMap(mapKey) {
-			this.blob.forEach((pc) => pc.switchMap(mapKey));
-		}
-
-		getMapKey() {
-			return this.getLeader().mapKey;
-		}
-
-		getCoords() {
-			return [...this.getLeader().coords];
 		}
 
 		turn(n = 0) {
@@ -51168,18 +51226,6 @@
 			return this.blob[0];
 		}
 
-		moveTo(coords) {
-			this.blob.forEach((pc) => {
-				pc.moveTo(coords);
-			});
-		}
-
-		move(relativeCoords) {
-			const currentCoords = this.getLeader.coords;
-			const newCoords = [0, 1, 2].forEach((i) => currentCoords[i] + relativeCoords[i]);
-			this.moveTo(newCoords);
-		}
-
 		checkReady() {
 			return (this.commandQueue.length > 0);
 		}
@@ -51198,39 +51244,124 @@
 		}
 	}
 
-	// import { clamp } from 'three/src/math/mathutils.js';
-	const clamp = (v, min = 0, max = 1) => v < min ? min : v > max ? max : v;
-
-	class PseudoRandomizer {
-		constructor(seed) {
-			this.seed = seed || Math.round(Math.random() * 9999);
-		}
-
-		static getPseudoRand(seed) {
-			// http://stackoverflow.com/a/19303725/1766230
-			const x = Math.sin(seed) * 10000;
-			return x - Math.floor(x);
-		}
-
-		random(n) {
-			this.seed += 1;
-			const r = PseudoRandomizer.getPseudoRand(this.seed);
-			if (n) return Math.floor(r * n);
-			return r;
+	/** A blob of NPCs */
+	class NpcBlob extends ActorBlob {
+		constructor(startAt = [], blockLegend = {}) {
+			super(Actor, startAt, blockLegend);
+			this.isNpcBlob = true;
 		}
 	}
 
-	const DEFAULT_BLOCK_TYPES = {
-		' ': { name: 'clear', blocked: 0, renderAs: false },
-		'#': { name: 'stone', blocked: 1, renderAs: 'box', color: [0.8, 0.8, 0.7] },
-	};
+	class VoxelWorldMap {
+		constructor(mapKey, world, sourceMap = []) {
+			this.mapKey = mapKey;
+			this.world = world; // parent
+			this.sourceMap = sourceMap || world.sourceMaps[mapKey];
+			// console.log('Making', mapKey, 'from', this.sourceMap);
+			const { map, legend } = this.sourceMap;
+			this.originalMap = map;
+			this.legend = legend;
+			this.blocks = VoxelWorldMap.parseWorldMapToBlocks(mapKey, map, legend);
+			this.npcBlobs = this.blocks.filter((block) => block instanceof NpcBlob);
+		}
+
+		static parseWorldMapToBlocks(mapKey, map, legend) {
+			const blocks = [];
+			map.forEach((floor, z) => {
+				floor.forEach((row, y) => {
+					row.split('').forEach((char, x) => {
+						const startAt = [mapKey, x, y, z];
+						const blockLegend = legend[char];
+						// If it is called "clear", or it is not blocking and not being rendered,
+						// then it's not really a block.
+						if (blockLegend.name === 'clear' || (!blockLegend.renderAs && !blockLegend.blocked)) {
+							return;
+						}
+						const BlockClass = (blockLegend.npc) ? NpcBlob : BlockEntity;
+						const block = new BlockClass(startAt, blockLegend);
+						blocks.push(block);
+					});
+				});
+			});
+			return blocks;
+		}
+
+		getNearbyBlocks(coords = [], distance = []) {
+			const [nearX, nearY, nearZ] = coords;
+			const [dX, dY, dZ] = distance;
+			return this.blocks.filter((block) => {
+				if (block.mapKey !== this.mapKey) console.error('block has wrong mapKey', block, 'expecting', this.mapKey);
+				const [x, y, z] = block.coords;
+				return (
+					Math.abs(x - nearX) <= dX
+					&& Math.abs(y - nearY) <= dY
+					&& Math.abs(z - nearZ) <= dZ
+				);
+			});
+		}
+	}
+
+	// const DEFAULT_BLOCK_TYPES = {
+	// ' ': { name: 'clear', blocked: 0, renderAs: false },
+	// '#': { name: 'stone', blocked: 1, renderAs: 'box', color: [0.8, 0.8, 0.7] },
+	// };
 
 	class VoxelWorld {
-		constructor(worldMaps = {}, blockTypes = {}) {
-			this.worldMaps = worldMaps;
+		constructor(worldSourceMaps = {}) {
+			this.worldMaps = worldSourceMaps;
+			this.maps = VoxelWorld.parseSourceMapsToWorldMaps(worldSourceMaps, this);
+			// this.blocks = VoxelWorld.parseWorldMapsToBlocks(worldSourceMaps);
+			// this.blocksByMap = this.makeBlocksByMap();
 			this.beyondAbove = '#';
 			this.beyondBelow = '#';
-			this.blockTypes = blockTypes || DEFAULT_BLOCK_TYPES;
+		}
+
+		static parseSourceMapsToWorldMaps(worldSourceMaps, world) {
+			const maps = {};
+			Object.keys(worldSourceMaps).forEach((mapKey) => {
+				maps[mapKey] = new VoxelWorldMap(mapKey, world, worldSourceMaps[mapKey]);
+			});
+			return maps;
+		}
+
+		/*
+		static parseWorldMapsToBlocks(worldMaps) {
+			const blocks = [];
+			Object.keys(worldMaps).forEach((mapKey) => {
+				const { map, legend } = worldMaps[mapKey];
+				map.forEach((floor, z) => {
+					floor.forEach((row, y) => {
+						row.split('').forEach((char, x) => {
+							const startAt = [mapKey, x, y, z];
+							const blockLegend = legend[char];
+							// If it is called "clear", or it is not blocking and not being rendered,
+							// then it's not really a block.
+							if (blockLegend.name === 'clear' || (!blockLegend.renderAs && !blockLegend.blocked)) {
+								return;
+							}
+							const BlockClass = (blockLegend.npc) ? NpcBlob : BlockEntity;
+							const block = new BlockClass(startAt, blockLegend);
+							blocks.push(block);
+						});
+					});
+				});
+			});
+			return blocks;
+		}
+
+		makeBlocksByMap() {
+			const maps = {};
+			this.blocks.forEach((block) => {
+				const { mapKey } = block;
+				if (!maps[mapKey]) maps[mapKey] = [];
+				maps[mapKey].push(block);
+			});
+			return maps;
+		}
+		*/
+
+		getMap(mapKey) {
+			return this.maps[mapKey];
 		}
 
 		getWorldMap(mapKey) {
@@ -51290,8 +51421,8 @@
 		getBlockByType(mapKey, char, coords) {
 			// Look up the basic block type and copy it
 			const worldMap = this.getWorldMap(mapKey);
-			const { blockTypes } = worldMap;
-			const block = { ...blockTypes[char] };
+			const { legend } = worldMap;
+			const block = { ...legend[char] };
 			// If provided coords, then copy those
 			if (coords) block.coords = [...coords];
 			// And then figure out some procedural values
@@ -51353,13 +51484,6 @@
 		}
 	}
 
-	/** A blob of NPCs */
-	class NpcBlob extends ActorBlob {
-		constructor(startAt = []) {
-			super(Actor, startAt);
-		}
-	}
-
 	// External modules
 	// import Renderer from './Renderer.js';
 
@@ -51379,6 +51503,7 @@
 		d: 'strafeRight',
 		q: 'turnLeft',
 		e: 'turnRight',
+		' ': 'wait',
 	};
 
 	const TURN_COMMANDS = ['turnLeft', 'turnRight'];
@@ -51386,11 +51511,10 @@
 
 	class DungeonCrawlerGame {
 		constructor(options = {}) {
-			this.worldMaps = options.worldMaps;
+			this.worldSourceMaps = options.worldMaps;
 			this.startAt = options.startAt;
-			this.world = new VoxelWorld(this.worldMaps, options.blockTypes);
+			this.world = new VoxelWorld(this.worldSourceMaps);
 			this.players = [];
-			this.npcs = [];
 			this.mainPlayerIndex = 0;
 			this.kbCommander = new KeyboardCommander(KB_MAPPING);
 			this.round = 0;
@@ -51456,11 +51580,12 @@
 		addMapBlocks() {
 			const p = this.getMainPlayer();
 			const coords = p.getCoords();
-			const [, , pZ] = coords;
+			// const [, , pZ] = coords;
 			const mapKey = p.getMapKey();
-			const floorBlocks = this.world.getFloorBlocks(mapKey, pZ)
-				.concat(this.world.getFloorBlocks(mapKey, pZ - 1))
-				.concat(this.world.getFloorBlocks(mapKey, pZ + 1));
+			// const floorBlocks = this.world.getFloorBlocks(mapKey, pZ)
+			// 	.concat(this.world.getFloorBlocks(mapKey, pZ - 1))
+			// 	.concat(this.world.getFloorBlocks(mapKey, pZ + 1));
+			const floorBlocks = this.world.getMap(mapKey).getNearbyBlocks(coords, [10, 10, 4]);
 			floorBlocks.forEach((block) => this.addMapBlock(block));
 		}
 
@@ -51755,7 +51880,7 @@
 		renderAs: 'box',
 		texture: 'runed_door.png',
 	};
-	const BLOCK_TYPES = {
+	const legend = {
 		' ': {
 			name: 'clear', blocked: 0, renderAs: false,
 		},
@@ -51778,7 +51903,13 @@
 		'S': {
 			name: 'cyclops', blocked: 1, renderAs: 'sprite', texture: 'cyclops_new.png',
 		},
-		'C': { name: 'cyclops', blocked: 1, renderAs: 'plane', texture: 'cyclops_new.png' },
+		'C': {
+			name: 'cyclops',
+			blocked: 1,
+			renderAs: 'plane',
+			texture: 'cyclops_new.png',
+			npc: 'monster',
+		},
 		'1': {
 			...teleportDoor,
 			teleport: ['temple', 11, 0, 2, 1],
@@ -51799,7 +51930,7 @@
 
 	var worldMaps = {
 		temple: {
-			blockTypes: BLOCK_TYPES,
+			legend,
 			map: [
 				[
 					'###################',
@@ -51831,7 +51962,7 @@
 			],
 		},
 		arena: {
-			blockTypes: BLOCK_TYPES,
+			legend,
 			map: [
 				[
 					'###################',
@@ -51865,7 +51996,6 @@
 	};
 
 	const game = new DungeonCrawlerGame({
-		blockTypes: BLOCK_TYPES,
 		worldMaps,
 		startAt: ['temple', 8, 4, 1],
 		clearColor: '#221100',

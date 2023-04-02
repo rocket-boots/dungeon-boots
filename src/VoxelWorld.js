@@ -1,18 +1,72 @@
 import clamp from 'rocket-boots-three-toolbox/src/clamp.js';
+
+import VoxelWorldMap from './VoxelWorldMap.js';
+// import BlockEntity from './BlockEntity.js';
+// import NpcBlob from './NpcBlob.js';
 import PseudoRandomizer from './PseudoRandomizer.js';
 import ArrayCoords from './ArrayCoords.js';
 
-const DEFAULT_BLOCK_TYPES = {
-	' ': { name: 'clear', blocked: 0, renderAs: false },
-	'#': { name: 'stone', blocked: 1, renderAs: 'box', color: [0.8, 0.8, 0.7] },
-};
+// const DEFAULT_BLOCK_TYPES = {
+// ' ': { name: 'clear', blocked: 0, renderAs: false },
+// '#': { name: 'stone', blocked: 1, renderAs: 'box', color: [0.8, 0.8, 0.7] },
+// };
 
 class VoxelWorld {
-	constructor(worldMaps = {}, blockTypes = {}) {
-		this.worldMaps = worldMaps;
+	constructor(worldSourceMaps = {}) {
+		this.worldMaps = worldSourceMaps;
+		this.maps = VoxelWorld.parseSourceMapsToWorldMaps(worldSourceMaps, this);
+		// this.blocks = VoxelWorld.parseWorldMapsToBlocks(worldSourceMaps);
+		// this.blocksByMap = this.makeBlocksByMap();
 		this.beyondAbove = '#';
 		this.beyondBelow = '#';
-		this.blockTypes = blockTypes || DEFAULT_BLOCK_TYPES;
+	}
+
+	static parseSourceMapsToWorldMaps(worldSourceMaps, world) {
+		const maps = {};
+		Object.keys(worldSourceMaps).forEach((mapKey) => {
+			maps[mapKey] = new VoxelWorldMap(mapKey, world, worldSourceMaps[mapKey]);
+		});
+		return maps;
+	}
+
+	/*
+	static parseWorldMapsToBlocks(worldMaps) {
+		const blocks = [];
+		Object.keys(worldMaps).forEach((mapKey) => {
+			const { map, legend } = worldMaps[mapKey];
+			map.forEach((floor, z) => {
+				floor.forEach((row, y) => {
+					row.split('').forEach((char, x) => {
+						const startAt = [mapKey, x, y, z];
+						const blockLegend = legend[char];
+						// If it is called "clear", or it is not blocking and not being rendered,
+						// then it's not really a block.
+						if (blockLegend.name === 'clear' || (!blockLegend.renderAs && !blockLegend.blocked)) {
+							return;
+						}
+						const BlockClass = (blockLegend.npc) ? NpcBlob : BlockEntity;
+						const block = new BlockClass(startAt, blockLegend);
+						blocks.push(block);
+					});
+				});
+			});
+		});
+		return blocks;
+	}
+
+	makeBlocksByMap() {
+		const maps = {};
+		this.blocks.forEach((block) => {
+			const { mapKey } = block;
+			if (!maps[mapKey]) maps[mapKey] = [];
+			maps[mapKey].push(block);
+		});
+		return maps;
+	}
+	*/
+
+	getMap(mapKey) {
+		return this.maps[mapKey];
 	}
 
 	getWorldMap(mapKey) {
@@ -72,8 +126,8 @@ class VoxelWorld {
 	getBlockByType(mapKey, char, coords) {
 		// Look up the basic block type and copy it
 		const worldMap = this.getWorldMap(mapKey);
-		const { blockTypes } = worldMap;
-		const block = { ...blockTypes[char] };
+		const { legend } = worldMap;
+		const block = { ...legend[char] };
 		// If provided coords, then copy those
 		if (coords) block.coords = [...coords];
 		// And then figure out some procedural values

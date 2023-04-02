@@ -5,7 +5,7 @@ const teleportDoor = {
 	renderAs: 'box',
 	texture: 'runed_door.png',
 };
-const BLOCK_TYPES = {
+const legend = {
 	' ': {
 		name: 'clear', blocked: 0, renderAs: false,
 	},
@@ -28,7 +28,13 @@ const BLOCK_TYPES = {
 	'S': {
 		name: 'cyclops', blocked: 1, renderAs: 'sprite', texture: 'cyclops_new.png',
 	},
-	'C': { name: 'cyclops', blocked: 1, renderAs: 'plane', texture: 'cyclops_new.png' },
+	'C': {
+		name: 'cyclops',
+		blocked: 1,
+		renderAs: 'plane',
+		texture: 'cyclops_new.png',
+		npc: 'monster',
+	},
 	'1': {
 		...teleportDoor,
 		teleport: ['temple', 11, 0, 2, 1],
@@ -47,4 +53,4 @@ const BLOCK_TYPES = {
 	},
 };
 
-export default BLOCK_TYPES;
+export default legend;

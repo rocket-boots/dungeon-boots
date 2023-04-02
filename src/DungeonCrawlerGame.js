@@ -28,6 +28,7 @@ const KB_MAPPING = {
 	d: 'strafeRight',
 	q: 'turnLeft',
 	e: 'turnRight',
+	' ': 'wait',
 };
 
 const TURN_COMMANDS = ['turnLeft', 'turnRight'];
@@ -35,11 +36,10 @@ const MOVE_COMMANDS = ['forward', 'back', 'strafeLeft', 'strafeRight'];
 
 class DungeonCrawlerGame {
 	constructor(options = {}) {
-		this.worldMaps = options.worldMaps;
+		this.worldSourceMaps = options.worldMaps;
 		this.startAt = options.startAt;
-		this.world = new VoxelWorld(this.worldMaps, options.blockTypes);
+		this.world = new VoxelWorld(this.worldSourceMaps);
 		this.players = [];
-		this.npcs = [];
 		this.mainPlayerIndex = 0;
 		this.kbCommander = new KeyboardCommander(KB_MAPPING);
 		this.round = 0;
@@ -105,11 +105,12 @@ class DungeonCrawlerGame {
 	addMapBlocks() {
 		const p = this.getMainPlayer();
 		const coords = p.getCoords();
-		const [, , pZ] = coords;
+		// const [, , pZ] = coords;
 		const mapKey = p.getMapKey();
-		const floorBlocks = this.world.getFloorBlocks(mapKey, pZ)
-			.concat(this.world.getFloorBlocks(mapKey, pZ - 1))
-			.concat(this.world.getFloorBlocks(mapKey, pZ + 1));
+		// const floorBlocks = this.world.getFloorBlocks(mapKey, pZ)
+		// 	.concat(this.world.getFloorBlocks(mapKey, pZ - 1))
+		// 	.concat(this.world.getFloorBlocks(mapKey, pZ + 1));
+		const floorBlocks = this.world.getMap(mapKey).getNearbyBlocks(coords, [10, 10, 4]);
 		floorBlocks.forEach((block) => this.addMapBlock(block));
 	}
 

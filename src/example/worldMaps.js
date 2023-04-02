@@ -1,8 +1,8 @@
-import blockTypes from './blockTypes.js';
+import legend from './legend.js';
 
 export default {
 	temple: {
-		blockTypes,
+		legend,
 		map: [
 			[
 				'###################',
@@ -34,7 +34,7 @@ export default {
 		],
 	},
 	arena: {
-		blockTypes,
+		legend,
 		map: [
 			[
 				'###################',

@@ -1,31 +1,22 @@
 import ArrayCoords from './ArrayCoords.js';
 import Actor from './Actor.js';
+import BlockEntity from './BlockEntity.js';
 
 const MAX_COMMAND_QUEUE_SIZE = 3;
 
 /** A blob of characters that can interact with the world */
-class ActorBlob {
-	constructor(ActorClass, startAt = []) {
+class ActorBlob extends BlockEntity {
+	constructor(ActorClass, startAt = [], blockLegend = {}) {
+		super(startAt, blockLegend);
 		this.blob = [
-			new (ActorClass || Actor)(this, startAt),
+			new (ActorClass || Actor)(this),
 		];
+		this.isActorBlob = true;
 		this.facing = 0;
 		// Ready for next turn?
 		this.ready = false;
 		this.commandQueue = [];
 		this.blobId = Number(new Date()).toString(36) + Math.round(Math.random() * 99999).toString(36);
-	}
-
-	switchMap(mapKey) {
-		this.blob.forEach((pc) => pc.switchMap(mapKey));
-	}
-
-	getMapKey() {
-		return this.getLeader().mapKey;
-	}
-
-	getCoords() {
-		return [...this.getLeader().coords];
 	}
 
 	turn(n = 0) {
@@ -51,18 +42,6 @@ class ActorBlob {
 
 	getLeader() {
 		return this.blob[0];
-	}
-
-	moveTo(coords) {
-		this.blob.forEach((pc) => {
-			pc.moveTo(coords);
-		});
-	}
-
-	move(relativeCoords) {
-		const currentCoords = this.getLeader.coords;
-		const newCoords = [0, 1, 2].forEach((i) => currentCoords[i] + relativeCoords[i]);
-		this.moveTo(newCoords);
 	}
 
 	checkReady() {

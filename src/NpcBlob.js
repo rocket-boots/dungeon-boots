@@ -3,8 +3,9 @@ import Actor from './Actor.js';
 
 /** A blob of NPCs */
 class NpcBlob extends ActorBlob {
-	constructor(startAt = []) {
-		super(Actor, startAt);
+	constructor(startAt = [], blockLegend = {}) {
+		super(Actor, startAt, blockLegend);
+		this.isNpcBlob = true;
 	}
 }
 
