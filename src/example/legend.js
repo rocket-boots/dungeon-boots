@@ -17,6 +17,13 @@ const legend = {
 		texture: 'catacombs_.png',
 		textureRange: [1, 11],
 	},
+	'&': {
+		name: 'brick',
+		blocked: 1,
+		renderAs: 'box',
+		color: [0.8, 0.8, 0.7],
+		texture: 'bricks.png',
+	},
 	'|': {
 		name: 'crumbled_column',
 		blocked: 1,
