@@ -1,3 +1,4 @@
+import ArrayCoords from './ArrayCoords.js';
 import BlockEntity from './BlockEntity.js';
 import NpcBlob from './NpcBlob.js';
 
@@ -47,6 +48,14 @@ class VoxelWorldMap {
 				&& Math.abs(z - nearZ) <= dZ
 			);
 		});
+	}
+
+	getBlocksAtCoords(coords = []) {
+		return this.blocks.filter((block) => ArrayCoords.checkEqual(block.coords, coords));
+	}
+
+	getNpcs() {
+		return this.blocks.filter((block) => block.isNpcBlob);
 	}
 }
 

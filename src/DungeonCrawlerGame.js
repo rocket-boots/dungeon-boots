@@ -14,7 +14,7 @@ import NpcBlob from './NpcBlob.js';
 
 window.THREE = THREE;
 const { Vector3, Object3D } = THREE;
-// const { Z } = ArrayCoords;
+const { Z } = ArrayCoords;
 const { PI } = Math;
 // const TAU = PI * 2;
 
@@ -29,10 +29,18 @@ const KB_MAPPING = {
 	q: 'turnLeft',
 	e: 'turnRight',
 	' ': 'wait',
+	m: 'map',
 };
 
 const TURN_COMMANDS = ['turnLeft', 'turnRight'];
 const MOVE_COMMANDS = ['forward', 'back', 'strafeLeft', 'strafeRight'];
+
+const $ = (selector) => {
+	const elt = window.document.querySelector(selector);
+	if (!elt) console.warn('Could not find', selector);
+	return elt;
+};
+window.$ = $;
 
 class DungeonCrawlerGame {
 	constructor(options = {}) {
@@ -44,7 +52,9 @@ class DungeonCrawlerGame {
 		this.kbCommander = new KeyboardCommander(KB_MAPPING);
 		this.round = 0;
 		this.isStopped = true;
+		this.mapView = false;
 		// Rendering properties
+		this.miniMapOn = false;
 		this.clearColor = options.clearColor || '#77bbff';
 		this.renderer = null;
 		this.scene = null;
@@ -53,11 +63,30 @@ class DungeonCrawlerGame {
 		// this.mainPlayerPositionCurrent = new Vector3();
 		// this.mainPlayerPositionGoal = new Vector3();
 		this.camera = null;
-		this.cameraZOffset = 0; // TODO: why negative for "above"?
+		this.cameraZOffset = -1; // TODO: why negative for "above"?
+		this.cameraZMapOffset = -80;
 		this.cameraGoal = new Object3D();
 		this.cameraCurrent = new Object3D();
 		this.lookGoal = new Vector3();
 		this.lookCurrent = new Vector3();
+		this.blocksAboveGroup = new THREE.Group();
+		this.blocksAtOrBelowGroup = new THREE.Group();
+		this.blockSceneObjectMapping = {};
+	}
+
+	/** The main player is the active player (allows ability to pass-and-play and multiple player) */
+	getMainPlayer() {
+		return this.players[this.mainPlayerIndex];
+	}
+
+	getNpcs() {
+		return this.getMainPlayerMap().getNpcs();
+	}
+
+	getMainPlayerMap() {
+		const p = this.getMainPlayer();
+		const mapKey = p.getMapKey();
+		return this.world.getMap(mapKey);
 	}
 
 	// ----------------------------------- Rendering
@@ -93,6 +122,7 @@ class DungeonCrawlerGame {
 		// const axesHelper = new THREE.AxesHelper(5);
 		// this.scene.add(axesHelper);
 
+		this.blockSceneObjectMapping = {};
 		this.addMapBlocks();
 	}
 
@@ -105,20 +135,27 @@ class DungeonCrawlerGame {
 	addMapBlocks() {
 		const p = this.getMainPlayer();
 		const coords = p.getCoords();
-		// const [, , pZ] = coords;
-		const mapKey = p.getMapKey();
+		const [, , pZ] = coords;
+		// const mapKey = p.getMapKey();
 		// const floorBlocks = this.world.getFloorBlocks(mapKey, pZ)
 		// 	.concat(this.world.getFloorBlocks(mapKey, pZ - 1))
 		// 	.concat(this.world.getFloorBlocks(mapKey, pZ + 1));
-		const floorBlocks = this.world.getMap(mapKey).getNearbyBlocks(coords, [10, 10, 4]);
-		floorBlocks.forEach((block) => this.addMapBlock(block));
+		const floorBlocks = this.getMainPlayerMap().getNearbyBlocks(coords, [10, 10, 4]);
+		this.blocksAboveGroup = new THREE.Group();
+		this.blocksAtOrBelowGroup = new THREE.Group();
+		this.scene.add(this.blocksAboveGroup);
+		this.scene.add(this.blocksAtOrBelowGroup);
+		floorBlocks.forEach((block) => {
+			const group = (block.coords[Z] > pZ) ? this.blocksAboveGroup : this.blocksAtOrBelowGroup;
+			this.addMapBlock(block, group);
+		});
 	}
 
-	addMapBlock(block) {
+	addMapBlock(block, group) {
 		if (!block.renderAs) return;
 		const [x, y, z] = block.coords;
 		let texture;
-		let thing; // mesh, plane, sprite, etc.
+		let sceneObj; // mesh, plane, sprite, etc.
 		let color;
 		if (block.texture) {
 			const imageUrl = `./images/${block.texture || 'zero.png'}`;
@@ -136,15 +173,16 @@ class DungeonCrawlerGame {
 				VISUAL_BLOCK_SIZE,
 				VISUAL_BLOCK_SIZE,
 			);
-			const materialOptions = { color };
+			const materialOptions = {};
+			if (color) materialOptions.color = color;
 			if (block.texture) materialOptions.map = texture;
 			const material = new THREE.MeshStandardMaterial(materialOptions);
-			thing = new THREE.Mesh(geometry, material);
+			sceneObj = new THREE.Mesh(geometry, material);
 		} else if (block.renderAs === 'sprite') {
 			const material = new THREE.SpriteMaterial({ map: texture });
 			const sprite = new THREE.Sprite(material);
 			sprite.scale.set(VISUAL_BLOCK_SIZE, VISUAL_BLOCK_SIZE, VISUAL_BLOCK_SIZE);
-			thing = sprite;
+			sceneObj = sprite;
 		} else if (block.renderAs === 'plane') {
 			const geometry = new THREE.PlaneGeometry(18, 18);
 			const material = new THREE.MeshStandardMaterial({
@@ -155,12 +193,33 @@ class DungeonCrawlerGame {
 			});
 			const plane = new THREE.Mesh(geometry, material);
 			this.autoFacingObjects.push(plane);
-			thing = plane;
+			sceneObj = plane;
 		}
-		if (thing) {
-			thing.position.set(x * VISUAL_BLOCK_SIZE, y * VISUAL_BLOCK_SIZE, -z * VISUAL_BLOCK_SIZE);
-			this.scene.add(thing);
+		if (sceneObj) {
+			this.blockSceneObjectMapping[block.blockId] = sceneObj;
+			sceneObj.position.set(x * VISUAL_BLOCK_SIZE, y * VISUAL_BLOCK_SIZE, -z * VISUAL_BLOCK_SIZE);
+			if (group) group.add(sceneObj);
+			else this.scene.add(sceneObj);
+		} else {
+			console.warn('No scene object to render');
 		}
+	}
+
+	updateBlockPosition(block, t = 0.1) {
+		const [x, y, z] = block.coords;
+		const sceneObject = this.blockSceneObjectMapping[block.blockId];
+		// sceneObject.iterimPos = new Vector3();
+		const goalPos = new Vector3(
+			x * VISUAL_BLOCK_SIZE,
+			y * VISUAL_BLOCK_SIZE,
+			-z * VISUAL_BLOCK_SIZE,
+		);
+		const q = 1.0 - (0.24 ** t); // This q & lerp logic is from simondev
+		// sceneObject.iterimPos.lerp(goalPos, q);
+		// sceneObject.position.copy(sceneObject.iterimPos);
+		sceneObject.position.lerp(goalPos, q);
+		// To do it instantly:
+		// sceneObject.position.copy(goalPos);
 	}
 
 	getWorldTextRows() {
@@ -175,7 +234,6 @@ class DungeonCrawlerGame {
 			rowArray.splice(x, 1, '@');
 			floor[y] = rowArray.join('');
 		}
-		floor.push(`Direction: ${ArrayCoords.getDirectionName(p.facing)}`);
 		return floor;
 	}
 
@@ -183,8 +241,9 @@ class DungeonCrawlerGame {
 		// Set the camera goal
 		const playerVec3 = this.getMainPlayerRenderingVector3();
 		this.cameraGoal.position.copy(playerVec3);
-		this.cameraGoal.position.add(new Vector3(0, 0, this.cameraZOffset));
-		const rotX = PI * 0.5;
+		const cameraZ = (this.mapView) ? this.cameraZMapOffset : this.cameraZOffset;
+		this.cameraGoal.position.add(new Vector3(0, 0, cameraZ));
+		const rotX = (this.mapView) ? (PI * 0.1) : (PI * 0.5);
 		const rotY = PI;
 		const rotZ = PI - ArrayCoords.getDirectionRadians(this.getMainPlayer().facing);
 		this.cameraGoal.rotation.setFromVector3(new THREE.Vector3(rotX, rotY, rotZ), 'YZX');
@@ -214,20 +273,38 @@ class DungeonCrawlerGame {
 		// Set the current camera position and look
 		this.camera.position.copy(this.cameraCurrent.position);
 		this.camera.quaternion.copy(this.cameraCurrent.quaternion);
-		this.eyeLight.position.copy(this.cameraCurrent.position);
+		if (!this.mapView) {
+			this.eyeLight.position.copy(this.cameraCurrent.position);
+		}
 		// this.camera.lookAt(this.lookCurrent);
 	}
 
-	renderMap() {
+	renderMiniMap() {
+		if (!this.miniMapOn) return;
 		const mapHtml = this.getWorldTextRows().join('<br>');
-		window.document.getElementById('map').innerHTML = mapHtml;
+		$('#mini-map').innerHTML = mapHtml;
+	}
+
+	renderUI() {
+		const p = this.getMainPlayer();
+		const pc = p.getLeader();
+		['hp', 'willpower', 'stamina', 'balance'].forEach((key) => {
+			$(`#${key}-value`).innerText = pc[key].getText();
+		});
+		$('#direction').innerText = `Direction: ${ArrayCoords.getDirectionName(p.facing)}`;
 	}
 
 	renderScene() { // Just render the three js scene
+		this.blocksAboveGroup.visible = !this.mapView;
 		this.renderer.render(this.scene, this.camera);
 		this.autoFacingObjects.forEach((obj) => {
 			obj.quaternion.copy(this.camera.quaternion);
 		});
+	}
+
+	renderNpcs() {
+		const npcs = this.getNpcs();
+		npcs.forEach((block) => this.updateBlockPosition(block));
 	}
 
 	animate() {
@@ -236,17 +313,20 @@ class DungeonCrawlerGame {
 		// this.orbitControls.update();
 		this.renderScene();
 		this.updateCamera();
+		this.renderNpcs();
 	}
 
 	/** Render everything */
 	render() {
 		this.updateCamera();
 		this.renderScene();
-		this.renderMap();
+		this.renderMiniMap();
+		this.renderUI();
 		// Update camera
 		// const { x, y, z } = this.convertMapToRenderingVector3(this.getMainPlayer().getCoords());
 		// this.camera.position.x = x;
 		// this.camera.position.y = y;
+		// blocksToUpdate.forEach((block) => this.updateBlockPosition(block));
 	}
 
 	makeCamera() { // eslint-disable-line class-methods-use-this
@@ -279,14 +359,10 @@ class DungeonCrawlerGame {
 
 	// ----------------------------------- Gameplay
 
-	/** The main player is the active player (allows ability to pass-and-play and multiple player) */
-	getMainPlayer() {
-		return this.players[this.mainPlayerIndex];
-	}
-
 	/** Make a new player blob, which arrives in the middle of the map */
 	makeNewPlayer(startAt = this.startAt) {
 		const p = new PlayerBlob(startAt);
+		p.name = 'Hero';
 		// const coords = this.world.getFloorCenter(mapKey, 1);
 		// coords[Z] = 1;
 		// p.moveTo(coords);
@@ -303,14 +379,23 @@ class DungeonCrawlerGame {
 	/** Take inputs commands and queue them for the main player */
 	handleInputCommand(command) {
 		console.log('Command:', command);
+		if (command === 'map') {
+			this.mapView = !this.mapView;
+			return;
+		}
+		this.mapView = false;
 		this.getMainPlayer().queueCommand(command);
 	}
 
-	doPlayerCommand(playerBlob, command) {
+	doActorCommand(blob, command) {
 		if (!command) return;
-		const mapKey = playerBlob.getMapKey();
+		if (command === 'wait') {
+			// TODO: healing
+			return;
+		}
+		const mapKey = blob.getMapKey();
 		if (TURN_COMMANDS.includes(command)) {
-			playerBlob.turn((command === 'turnLeft') ? -1 : 1);
+			blob.turn((command === 'turnLeft') ? -1 : 1);
 			return;
 		}
 		if (MOVE_COMMANDS.includes(command)) {
@@ -323,50 +408,54 @@ class DungeonCrawlerGame {
 			else if (command === 'strafeRight') strafe = 1;
 			else if (command === 'ascend') up = 1;
 			else if (command === 'descend') up = -1;
-			console.log('Desired Move:', mapKey, 'facing', playerBlob.facing, 'forward', forward, 'strafe', strafe, 'up', up);
+			// console.log(blob.name, 'Desired Move:', mapKey, 'facing', blob.facing,
+			// 'forward', forward, 'strafe', strafe, 'up', up);
 			const block = this.world.getBlockAtMoveCoordinates(
 				mapKey,
-				playerBlob.getCoords(),
-				playerBlob.facing,
+				blob.getCoords(),
+				blob.facing,
 				forward,
 				strafe,
 				up,
 			);
 			if (block.blocked) {
-				console.log('\tBlocked at', JSON.stringify(block.coords), block);
+				console.log('\t', blob.name, 'blocked at', JSON.stringify(block.coords), 'Desired Move:', mapKey, 'facing', blob.facing, 'forward', forward, 'strafe', strafe, 'up', up);
+				// console.log('\tBlocked at', JSON.stringify(block.coords), block);
 				return;
 			}
 			let moveToCoords = block.coords;
 			if (block.teleport) {
 				const [destMapKey, x, y, z, turn] = block.teleport;
 				moveToCoords = [x, y, z];
-				playerBlob.turnTo(turn);
+				blob.turnTo(turn);
 				if (destMapKey !== mapKey) {
-					playerBlob.switchMap(destMapKey);
+					blob.switchMap(destMapKey);
 					this.setupScene();
 				}
 			}
-			console.log('\tMoving to', JSON.stringify(moveToCoords), block);
-			playerBlob.moveTo(moveToCoords);
+			console.log('\t', blob.name, 'moving to', JSON.stringify(moveToCoords), block);
+			blob.moveTo(moveToCoords);
 			return;
 		}
-		console.log('Unknown', command, playerBlob);
+		console.log('Unknown command', command, 'from', blob.name || blob.blockId);
 	}
 
-	doPlayerCommands() {
-		this.players.forEach((p) => {
+	doActorsCommands(actors = []) {
+		actors.forEach((p) => {
 			const command = p.dequeueCommand(p);
-			this.doPlayerCommand(p, command);
+			if (!command) return;
+			this.doActorCommand(p, command);
 		});
 	}
 
 	doRound() {
-		this.players.forEach((p) => {
-			const command = p.dequeueCommand();
-			if (!command) return;
-			this.doPlayerCommand(p, command);
-		});
 		this.round += 1;
+		console.log('Round', this.round);
+		this.doActorsCommands(this.players);
+		const npcs = this.getNpcs();
+		npcs.forEach((a) => a.plan(this.players, this.getMainPlayerMap()));
+		// ^ TODO: More efficient to do the planning while waiting for player input
+		this.doActorsCommands(npcs);
 		this.render();
 	}
 
@@ -387,6 +476,13 @@ class DungeonCrawlerGame {
 		this.isStopped = false;
 		// this.makeNewPlayer();
 		this.kbCommander.on('command', (cmd) => this.handleInputCommand(cmd));
+		window.document.addEventListener('click', (event) => {
+			const commandElt = event.target.closest('[data-command]');
+			if (commandElt && commandElt.dataset.command) {
+				this.handleInputCommand(commandElt.dataset.command);
+				event.preventDefault();
+			}
+		});
 		this.setupRendering();
 		this.render();
 		this.tick();

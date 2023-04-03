@@ -44,6 +44,18 @@ class ArrayCoords {
 		const facing = ArrayCoords.normalizeDirection(facingParam);
 		return RADIANS[facing];
 	}
+
+	static getDistance(coords1, coords2) {
+		return Math.sqrt(
+			(coords2[X] - coords1[X]) ** 2
+			+ (coords2[Y] - coords1[Y]) ** 2
+			+ (coords2[Z] - coords1[Z]) ** 2,
+		);
+	}
+
+	static checkEqual(coords1, coords2) {
+		return (coords1[X] === coords2[X] && coords1[Y] === coords2[Y] && coords1[Z] === coords2[Z]);
+	}
 }
 
 // Indices

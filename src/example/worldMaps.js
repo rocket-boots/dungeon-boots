@@ -34,9 +34,9 @@ export default {
 		],
 	},
 	arena: {
-		legend,
+		legend, // Note that not all maps need to use the same legend, they can be different
 		map: [
-			[
+			[ // Right now its best to have the "floor" levels be completely filled in
 				'###################',
 				'###################',
 				'###################',
