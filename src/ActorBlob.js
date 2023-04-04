@@ -13,10 +13,12 @@ class ActorBlob extends BlockEntity {
 		];
 		this.isActorBlob = true;
 		this.facing = 0;
-		// Ready for next turn?
-		this.ready = false;
+		this.ready = false; // Ready for next turn?
 		this.commandQueue = [];
 		this.blobId = Number(new Date()).toString(36) + Math.round(Math.random() * 99999).toString(36);
+		this.inventory = [null, null, null, null, null, null];
+		// Update defaults for some actor-specific legend properties
+		if (typeof this.aggro !== 'number') this.aggro = 0;
 	}
 
 	turn(n = 0) {
@@ -27,6 +29,18 @@ class ActorBlob extends BlockEntity {
 		if (typeof f === 'number') {
 			this.facing = ArrayCoords.normalizeDirection(f);
 		}
+	}
+
+	turnTowards(coords = []) {
+		const [deltaX, deltaY] = ArrayCoords.subtract(this.coords, coords);
+		let { facing } = this;
+		if (deltaX < 0) facing = 1;
+		else if (deltaX > 0) facing = 3;
+		if (deltaY < 0) facing = 2;
+		else if (deltaY > 0) facing = 0;
+		// TODO: This could be improved so that it doesn't favor Y direction if the target
+		// is at a diagnol angle
+		this.turnTo(facing);
 	}
 
 	queueCommand(command) {
@@ -44,8 +58,54 @@ class ActorBlob extends BlockEntity {
 		return this.blob[0];
 	}
 
+	getRandomMember() {
+		const i = Math.floor(this.blob.length * Math.random());
+		return this.blob[i];
+	}
+
 	checkReady() {
 		return (this.commandQueue.length > 0);
+	}
+
+	getFacingBlocks(worldMap) {
+		const aheadCoords = ArrayCoords.getRelativeCoordsInDirection(this.coords, this.facing, 1, 0, 0);
+		return worldMap.getBlocksAtCoords(aheadCoords);
+	}
+
+	checkFacingWall(worldMap) {
+		const blocksAhead = this.getFacingBlocks(worldMap);
+		const blockedSum = blocksAhead.reduce((sum, block) => sum + (block.blocked || 0), 0);
+		return (blockedSum >= 1);
+	}
+
+	getFacingActor(worldMap) {
+		const blocksAhead = this.getFacingBlocks(worldMap);
+		const actorsAhead = blocksAhead.filter((block) => block.isActorBlob);
+		if (actorsAhead.length > 1) console.warn('More than 1 actor ahead of', this.name, '. that probably should not happen', actorsAhead);
+		if (actorsAhead.length) return actorsAhead[0];
+		return null;
+	}
+
+	getKnownAbilities() {
+		const allBlobAbilitiesSet = new Set();
+		this.blob.forEach((character) => {
+			character.knownAbilities.forEach((abilityName) => {
+				allBlobAbilitiesSet.add(abilityName);
+			});
+		});
+		return Array.from(allBlobAbilitiesSet);
+	}
+
+	waitHeal(rounds = 1) {
+		this.blob.forEach((character) => {
+			character.waitHeal(rounds);
+		});
+	}
+
+	damage(dmg = 0, poolType = 'hp') {
+		const whoIsHit = this.getRandomMember();
+		if (dmg) this.aggro = 1;
+		return whoIsHit.damage(dmg, poolType);
 	}
 }
 

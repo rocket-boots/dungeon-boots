@@ -51095,6 +51095,14 @@
 		static checkEqual(coords1, coords2) {
 			return (coords1[X] === coords2[X] && coords1[Y] === coords2[Y] && coords1[Z$1] === coords2[Z$1]);
 		}
+
+		static subtract(coords1, coords2) {
+			return [coords1[X] - coords2[X], coords1[Y] - coords2[Y], coords1[Z$1] - coords2[Z$1]];
+		}
+
+		static add(coords1, coords2) {
+			return [coords1[X] + coords2[X], coords1[Y] + coords2[Y], coords1[Z$1] + coords2[Z$1]];
+		}
 	}
 
 	// Indices
@@ -51145,14 +51153,15 @@
 	}
 
 	class Actor {
-		constructor(blob) {
-			this.blob = blob;
+		constructor(/* blob */) {
+			// this.blob = blob;
 			this.isActor = true;
 			this.hp = new Pool(10, 10);
 			this.willpower = new Pool(10, 10);
 			this.stamina = new Pool(10, 10);
 			this.balance = new Pool(10, 10);
 			this.xp = 0;
+			this.knownAbilities = ['hack', 'slash', 'dodge'];
 		}
 
 		hurt(dmg = 0) {
@@ -51161,6 +51170,18 @@
 
 		heal(healing = 0) {
 			return this.hp.add(healing);
+		}
+
+		waitHeal(rounds = 1) {
+			this.hp.add(1 * rounds);
+			this.willpower.add(1 * rounds);
+			this.stamina.add(2 * rounds);
+			this.balance.add(3 * rounds);
+		}
+
+		damage(dmg = 0, poolType = 'hp') {
+			// if (dmg) this.blob.aggro = 1;
+			return this[poolType].subtract(dmg);
 		}
 	}
 
@@ -51186,6 +51207,8 @@
 		}
 	}
 
+	const clone = (value) => JSON.parse(JSON.stringify(value));
+
 	/** A block entity is jjust something that exists at a space in the grid/voxel world */
 	class BlockEntity {
 		constructor(startAt = [], blockLegend = {}) {
@@ -51193,32 +51216,43 @@
 			this.mapKey = mapKey;
 			this.coords = [x, y, z];
 			this.blockId = Number(new Date()).toString(36) + Math.round(Math.random() * 99999).toString(36);
-			// Properties from legend
-			this.name = blockLegend.name;
+			// Add all properties from legend
+			Object.keys(blockLegend).forEach((key) => {
+				if (typeof blockLegend[key] === 'object') {
+					this[key] = clone(blockLegend[key]);
+					return;
+				}
+				this[key] = blockLegend[key];
+			});
+			// this.name = blockLegend.name;
+			// this.renderAs = blockLegend.renderAs;
+			// this.texture = blockLegend.texture;
+			// this.textureRange = blockLegend.textureRange;
+			// this.npc = blockLegend.npc;
+			// Add properties from legend that have a default value
 			this.blocked = blockLegend.blocked || 0;
-			this.renderAs = blockLegend.renderAs;
-			this.texture = blockLegend.texture;
-			this.textureRange = blockLegend.textureRange;
-			this.npc = blockLegend.npc;
+
 			// Procedural (seed-based) randomness
-			let seed = this.coords[0] + this.coords[1] + this.coords[2];
-			const getBlockRand = () => {
-				seed += 1;
-				return PseudoRandomizer.getPseudoRand(seed);
-			};
+			this.seed = parseInt(this.name, 32) + this.coords[0] + this.coords[1] + this.coords[2];
 			// Modify color
 			if (this.color) {
-				const i = Math.floor(getBlockRand() * 3);
-				const alterColor = (getBlockRand() / 15) - (getBlockRand() / 15);
+				const i = Math.floor(this.getBlockRand() * 3);
+				const alterColor = (this.getBlockRand() / 15) - (this.getBlockRand() / 15);
 				this.color[i] = clamp(this.color[i] + alterColor, 0, 1);
+				this.originalColor = [...this.color];
 			}
 			// Modify texture for texture range
 			if (this.texture && this.textureRange) {
 				const n = this.textureRange[1] - this.textureRange[0];
-				const textureNum = this.textureRange[0] + Math.floor(getBlockRand() * n);
+				const textureNum = this.textureRange[0] + Math.floor(this.getBlockRand() * n);
 				this.texture = this.texture.replace('.', `${textureNum}.`);
 				// this.color = '#ffffff';
 			}
+		}
+
+		getBlockRand() {
+			this.seed += 1;
+			return PseudoRandomizer.getPseudoRand(this.seed);
 		}
 
 		switchMap(mapKey) {
@@ -51257,10 +51291,12 @@
 			];
 			this.isActorBlob = true;
 			this.facing = 0;
-			// Ready for next turn?
-			this.ready = false;
+			this.ready = false; // Ready for next turn?
 			this.commandQueue = [];
 			this.blobId = Number(new Date()).toString(36) + Math.round(Math.random() * 99999).toString(36);
+			this.inventory = [null, null, null, null, null, null];
+			// Update defaults for some actor-specific legend properties
+			if (typeof this.aggro !== 'number') this.aggro = 0;
 		}
 
 		turn(n = 0) {
@@ -51271,6 +51307,18 @@
 			if (typeof f === 'number') {
 				this.facing = ArrayCoords.normalizeDirection(f);
 			}
+		}
+
+		turnTowards(coords = []) {
+			const [deltaX, deltaY] = ArrayCoords.subtract(this.coords, coords);
+			let { facing } = this;
+			if (deltaX < 0) facing = 1;
+			else if (deltaX > 0) facing = 3;
+			if (deltaY < 0) facing = 2;
+			else if (deltaY > 0) facing = 0;
+			// TODO: This could be improved so that it doesn't favor Y direction if the target
+			// is at a diagnol angle
+			this.turnTo(facing);
 		}
 
 		queueCommand(command) {
@@ -51288,14 +51336,61 @@
 			return this.blob[0];
 		}
 
+		getRandomMember() {
+			const i = Math.floor(this.blob.length * Math.random());
+			return this.blob[i];
+		}
+
 		checkReady() {
 			return (this.commandQueue.length > 0);
+		}
+
+		getFacingBlocks(worldMap) {
+			const aheadCoords = ArrayCoords.getRelativeCoordsInDirection(this.coords, this.facing, 1, 0, 0);
+			return worldMap.getBlocksAtCoords(aheadCoords);
+		}
+
+		checkFacingWall(worldMap) {
+			const blocksAhead = this.getFacingBlocks(worldMap);
+			const blockedSum = blocksAhead.reduce((sum, block) => sum + (block.blocked || 0), 0);
+			return (blockedSum >= 1);
+		}
+
+		getFacingActor(worldMap) {
+			const blocksAhead = this.getFacingBlocks(worldMap);
+			const actorsAhead = blocksAhead.filter((block) => block.isActorBlob);
+			if (actorsAhead.length > 1) console.warn('More than 1 actor ahead of', this.name, '. that probably should not happen', actorsAhead);
+			if (actorsAhead.length) return actorsAhead[0];
+			return null;
+		}
+
+		getKnownAbilities() {
+			const allBlobAbilitiesSet = new Set();
+			this.blob.forEach((character) => {
+				character.knownAbilities.forEach((abilityName) => {
+					allBlobAbilitiesSet.add(abilityName);
+				});
+			});
+			return Array.from(allBlobAbilitiesSet);
+		}
+
+		waitHeal(rounds = 1) {
+			this.blob.forEach((character) => {
+				character.waitHeal(rounds);
+			});
+		}
+
+		damage(dmg = 0, poolType = 'hp') {
+			const whoIsHit = this.getRandomMember();
+			if (dmg) this.aggro = 1;
+			return whoIsHit.damage(dmg, poolType);
 		}
 	}
 
 	class PlayerCharacter extends Actor {
 		constructor(playerBlob, startAt = []) {
 			super(playerBlob, startAt);
+			this.knownAbilities = ['hack', 'slash'];
 		}
 	}
 
@@ -51311,6 +51406,13 @@
 		}
 	}
 
+	class NonPlayerCharacter extends Actor {
+		constructor(blob, startAt = []) {
+			super(blob, startAt);
+			this.knownAbilities = ['hack', 'slash'];
+		}
+	}
+
 	const BRAINS = {
 		monster: {
 			wander: 0.8,
@@ -51322,29 +51424,23 @@
 	/** A blob of NPCs */
 	class NpcBlob extends ActorBlob {
 		constructor(startAt = [], blockLegend = {}) {
-			super(Actor, startAt, blockLegend);
+			super(NonPlayerCharacter, startAt, blockLegend);
 			this.isNpcBlob = true;
+			this.brain = null;
 			if (blockLegend.npc && BRAINS[blockLegend.npc]) {
 				this.brain = BRAINS[blockLegend.npc];
 			}
 		}
 
-		facingWall(worldMap) {
-			const aheadCoords = ArrayCoords.getRelativeCoordsInDirection(this.coords, this.facing, 1, 0, 0);
-			const blocksAhead = worldMap.getBlocksAtCoords(aheadCoords);
-			const blockedSum = blocksAhead.reduce((sum, block) => sum + (block.blocked || 0), 0);
-			return (blockedSum >= 1);
-		}
-
 		plan(players = [], worldMap = {}) {
 			const roll = Math.random();
 			// If facing a wall, do a free turn
-			if (this.facingWall(worldMap)) {
+			if (this.checkFacingWall(worldMap)) {
 				console.log(this.name, 'facing wall so turning');
 				this.turn((roll < 0.2) ? 1 : -1); // turning is free for NPCs
 			}
 			// Hunters
-			if (this.brain.huntPlayers && roll < this.brain.huntPlayers) {
+			if (this.brain.huntPlayers && roll < this.brain.huntPlayers && this.aggro) {
 				const isHunting = this.planHunt(players, worldMap);
 				if (isHunting) return;
 			}
@@ -51356,18 +51452,32 @@
 			this.queueCommand('wait');
 		}
 
-		planHunt(prey = [], worldMap = {}) {
+		planHunt(prey = [], worldMap = {}, command = 'attack') {
+			let nearestPrey;
+			let nearestDist = Infinity;
 			const nearPrey = prey.filter((a) => {
+				// TODO: figure out prey based on faction rather than player
 				if (!a.isPlayerBlob) return false;
 				const dist = ArrayCoords.getDistance(a.coords, this.coords);
 				if (dist > this.sight) return false;
+				if (dist < nearestDist) {
+					nearestDist = dist;
+					nearestPrey = a;
+				}
 				return true;
 			});
 			if (!nearPrey.length) return false; // No one to hunt within sight
 			// TODO: Do A-star path finding to get to nearestPrey
-			// TODO: Turn towards nearestPreye
-			console.log(this.name, 'planning to hunt', nearPrey);
-			this.queueCommand('forward');
+			this.turnTowards(nearestPrey.coords);
+			if (nearestDist > 1) {
+				console.log(this.name, 'planning to hunt', nearPrey);
+				this.queueCommand('forward');
+			} else if (nearestDist === 1) {
+				// TODO: Should we check getFacingActor?
+				const targetActor = this.getFacingActor(worldMap);
+				console.log(this.name, 'is next to', targetActor, ', so will attack');
+				this.queueCommand(command);
+			}
 			return true;
 		}
 
@@ -51438,6 +51548,39 @@
 
 		getNpcs() {
 			return this.blocks.filter((block) => block.isNpcBlob);
+		}
+
+		findBlock(block) {
+			const i = this.foundBlockIndex(block);
+			return (i === -1) ? null : this.blocks[i];
+		}
+
+		findBlockIndex(block) {
+			let foundIndex = -1;
+			for (let i = this.blocks.length - 1; i >= 0; i -= 1) {
+				if (this.blocks[i].blockId === block.blockId) {
+					foundIndex = i;
+					i = -1;
+				}
+			}
+			return foundIndex;
+		}
+
+		addBlock(block) {
+			const i = this.findBlockIndex(block);
+			if (i > -1) {
+				console.warn('Cannot add duplicate block', block);
+				return false;
+			}
+			this.blocks.push(block);
+			return true;
+		}
+
+		removeBlock(block) {
+			const i = this.findBlockIndex(block);
+			if (i === -1) return false;
+			this.blocks.splice(i, 1);
+			return true;
 		}
 	}
 
@@ -51624,6 +51767,260 @@
 		}
 	}
 
+	const abilities = {
+		// --- Non-Spells ---
+		hack: {
+			name: 'Hack',
+			combat: true,
+			cost: { stamina: 2 },
+			damage: { hp: [4, 8] },
+		},
+		slash: {
+			name: 'Slash',
+			combat: true,
+			cost: { stamina: 1, balance: 2 },
+			damage: { hp: [5, 7] },
+		},
+		bash: {
+			name: 'Bash',
+			combat: true,
+			cost: { stamina: 1, hp: 1 },
+			damage: { hp: [4, 10] },
+		},
+		rally: {
+			name: 'Rally',
+			combat: true,
+			replenish: { willpower: [1, 5], stamina: [1, 5] },
+		},
+		dodge: {
+			name: 'Dodge',
+			combat: true,
+			cost: { balance: 2 },
+			effect: { evasion: 0.75, rounds: 1 },
+		},
+		tactics: {
+			name: 'Tactics',
+			combat: true,
+			cost: { willpower: 4 },
+			replenish: { health: [1, 2], stamina: [1, 5], balance: [2, 6] },
+		},
+		lunge: {
+			name: 'Lunge',
+			combat: true,
+			cost: { balance: 2, stamina: 1 },
+			damage: { hp: [4, 8] },
+		},
+		swift: {
+			name: 'Swift Attack',
+			combat: true,
+			cost: { balance: 3 },
+			damage: { hp: [5, 7] },
+		},
+		spin: {
+			name: 'Spin Attack',
+			combat: true,
+			cost: { balance: 4 },
+			damage: { hp: [5, 12] },
+		},
+		feint: {
+			name: 'Feint',
+			combat: true,
+			cost: { balance: 5 },
+			damage: { balance: [1, 5] },
+			replenish: { balance: [0, 4] },
+			effect: { evasion: 0.25, rounds: 1 },
+		},
+		parry: {
+			name: 'Parry',
+			combat: true,
+			cost: { stamina: 1, balance: 1 },
+			effect: { evasion: 0.5, rounds: 1 },
+		},
+		reprise: {
+			name: 'Reprise',
+			combat: true,
+			damage: { hp: [1, 4] },
+			cost: { stamina: 1 },
+			replenish: { balance: [1, 5] },
+		},
+		push: {
+			name: 'Push',
+			combat: true,
+			cost: { stamina: 1 },
+			damage: { hp: 1, balance: [4, 8] },
+		},
+		insistence: {
+			name: 'Insistence',
+			cost: { willpower: 2 },
+			replenish: { stamina: [5, 8] },
+		},
+		sweep: {
+			name: 'Sweep',
+			cost: { stamina: 3 },
+			damage: { hp: [2, 6] },
+		},
+		berserk: {
+			name: 'Berserk',
+			cost: { willpower: 10, stamina: 8 },
+			damage: { hp: [4, 12], stamina: [1, 4] },
+			replenish: { hp: [1, 4] },
+		},
+		rage: {
+			name: 'Rage',
+			cost: { willpower: 4, stamina: 4, hp: 1 },
+			replenish: { willpower: [1, 4], stamina: [1, 4] },
+		},
+		counterStrike: {
+			name: 'Counter-strike',
+			cost: { willpower: 1, stamina: 1, balance: 1 },
+			damage: { hp: [4, 5] },
+		},
+		endure: {
+			name: 'Endure',
+			cost: { willpower: 1 },
+			replenish: { stamina: 1, hp: 1 },
+		},
+		// --- Spells ---
+		light: {
+			name: 'Light',
+			spell: true,
+			cost: { willpower: 1 },
+			effect: { brightness: 10, rounds: 20 },
+		},
+		focus: {
+			name: 'Mental Focus',
+			spell: true,
+			cost: { stamina: 1 },
+			replenish: { willpower: 5 },
+		},
+		heal: {
+			name: 'Heal I',
+			spell: true,
+			cost: { willpower: 2 },
+			replenish: { hp: [2, 6] },
+		},
+		heal2: {
+			name: 'Heal II',
+			spell: true,
+			cost: { willpower: 5 },
+			replenish: { hp: [4, 12] },
+		},
+	};
+	Object.keys(abilities).forEach((key) => {
+		abilities[key].key = key;
+	});
+	var abilities$1 = Object.freeze(abilities);
+
+	const $$1 = (selector) => {
+		const elt = window.document.querySelector(selector);
+		if (!elt) console.warn('Could not find', selector);
+		return elt;
+	};
+
+	class Interface {
+		constructor() {
+			this.OPTIONS_VIEWS = ['combat', 'talk', 'inventory'];
+			this.optionsView = 'closed'; // 'closed', 'combat', 'talk', 'inventory'
+			this.FULL_VIEWS = ['character', 'abilities', 'spells', 'menu'];
+			this.fullView = 'closed'; // 'closed', 'character', 'abilities', 'spells', 'menu'
+		}
+
+		view(what) {
+			if (this.FULL_VIEWS.includes(what)) {
+				this.optionsView = 'closed';
+				this.fullView = (this.fullView === what) ? 'closed' : what;
+			} else if (this.OPTIONS_VIEWS.includes(what)) {
+				this.fullView = 'closed';
+				this.optionsView = (this.optionsView === what) ? 'closed' : what;
+			}
+			if (what === 'closed') {
+				this.fullView = 'closed';
+				this.optionsView = 'closed';
+			}
+		}
+
+		renderOptions(blob) {
+			const uiOptionsRow = $$1('#ui-options-row');
+			uiOptionsRow.classList.remove(...uiOptionsRow.classList);
+			uiOptionsRow.classList.add(`ui-options-row--${this.optionsView}`);
+			let html = '';
+			if (this.optionsView === 'combat') {
+				html = ['Hack', 'Slash', 'Smash'].map((ability, i) => (
+					`<li>
+					<button type="button">
+						${ability}
+						<i class="key" data-command="attack ${i + 1}">${i + 1}</i>
+					</button>
+				</li>`
+				)).join('');
+			} else if (this.optionsView === 'talk') {
+				html = ['Insult', 'Shout', 'Ignore'].map((ability, i) => (
+					`<li>
+					<button type="button">
+						${ability}
+						<i class="key" data-command="option ${i + 1}">${i + 1}</i>
+					</button>
+				</li>`
+				)).join('');
+			} else if (this.optionsView === 'inventory') {
+				html = blob.inventory.map((inventoryItem, i) => {
+					if (!inventoryItem) return '<li class="inventory-item inventory-item--empty">Empty</li>';
+					return `<li class="inventory-item">
+					<button type="button">
+						${inventoryItem.name}
+						<i class="key" data-command="option ${i + 1}">${i + 1}</i>
+					</button>
+				</li>`;
+				}).join('');
+			}
+			$$1('#ui-options-list').innerHTML = html;
+		}
+
+		static getAbilityItemHtml(blob, ability) {
+			const knownAbilities = blob.getKnownAbilities();
+			const isKnown = knownAbilities.includes(ability.key);
+			const rows = [isKnown ? 'Known' : 'Not known'];
+			if (ability.cost) rows.push(`Cost: ${JSON.stringify(ability.cost, null, ' ')}`);
+			if (ability.replenish) rows.push(`Replenish: ${JSON.stringify(ability.replenish, null, ' ')}`);
+			if (ability.damage) rows.push(`Damage: ${JSON.stringify(ability.damage, null, ' ')}`);
+			if (ability.effect) rows.push(`Effect: ${JSON.stringify(ability.effect, null, ' ')}`);
+			return (
+				`<li class="ability-item ${isKnown ? 'ability-item--known' : 'ability-item--unknown'}">
+				${ability.name || ability.key}
+				${rows.map((row) => `<div>${row}</div>`).join('')}
+			</li>`
+			);
+		}
+
+		renderFullView(blob) {
+			const view = $$1('#ui-full-view');
+			view.classList.remove(...view.classList);
+			view.classList.add(`ui-full-view--${this.fullView}`);
+			// const knownAbilities = p.getKnownAbilities();
+			let html = '';
+			if (this.fullView === 'abilities') {
+				html = Object.keys(abilities$1)
+					.map((abilityKey) => abilities$1[abilityKey])
+					.filter((ability) => !ability.spell)
+					.map((ability) => Interface.getAbilityItemHtml(blob, ability))
+					.join('');
+				html = `<h1>Abilities</h1>${html}`;
+			} else if (this.fullView === 'spells') {
+				html = Object.keys(abilities$1)
+					.map((abilityKey) => abilities$1[abilityKey])
+					.filter((ability) => ability.spell)
+					.map((ability) => Interface.getAbilityItemHtml(blob, ability))
+					.join('');
+				html = `<h1>Spells</h1>${html}`;
+			} else if (this.fullView === 'character') {
+				html = `<h1>Character</h1> ${JSON.stringify(blob, null, ' ')}`;
+			} else if (this.fullView === 'menu') {
+				html = 'Menu - Not implemented yet';
+			}
+			view.innerHTML = html;
+		}
+	}
+
 	// External modules
 	// import Renderer from './Renderer.js';
 
@@ -51645,6 +52042,19 @@
 		e: 'turnRight',
 		' ': 'wait',
 		m: 'map',
+		f: 'combat',
+		t: 'talk',
+		i: 'inventory',
+		Tab: 'inventory',
+		1: 'option 1',
+		2: 'option 2',
+		3: 'option 3',
+		4: 'option 4',
+		5: 'option 5',
+		6: 'option 6',
+		7: 'option 7',
+		8: 'option 8',
+		9: 'option 9',
 	};
 
 	const TURN_COMMANDS = ['turnLeft', 'turnRight'];
@@ -51669,6 +52079,7 @@
 			this.isStopped = true;
 			this.mapView = false;
 			// Rendering properties
+			this.interface = new Interface();
 			this.miniMapOn = false;
 			this.clearColor = options.clearColor || '#77bbff';
 			this.renderer = null;
@@ -51907,6 +52318,8 @@
 				$(`#${key}-value`).innerText = pc[key].getText();
 			});
 			$('#direction').innerText = `Direction: ${ArrayCoords.getDirectionName(p.facing)}`;
+			this.interface.renderOptions(p);
+			this.interface.renderFullView(p);
 		}
 
 		renderScene() { // Just render the three js scene
@@ -51982,33 +52395,60 @@
 			// coords[Z] = 1;
 			// p.moveTo(coords);
 			this.players.push(p);
+			const mapKey = p.getMapKey();
+			const map = this.world.getMap(mapKey);
+			map.addBlock(p);
 			return p;
 		}
 
-		makeNewNpc(startAt = this.startAt) {
-			const n = new NpcBlob(startAt);
-			this.npcs.push(n);
-			return n;
-		}
+		// makeNewNpc(startAt = this.startAt) {
+		// 	const n = new NpcBlob(startAt);
+		// 	this.npcs.push(n);
+		// 	return n;
+		// }
 
 		/** Take inputs commands and queue them for the main player */
 		handleInputCommand(command) {
 			console.log('Command:', command);
-			if (command === 'map') {
-				this.mapView = !this.mapView;
+			const commandWords = command.split(' ');
+			if (commandWords[0] === 'view') {
+				const [, page] = commandWords;
+				this.interface.view(page);
+				this.render();
 				return;
 			}
+			if (this.interface.OPTIONS_VIEWS.includes(command)) {
+				this.interface.view(command);
+				this.render();
+				return;
+			}
+			if (command === 'map') {
+				this.mapView = !this.mapView;
+				this.render();
+				return;
+			}
+			this.render();
 			this.mapView = false;
 			this.getMainPlayer().queueCommand(command);
 		}
 
 		doActorCommand(blob, command) {
 			if (!command) return;
-			if (command === 'wait') {
-				// TODO: healing
+			const mapKey = blob.getMapKey();
+			const worldMap = this.world.getMap(mapKey);
+			const commandWords = command.split(' ');
+			if (commandWords[0] === 'attack') {
+				const target = blob.getFacingActor(worldMap);
+				if (target) {
+					target.damage(1, 'hp');
+					// TODO
+				} else console.warn('Nothing to attack');
 				return;
 			}
-			const mapKey = blob.getMapKey();
+			if (command === 'wait') {
+				blob.waitHeal(1);
+				return;
+			}
 			if (TURN_COMMANDS.includes(command)) {
 				blob.turn((command === 'turnLeft') ? -1 : 1);
 				return;
@@ -52044,8 +52484,7 @@
 					moveToCoords = [x, y, z];
 					blob.turnTo(turn);
 					if (destMapKey !== mapKey) {
-						blob.switchMap(destMapKey);
-						this.setupScene();
+						this.switchBlobMap(blob, mapKey, destMapKey);
 					}
 				}
 				console.log('\t', blob.name, 'moving to', JSON.stringify(moveToCoords), block);
@@ -52053,6 +52492,16 @@
 				return;
 			}
 			console.log('Unknown command', command, 'from', blob.name || blob.blockId);
+		}
+
+		switchBlobMap(blob, currentMapKey, destMapKey) {
+			if (currentMapKey === destMapKey) return;
+			const currentMap = this.world.getMap(currentMapKey);
+			const destMap = this.world.getMap(destMapKey);
+			currentMap.removeBlock(blob);
+			blob.switchMap(destMapKey);
+			destMap.addBlock(blob);
+			this.setupScene();
 		}
 
 		doActorsCommands(actors = []) {
@@ -52132,7 +52581,7 @@
 			name: 'brick',
 			blocked: 1,
 			renderAs: 'box',
-			color: [0.8, 0.8, 0.7],
+			color: [0.9, 0.9, 0.9],
 			texture: 'bricks.png',
 		},
 		'|': {
@@ -52143,15 +52592,24 @@
 			texture: 'crumbled_column_.png',
 			textureRange: [1, 6],
 		},
-		'S': {
-			name: 'cyclops', blocked: 1, renderAs: 'sprite', texture: 'cyclops_new.png',
-		},
+		// 'X': {
+		// name: 'cyclops', blocked: 1, renderAs: 'sprite', texture: 'cyclops_new.png',
+		// },
 		'C': {
 			name: 'cyclops',
 			blocked: 1,
 			renderAs: 'plane',
 			texture: 'cyclops_new.png',
 			npc: 'monster',
+			aggro: 1,
+		},
+		'O': {
+			name: 'ogre',
+			blocked: 1,
+			renderAs: 'plane',
+			texture: 'ogre_new.png',
+			npc: 'monster',
+			aggro: 1,
 		},
 		'1': {
 			...teleportDoor,
@@ -52182,14 +52640,18 @@
 					'###################',
 					'###################',
 					'###################',
+					'###################',
+					'###################',
 					'########## ########',
 				],
 				[
 					'##########1########',
 					'###    &&| | #    #',
 					'#   #         && #',
-					'# # #       && &#C#',
+					'# # #       && &#O#',
 					'### ###C    && &  #',
+					'###   ###         #',
+					'###   ###         #',
 					'###   ###         #',
 					'#########&3&&######',
 				],
@@ -52200,6 +52662,8 @@
 					'########## ########',
 					'###        ## ####',
 					'###   ####     ####',
+					'###   ###         #',
+					'###   ###         #',
 					'#########& ########',
 				],
 			],
@@ -52220,9 +52684,9 @@
 					' #########4####### ',
 					'##|             |##',
 					'#   C             #',
-					'# # C          ##C#',
+					'# # O          ##C#',
 					'### C          #  #',
-					'###      C   C   ##',
+					'###      O   O   ##',
 					' ################# ',
 				],
 				[

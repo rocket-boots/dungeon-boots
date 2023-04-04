@@ -21,7 +21,7 @@ const legend = {
 		name: 'brick',
 		blocked: 1,
 		renderAs: 'box',
-		color: [0.8, 0.8, 0.7],
+		color: [0.9, 0.9, 0.9],
 		texture: 'bricks.png',
 	},
 	'|': {
@@ -32,15 +32,24 @@ const legend = {
 		texture: 'crumbled_column_.png',
 		textureRange: [1, 6],
 	},
-	'S': {
-		name: 'cyclops', blocked: 1, renderAs: 'sprite', texture: 'cyclops_new.png',
-	},
+	// 'X': {
+	// name: 'cyclops', blocked: 1, renderAs: 'sprite', texture: 'cyclops_new.png',
+	// },
 	'C': {
 		name: 'cyclops',
 		blocked: 1,
 		renderAs: 'plane',
 		texture: 'cyclops_new.png',
 		npc: 'monster',
+		aggro: 1,
+	},
+	'O': {
+		name: 'ogre',
+		blocked: 1,
+		renderAs: 'plane',
+		texture: 'ogre_new.png',
+		npc: 'monster',
+		aggro: 1,
 	},
 	'1': {
 		...teleportDoor,

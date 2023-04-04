@@ -9,7 +9,9 @@ import Renderer from 'rocket-boots-three-toolbox/src/Renderer.js';
 import ArrayCoords from './ArrayCoords.js';
 import PlayerBlob from './PlayerBlob.js';
 import VoxelWorld from './VoxelWorld.js';
-import NpcBlob from './NpcBlob.js';
+// import NpcBlob from './NpcBlob.js';
+// import abilities from './abilities.js';
+import Interface from './Interface.js';
 // import Renderer from './Renderer.js';
 
 window.THREE = THREE;
@@ -30,6 +32,19 @@ const KB_MAPPING = {
 	e: 'turnRight',
 	' ': 'wait',
 	m: 'map',
+	f: 'combat',
+	t: 'talk',
+	i: 'inventory',
+	Tab: 'inventory',
+	1: 'option 1',
+	2: 'option 2',
+	3: 'option 3',
+	4: 'option 4',
+	5: 'option 5',
+	6: 'option 6',
+	7: 'option 7',
+	8: 'option 8',
+	9: 'option 9',
 };
 
 const TURN_COMMANDS = ['turnLeft', 'turnRight'];
@@ -54,6 +69,7 @@ class DungeonCrawlerGame {
 		this.isStopped = true;
 		this.mapView = false;
 		// Rendering properties
+		this.interface = new Interface();
 		this.miniMapOn = false;
 		this.clearColor = options.clearColor || '#77bbff';
 		this.renderer = null;
@@ -292,6 +308,8 @@ class DungeonCrawlerGame {
 			$(`#${key}-value`).innerText = pc[key].getText();
 		});
 		$('#direction').innerText = `Direction: ${ArrayCoords.getDirectionName(p.facing)}`;
+		this.interface.renderOptions(p);
+		this.interface.renderFullView(p);
 	}
 
 	renderScene() { // Just render the three js scene
@@ -367,33 +385,60 @@ class DungeonCrawlerGame {
 		// coords[Z] = 1;
 		// p.moveTo(coords);
 		this.players.push(p);
+		const mapKey = p.getMapKey();
+		const map = this.world.getMap(mapKey);
+		map.addBlock(p);
 		return p;
 	}
 
-	makeNewNpc(startAt = this.startAt) {
-		const n = new NpcBlob(startAt);
-		this.npcs.push(n);
-		return n;
-	}
+	// makeNewNpc(startAt = this.startAt) {
+	// 	const n = new NpcBlob(startAt);
+	// 	this.npcs.push(n);
+	// 	return n;
+	// }
 
 	/** Take inputs commands and queue them for the main player */
 	handleInputCommand(command) {
 		console.log('Command:', command);
-		if (command === 'map') {
-			this.mapView = !this.mapView;
+		const commandWords = command.split(' ');
+		if (commandWords[0] === 'view') {
+			const [, page] = commandWords;
+			this.interface.view(page);
+			this.render();
 			return;
 		}
+		if (this.interface.OPTIONS_VIEWS.includes(command)) {
+			this.interface.view(command);
+			this.render();
+			return;
+		}
+		if (command === 'map') {
+			this.mapView = !this.mapView;
+			this.render();
+			return;
+		}
+		this.render();
 		this.mapView = false;
 		this.getMainPlayer().queueCommand(command);
 	}
 
 	doActorCommand(blob, command) {
 		if (!command) return;
-		if (command === 'wait') {
-			// TODO: healing
+		const mapKey = blob.getMapKey();
+		const worldMap = this.world.getMap(mapKey);
+		const commandWords = command.split(' ');
+		if (commandWords[0] === 'attack') {
+			const target = blob.getFacingActor(worldMap);
+			if (target) {
+				target.damage(1, 'hp');
+				// TODO
+			} else console.warn('Nothing to attack');
 			return;
 		}
-		const mapKey = blob.getMapKey();
+		if (command === 'wait') {
+			blob.waitHeal(1);
+			return;
+		}
 		if (TURN_COMMANDS.includes(command)) {
 			blob.turn((command === 'turnLeft') ? -1 : 1);
 			return;
@@ -429,8 +474,7 @@ class DungeonCrawlerGame {
 				moveToCoords = [x, y, z];
 				blob.turnTo(turn);
 				if (destMapKey !== mapKey) {
-					blob.switchMap(destMapKey);
-					this.setupScene();
+					this.switchBlobMap(blob, mapKey, destMapKey);
 				}
 			}
 			console.log('\t', blob.name, 'moving to', JSON.stringify(moveToCoords), block);
@@ -438,6 +482,16 @@ class DungeonCrawlerGame {
 			return;
 		}
 		console.log('Unknown command', command, 'from', blob.name || blob.blockId);
+	}
+
+	switchBlobMap(blob, currentMapKey, destMapKey) {
+		if (currentMapKey === destMapKey) return;
+		const currentMap = this.world.getMap(currentMapKey);
+		const destMap = this.world.getMap(destMapKey);
+		currentMap.removeBlock(blob);
+		blob.switchMap(destMapKey);
+		destMap.addBlock(blob);
+		this.setupScene();
 	}
 
 	doActorsCommands(actors = []) {

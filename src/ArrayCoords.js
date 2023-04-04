@@ -56,6 +56,14 @@ class ArrayCoords {
 	static checkEqual(coords1, coords2) {
 		return (coords1[X] === coords2[X] && coords1[Y] === coords2[Y] && coords1[Z] === coords2[Z]);
 	}
+
+	static subtract(coords1, coords2) {
+		return [coords1[X] - coords2[X], coords1[Y] - coords2[Y], coords1[Z] - coords2[Z]];
+	}
+
+	static add(coords1, coords2) {
+		return [coords1[X] + coords2[X], coords1[Y] + coords2[Y], coords1[Z] + coords2[Z]];
+	}
 }
 
 // Indices

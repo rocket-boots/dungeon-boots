@@ -57,6 +57,39 @@ class VoxelWorldMap {
 	getNpcs() {
 		return this.blocks.filter((block) => block.isNpcBlob);
 	}
+
+	findBlock(block) {
+		const i = this.foundBlockIndex(block);
+		return (i === -1) ? null : this.blocks[i];
+	}
+
+	findBlockIndex(block) {
+		let foundIndex = -1;
+		for (let i = this.blocks.length - 1; i >= 0; i -= 1) {
+			if (this.blocks[i].blockId === block.blockId) {
+				foundIndex = i;
+				i = -1;
+			}
+		}
+		return foundIndex;
+	}
+
+	addBlock(block) {
+		const i = this.findBlockIndex(block);
+		if (i > -1) {
+			console.warn('Cannot add duplicate block', block);
+			return false;
+		}
+		this.blocks.push(block);
+		return true;
+	}
+
+	removeBlock(block) {
+		const i = this.findBlockIndex(block);
+		if (i === -1) return false;
+		this.blocks.splice(i, 1);
+		return true;
+	}
 }
 
 export default VoxelWorldMap;
