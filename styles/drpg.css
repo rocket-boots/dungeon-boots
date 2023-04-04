@@ -4,6 +4,7 @@ body {
 	margin: 0;
 	background: #333;
 	color: white;
+	font-size: calc(8px + 0.75vmin);
 }
 
 main {
@@ -95,6 +96,7 @@ button:active {
 .ui-static-row {
 	display: flex;
 	flex-direction: row;
+	flex-wrap: wrap;
 	justify-content: space-around;
 	align-items: center;
 }
