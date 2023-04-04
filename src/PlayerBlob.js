@@ -10,6 +10,10 @@ class PlayerBlob extends ActorBlob {
 		};
 		super(PlayerCharacter, startAt, playerBlockLegend);
 		this.isPlayerBlob = true;
+		this.blocked = 1;
+		this.color = [1, 1, 1];
+		this.renderAs = 'plane';
+		this.texture = 'human_male.png';
 	}
 }
 

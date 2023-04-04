@@ -51248,6 +51248,7 @@
 				this.texture = this.texture.replace('.', `${textureNum}.`);
 				// this.color = '#ffffff';
 			}
+			this.redraw = false; // Do we need to redraw the thing (likely due to a texture change)
 		}
 
 		getBlockRand() {
@@ -51278,9 +51279,16 @@
 			const newCoords = [0, 1, 2].forEach((i) => this.coords[i] + relativeCoords[i]);
 			this.moveTo(newCoords);
 		}
+
+		changeTexture(newTexture) {
+			if (this.texture === newTexture) return;
+			this.texture = newTexture;
+			this.redraw = true;
+		}
 	}
 
 	const MAX_COMMAND_QUEUE_SIZE = 3;
+	const GHOST_TEXTURE = 'ghost_new.png';
 
 	/** A blob of characters that can interact with the world */
 	class ActorBlob extends BlockEntity {
@@ -51297,6 +51305,7 @@
 			this.inventory = [null, null, null, null, null, null];
 			// Update defaults for some actor-specific legend properties
 			if (typeof this.aggro !== 'number') this.aggro = 0;
+			this.dead = false;
 		}
 
 		turn(n = 0) {
@@ -51345,15 +51354,18 @@
 			return (this.commandQueue.length > 0);
 		}
 
+		getAheadCoords() {
+			return ArrayCoords.getRelativeCoordsInDirection(this.coords, this.facing, 1, 0, 0);
+		}
+
 		getFacingBlocks(worldMap) {
-			const aheadCoords = ArrayCoords.getRelativeCoordsInDirection(this.coords, this.facing, 1, 0, 0);
+			const aheadCoords = this.getAheadCoords();
 			return worldMap.getBlocksAtCoords(aheadCoords);
 		}
 
 		checkFacingWall(worldMap) {
-			const blocksAhead = this.getFacingBlocks(worldMap);
-			const blockedSum = blocksAhead.reduce((sum, block) => sum + (block.blocked || 0), 0);
-			return (blockedSum >= 1);
+			const aheadCoords = this.getAheadCoords();
+			return worldMap.isBlockedAtCoords(aheadCoords);
 		}
 
 		getFacingActor(worldMap) {
@@ -51385,6 +51397,25 @@
 			if (dmg) this.aggro = 1;
 			return whoIsHit.damage(dmg, poolType);
 		}
+
+		kill() {
+			this.blob.forEach((character) => {
+				character.damage(Infinity, 'hp');
+			});
+			this.dead = true;
+			this.blocked = 0;
+			this.changeTexture(this.deadTexture || this.ghostTexture || GHOST_TEXTURE);
+		}
+
+		checkDeath() {
+			const totalHp = this.blob.map((character) => character.hp.get())
+				.reduce((sum, hp) => sum + hp, 0);
+			if (totalHp <= 0) {
+				this.kill();
+				return true;
+			}
+			return false;
+		}
 	}
 
 	class PlayerCharacter extends Actor {
@@ -51403,6 +51434,10 @@
 			};
 			super(PlayerCharacter, startAt, playerBlockLegend);
 			this.isPlayerBlob = true;
+			this.blocked = 1;
+			this.color = [1, 1, 1];
+			this.renderAs = 'plane';
+			this.texture = 'human_male.png';
 		}
 	}
 
@@ -51440,7 +51475,7 @@
 				this.turn((roll < 0.2) ? 1 : -1); // turning is free for NPCs
 			}
 			// Hunters
-			if (this.brain.huntPlayers && roll < this.brain.huntPlayers && this.aggro) {
+			if (this.brain.huntPlayers && roll < this.brain.huntPlayers && this.aggro && !this.dead) {
 				const isHunting = this.planHunt(players, worldMap);
 				if (isHunting) return;
 			}
@@ -51544,6 +51579,21 @@
 
 		getBlocksAtCoords(coords = []) {
 			return this.blocks.filter((block) => ArrayCoords.checkEqual(block.coords, coords));
+		}
+
+		getBlocksAtMoveCoordinates(coords, facing, forward = 0, strafe = 0, up = 0) {
+			const newCoords = ArrayCoords.getRelativeCoordsInDirection(coords, facing, forward, strafe, up);
+			return this.getBlocksAtCoords(newCoords);
+		}
+
+		getBlockedSumAtCoords(coords = []) {
+			const blocks = this.getBlocksAtCoords(coords);
+			const blockedSum = blocks.reduce((sum, block) => sum + (block.blocked || 0), 0);
+			return blockedSum;
+		}
+
+		isBlockedAtCoords(coords = []) {
+			return (this.getBlockedSumAtCoords(coords) >= 1);
 		}
 
 		getNpcs() {
@@ -51739,32 +51789,27 @@
 			return block;
 		}
 
-		getBlock(mapKey, coords) {
-			const [x = 0, y = 0, z = 0] = coords;
-			const isBelow = (z < 0);
-			// x and y are effectively indices in an array, so they can't be negative
-			if (x < 0 || y < 0) {
-				return this.getBeyondBlock(mapKey, isBelow, coords);
-			}
-			const floor = this.getFloor(mapKey, z);
-			if (!floor) { // If nothing defined for that z level
-				return this.getBeyondBlock(mapKey, isBelow, coords);
-			}
-			const row = floor[y];
-			if (!row) {
-				return this.getBeyondBlock(mapKey, isBelow, coords);
-			}
-			const blockChar = row.charAt(x);
-			if (!blockChar) {
-				return this.getBeyondBlock(mapKey, isBelow, coords);
-			}
-			return this.getBlockByType(mapKey, blockChar, coords);
-		}
-
-		getBlockAtMoveCoordinates(mapKey, coords, facing, forward = 0, strafe = 0, up = 0) {
-			const newCoords = ArrayCoords.getRelativeCoordsInDirection(coords, facing, forward, strafe, up);
-			return this.getBlock(mapKey, newCoords);
-		}
+		// getBlock(mapKey, coords) {
+		// 	const [x = 0, y = 0, z = 0] = coords;
+		// 	const isBelow = (z < 0);
+		// 	// x and y are effectively indices in an array, so they can't be negative
+		// 	if (x < 0 || y < 0) {
+		// 		return this.getBeyondBlock(mapKey, isBelow, coords);
+		// 	}
+		// 	const floor = this.getFloor(mapKey, z);
+		// 	if (!floor) { // If nothing defined for that z level
+		// 		return this.getBeyondBlock(mapKey, isBelow, coords);
+		// 	}
+		// 	const row = floor[y];
+		// 	if (!row) {
+		// 		return this.getBeyondBlock(mapKey, isBelow, coords);
+		// 	}
+		// 	const blockChar = row.charAt(x);
+		// 	if (!blockChar) {
+		// 		return this.getBeyondBlock(mapKey, isBelow, coords);
+		// 	}
+		// 	return this.getBlockByType(mapKey, blockChar, coords);
+		// }
 	}
 
 	const abilities = {
@@ -51947,18 +51992,18 @@
 			if (this.optionsView === 'combat') {
 				html = ['Hack', 'Slash', 'Smash'].map((ability, i) => (
 					`<li>
-					<button type="button">
+					<button type="button" data-command="attack ${i + 1}">
 						${ability}
-						<i class="key" data-command="attack ${i + 1}">${i + 1}</i>
+						<i class="key">${i + 1}</i>
 					</button>
 				</li>`
 				)).join('');
 			} else if (this.optionsView === 'talk') {
 				html = ['Insult', 'Shout', 'Ignore'].map((ability, i) => (
 					`<li>
-					<button type="button">
+					<button type="button" data-command="option ${i + 1}">
 						${ability}
-						<i class="key" data-command="option ${i + 1}">${i + 1}</i>
+						<i class="key">${i + 1}</i>
 					</button>
 				</li>`
 				)).join('');
@@ -51966,9 +52011,9 @@
 				html = blob.inventory.map((inventoryItem, i) => {
 					if (!inventoryItem) return '<li class="inventory-item inventory-item--empty">Empty</li>';
 					return `<li class="inventory-item">
-					<button type="button">
+					<button type="button" data-command="option ${i + 1}">
 						${inventoryItem.name}
-						<i class="key" data-command="option ${i + 1}">${i + 1}</i>
+						<i class="key">${i + 1}</i>
 					</button>
 				</li>`;
 				}).join('');
@@ -52224,6 +52269,9 @@
 			if (sceneObj) {
 				this.blockSceneObjectMapping[block.blockId] = sceneObj;
 				sceneObj.position.set(x * VISUAL_BLOCK_SIZE, y * VISUAL_BLOCK_SIZE, -z * VISUAL_BLOCK_SIZE);
+				if (block.isPlayerBlob) { // TODO: only hide the current main player
+					sceneObj.visible = this.mapView;
+				}
 				if (group) group.add(sceneObj);
 				else this.scene.add(sceneObj);
 			} else {
@@ -52330,9 +52378,11 @@
 			});
 		}
 
-		renderNpcs() {
+		renderActors() {
 			const npcs = this.getNpcs();
 			npcs.forEach((block) => this.updateBlockPosition(block));
+			const p = this.getMainPlayer();
+			this.updateBlockPosition(p);
 		}
 
 		animate() {
@@ -52341,7 +52391,7 @@
 			// this.orbitControls.update();
 			this.renderScene();
 			this.updateCamera();
-			this.renderNpcs();
+			this.renderActors();
 		}
 
 		/** Render everything */
@@ -52410,6 +52460,7 @@
 		/** Take inputs commands and queue them for the main player */
 		handleInputCommand(command) {
 			console.log('Command:', command);
+			const p = this.getMainPlayer();
 			const commandWords = command.split(' ');
 			if (commandWords[0] === 'view') {
 				const [, page] = commandWords;
@@ -52422,8 +52473,13 @@
 				this.render();
 				return;
 			}
+			if (commandWords[0] === 'option') {
+				if (this.interface.optionsView === 'combat') command = `attack ${commandWords[1]}`;
+			}
 			if (command === 'map') {
 				this.mapView = !this.mapView;
+				const playerSceneObject = this.blockSceneObjectMapping[p.blockId];
+				playerSceneObject.visible = this.mapView;
 				this.render();
 				return;
 			}
@@ -52440,8 +52496,10 @@
 			if (commandWords[0] === 'attack') {
 				const target = blob.getFacingActor(worldMap);
 				if (target) {
-					target.damage(1, 'hp');
+					const dmg = (blob.isPlayerBlob) ? 9 : 1;
+					target.damage(dmg, 'hp');
 					// TODO
+					target.checkDeath();
 				} else console.warn('Nothing to attack');
 				return;
 			}
@@ -52465,21 +52523,22 @@
 				else if (command === 'descend') up = -1;
 				// console.log(blob.name, 'Desired Move:', mapKey, 'facing', blob.facing,
 				// 'forward', forward, 'strafe', strafe, 'up', up);
-				const block = this.world.getBlockAtMoveCoordinates(
-					mapKey,
+				const newCoords = ArrayCoords.getRelativeCoordsInDirection(
 					blob.getCoords(),
 					blob.facing,
 					forward,
 					strafe,
 					up,
 				);
-				if (block.blocked) {
+				const blocks = worldMap.getBlocksAtCoords(newCoords);
+				const block = blocks[0]; // just look at first block in case there are multiple
+				if (block && block.blocked) {
 					console.log('\t', blob.name, 'blocked at', JSON.stringify(block.coords), 'Desired Move:', mapKey, 'facing', blob.facing, 'forward', forward, 'strafe', strafe, 'up', up);
 					// console.log('\tBlocked at', JSON.stringify(block.coords), block);
 					return;
 				}
-				let moveToCoords = block.coords;
-				if (block.teleport) {
+				let moveToCoords = newCoords;
+				if (block && block.teleport) {
 					const [destMapKey, x, y, z, turn] = block.teleport;
 					moveToCoords = [x, y, z];
 					blob.turnTo(turn);
@@ -52505,10 +52564,10 @@
 		}
 
 		doActorsCommands(actors = []) {
-			actors.forEach((p) => {
-				const command = p.dequeueCommand(p);
-				if (!command) return;
-				this.doActorCommand(p, command);
+			actors.forEach((a) => {
+				const command = a.dequeueCommand();
+				if (!command || a.dead) return;
+				this.doActorCommand(a, command);
 			});
 		}
 
@@ -52520,6 +52579,17 @@
 			npcs.forEach((a) => a.plan(this.players, this.getMainPlayerMap()));
 			// ^ TODO: More efficient to do the planning while waiting for player input
 			this.doActorsCommands(npcs);
+			// Death checks
+			if (this.getMainPlayer().checkDeath()) alert('You are dead');
+			let redraws = 0;
+			npcs.forEach((a) => {
+				a.checkDeath();
+				if (a.redraw) {
+					redraws += 1;
+					a.redraw = false;
+				}
+			});
+			if (redraws > 0) this.setupScene();
 			this.render();
 		}
 

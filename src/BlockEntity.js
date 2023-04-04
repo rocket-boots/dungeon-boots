@@ -42,6 +42,7 @@ class BlockEntity {
 			this.texture = this.texture.replace('.', `${textureNum}.`);
 			// this.color = '#ffffff';
 		}
+		this.redraw = false; // Do we need to redraw the thing (likely due to a texture change)
 	}
 
 	getBlockRand() {
@@ -71,6 +72,12 @@ class BlockEntity {
 	move(relativeCoords) {
 		const newCoords = [0, 1, 2].forEach((i) => this.coords[i] + relativeCoords[i]);
 		this.moveTo(newCoords);
+	}
+
+	changeTexture(newTexture) {
+		if (this.texture === newTexture) return;
+		this.texture = newTexture;
+		this.redraw = true;
 	}
 }
 

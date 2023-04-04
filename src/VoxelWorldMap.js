@@ -54,6 +54,21 @@ class VoxelWorldMap {
 		return this.blocks.filter((block) => ArrayCoords.checkEqual(block.coords, coords));
 	}
 
+	getBlocksAtMoveCoordinates(coords, facing, forward = 0, strafe = 0, up = 0) {
+		const newCoords = ArrayCoords.getRelativeCoordsInDirection(coords, facing, forward, strafe, up);
+		return this.getBlocksAtCoords(newCoords);
+	}
+
+	getBlockedSumAtCoords(coords = []) {
+		const blocks = this.getBlocksAtCoords(coords);
+		const blockedSum = blocks.reduce((sum, block) => sum + (block.blocked || 0), 0);
+		return blockedSum;
+	}
+
+	isBlockedAtCoords(coords = []) {
+		return (this.getBlockedSumAtCoords(coords) >= 1);
+	}
+
 	getNpcs() {
 		return this.blocks.filter((block) => block.isNpcBlob);
 	}

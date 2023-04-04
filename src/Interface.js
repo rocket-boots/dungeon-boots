@@ -36,18 +36,18 @@ class Interface {
 		if (this.optionsView === 'combat') {
 			html = ['Hack', 'Slash', 'Smash'].map((ability, i) => (
 				`<li>
-					<button type="button">
+					<button type="button" data-command="attack ${i + 1}">
 						${ability}
-						<i class="key" data-command="attack ${i + 1}">${i + 1}</i>
+						<i class="key">${i + 1}</i>
 					</button>
 				</li>`
 			)).join('');
 		} else if (this.optionsView === 'talk') {
 			html = ['Insult', 'Shout', 'Ignore'].map((ability, i) => (
 				`<li>
-					<button type="button">
+					<button type="button" data-command="option ${i + 1}">
 						${ability}
-						<i class="key" data-command="option ${i + 1}">${i + 1}</i>
+						<i class="key">${i + 1}</i>
 					</button>
 				</li>`
 			)).join('');
@@ -55,9 +55,9 @@ class Interface {
 			html = blob.inventory.map((inventoryItem, i) => {
 				if (!inventoryItem) return '<li class="inventory-item inventory-item--empty">Empty</li>';
 				return `<li class="inventory-item">
-					<button type="button">
+					<button type="button" data-command="option ${i + 1}">
 						${inventoryItem.name}
-						<i class="key" data-command="option ${i + 1}">${i + 1}</i>
+						<i class="key">${i + 1}</i>
 					</button>
 				</li>`;
 			}).join('');

@@ -214,6 +214,9 @@ class DungeonCrawlerGame {
 		if (sceneObj) {
 			this.blockSceneObjectMapping[block.blockId] = sceneObj;
 			sceneObj.position.set(x * VISUAL_BLOCK_SIZE, y * VISUAL_BLOCK_SIZE, -z * VISUAL_BLOCK_SIZE);
+			if (block.isPlayerBlob) { // TODO: only hide the current main player
+				sceneObj.visible = this.mapView;
+			}
 			if (group) group.add(sceneObj);
 			else this.scene.add(sceneObj);
 		} else {
@@ -320,9 +323,11 @@ class DungeonCrawlerGame {
 		});
 	}
 
-	renderNpcs() {
+	renderActors() {
 		const npcs = this.getNpcs();
 		npcs.forEach((block) => this.updateBlockPosition(block));
+		const p = this.getMainPlayer();
+		this.updateBlockPosition(p);
 	}
 
 	animate() {
@@ -331,7 +336,7 @@ class DungeonCrawlerGame {
 		// this.orbitControls.update();
 		this.renderScene();
 		this.updateCamera();
-		this.renderNpcs();
+		this.renderActors();
 	}
 
 	/** Render everything */
@@ -400,6 +405,7 @@ class DungeonCrawlerGame {
 	/** Take inputs commands and queue them for the main player */
 	handleInputCommand(command) {
 		console.log('Command:', command);
+		const p = this.getMainPlayer();
 		const commandWords = command.split(' ');
 		if (commandWords[0] === 'view') {
 			const [, page] = commandWords;
@@ -412,8 +418,13 @@ class DungeonCrawlerGame {
 			this.render();
 			return;
 		}
+		if (commandWords[0] === 'option') {
+			if (this.interface.optionsView === 'combat') command = `attack ${commandWords[1]}`;
+		}
 		if (command === 'map') {
 			this.mapView = !this.mapView;
+			const playerSceneObject = this.blockSceneObjectMapping[p.blockId];
+			playerSceneObject.visible = this.mapView;
 			this.render();
 			return;
 		}
@@ -430,8 +441,10 @@ class DungeonCrawlerGame {
 		if (commandWords[0] === 'attack') {
 			const target = blob.getFacingActor(worldMap);
 			if (target) {
-				target.damage(1, 'hp');
+				const dmg = (blob.isPlayerBlob) ? 9 : 1;
+				target.damage(dmg, 'hp');
 				// TODO
+				target.checkDeath();
 			} else console.warn('Nothing to attack');
 			return;
 		}
@@ -455,21 +468,22 @@ class DungeonCrawlerGame {
 			else if (command === 'descend') up = -1;
 			// console.log(blob.name, 'Desired Move:', mapKey, 'facing', blob.facing,
 			// 'forward', forward, 'strafe', strafe, 'up', up);
-			const block = this.world.getBlockAtMoveCoordinates(
-				mapKey,
+			const newCoords = ArrayCoords.getRelativeCoordsInDirection(
 				blob.getCoords(),
 				blob.facing,
 				forward,
 				strafe,
 				up,
 			);
-			if (block.blocked) {
+			const blocks = worldMap.getBlocksAtCoords(newCoords);
+			const block = blocks[0]; // just look at first block in case there are multiple
+			if (block && block.blocked) {
 				console.log('\t', blob.name, 'blocked at', JSON.stringify(block.coords), 'Desired Move:', mapKey, 'facing', blob.facing, 'forward', forward, 'strafe', strafe, 'up', up);
 				// console.log('\tBlocked at', JSON.stringify(block.coords), block);
 				return;
 			}
-			let moveToCoords = block.coords;
-			if (block.teleport) {
+			let moveToCoords = newCoords;
+			if (block && block.teleport) {
 				const [destMapKey, x, y, z, turn] = block.teleport;
 				moveToCoords = [x, y, z];
 				blob.turnTo(turn);
@@ -495,10 +509,10 @@ class DungeonCrawlerGame {
 	}
 
 	doActorsCommands(actors = []) {
-		actors.forEach((p) => {
-			const command = p.dequeueCommand(p);
-			if (!command) return;
-			this.doActorCommand(p, command);
+		actors.forEach((a) => {
+			const command = a.dequeueCommand();
+			if (!command || a.dead) return;
+			this.doActorCommand(a, command);
 		});
 	}
 
@@ -510,6 +524,17 @@ class DungeonCrawlerGame {
 		npcs.forEach((a) => a.plan(this.players, this.getMainPlayerMap()));
 		// ^ TODO: More efficient to do the planning while waiting for player input
 		this.doActorsCommands(npcs);
+		// Death checks
+		if (this.getMainPlayer().checkDeath()) alert('You are dead');
+		let redraws = 0;
+		npcs.forEach((a) => {
+			a.checkDeath();
+			if (a.redraw) {
+				redraws += 1;
+				a.redraw = false;
+			}
+		});
+		if (redraws > 0) this.setupScene();
 		this.render();
 	}
 

@@ -29,7 +29,7 @@ class NpcBlob extends ActorBlob {
 			this.turn((roll < 0.2) ? 1 : -1); // turning is free for NPCs
 		}
 		// Hunters
-		if (this.brain.huntPlayers && roll < this.brain.huntPlayers && this.aggro) {
+		if (this.brain.huntPlayers && roll < this.brain.huntPlayers && this.aggro && !this.dead) {
 			const isHunting = this.planHunt(players, worldMap);
 			if (isHunting) return;
 		}

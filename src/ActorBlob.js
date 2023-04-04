@@ -3,6 +3,7 @@ import Actor from './Actor.js';
 import BlockEntity from './BlockEntity.js';
 
 const MAX_COMMAND_QUEUE_SIZE = 3;
+const GHOST_TEXTURE = 'ghost_new.png';
 
 /** A blob of characters that can interact with the world */
 class ActorBlob extends BlockEntity {
@@ -19,6 +20,7 @@ class ActorBlob extends BlockEntity {
 		this.inventory = [null, null, null, null, null, null];
 		// Update defaults for some actor-specific legend properties
 		if (typeof this.aggro !== 'number') this.aggro = 0;
+		this.dead = false;
 	}
 
 	turn(n = 0) {
@@ -67,15 +69,18 @@ class ActorBlob extends BlockEntity {
 		return (this.commandQueue.length > 0);
 	}
 
+	getAheadCoords() {
+		return ArrayCoords.getRelativeCoordsInDirection(this.coords, this.facing, 1, 0, 0);
+	}
+
 	getFacingBlocks(worldMap) {
-		const aheadCoords = ArrayCoords.getRelativeCoordsInDirection(this.coords, this.facing, 1, 0, 0);
+		const aheadCoords = this.getAheadCoords();
 		return worldMap.getBlocksAtCoords(aheadCoords);
 	}
 
 	checkFacingWall(worldMap) {
-		const blocksAhead = this.getFacingBlocks(worldMap);
-		const blockedSum = blocksAhead.reduce((sum, block) => sum + (block.blocked || 0), 0);
-		return (blockedSum >= 1);
+		const aheadCoords = this.getAheadCoords();
+		return worldMap.isBlockedAtCoords(aheadCoords);
 	}
 
 	getFacingActor(worldMap) {
@@ -106,6 +111,25 @@ class ActorBlob extends BlockEntity {
 		const whoIsHit = this.getRandomMember();
 		if (dmg) this.aggro = 1;
 		return whoIsHit.damage(dmg, poolType);
+	}
+
+	kill() {
+		this.blob.forEach((character) => {
+			character.damage(Infinity, 'hp');
+		});
+		this.dead = true;
+		this.blocked = 0;
+		this.changeTexture(this.deadTexture || this.ghostTexture || GHOST_TEXTURE);
+	}
+
+	checkDeath() {
+		const totalHp = this.blob.map((character) => character.hp.get())
+			.reduce((sum, hp) => sum + hp, 0);
+		if (totalHp <= 0) {
+			this.kill();
+			return true;
+		}
+		return false;
 	}
 }
 
