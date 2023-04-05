@@ -49,6 +49,9 @@ const KB_MAPPING = {
 
 const TURN_COMMANDS = ['turnLeft', 'turnRight'];
 const MOVE_COMMANDS = ['forward', 'back', 'strafeLeft', 'strafeRight'];
+const DEFAULT_SOUNDS = {
+	// TODO
+};
 
 const $ = (selector) => {
 	const elt = window.document.querySelector(selector);
@@ -61,6 +64,8 @@ class DungeonCrawlerGame {
 	constructor(options = {}) {
 		this.worldSourceMaps = options.worldMaps;
 		this.startAt = options.startAt;
+		this.customEvents = options.customEvents || {};
+		this.sounds = options.sounds || DEFAULT_SOUNDS;
 		this.world = new VoxelWorld(this.worldSourceMaps);
 		this.players = [];
 		this.mainPlayerIndex = 0;
@@ -368,7 +373,7 @@ class DungeonCrawlerGame {
 		// const light = new THREE.DirectionalLight(color, intensity);
 		// light.position.set(-1, 2, 4);
 		// grid.scene.add(light);
-		this.eyeLight = new THREE.PointLight(0xffffff, 0.9, VISUAL_BLOCK_SIZE * 5);
+		this.eyeLight = new THREE.PointLight(0xffffff, 0.9, VISUAL_BLOCK_SIZE * 6);
 		this.scene.add(this.eyeLight);
 
 		const pointLight = new THREE.PointLight(0xffffff, 0.15, 1000);
@@ -405,6 +410,7 @@ class DungeonCrawlerGame {
 	/** Take inputs commands and queue them for the main player */
 	handleInputCommand(command) {
 		console.log('Command:', command);
+		// this.sounds.play('button');
 		const p = this.getMainPlayer();
 		const commandWords = command.split(' ');
 		if (commandWords[0] === 'view') {
@@ -440,6 +446,11 @@ class DungeonCrawlerGame {
 		const commandWords = command.split(' ');
 		if (commandWords[0] === 'attack') {
 			const target = blob.getFacingActor(worldMap);
+			if (target.isPlayerBlob) {
+				this.sounds.play('hurt');
+			} else {
+				this.sounds.play('hit');
+			}
 			if (target) {
 				const dmg = (blob.isPlayerBlob) ? 9 : 1;
 				target.damage(dmg, 'hp');
@@ -525,7 +536,10 @@ class DungeonCrawlerGame {
 		// ^ TODO: More efficient to do the planning while waiting for player input
 		this.doActorsCommands(npcs);
 		// Death checks
-		if (this.getMainPlayer().checkDeath()) alert('You are dead');
+		if (this.getMainPlayer().checkDeath()) {
+			this.sounds.playMusic('death');
+			this.sounds.play('death');
+		}
 		let redraws = 0;
 		npcs.forEach((a) => {
 			a.checkDeath();
@@ -566,6 +580,7 @@ class DungeonCrawlerGame {
 		this.render();
 		this.tick();
 		this.animate();
+		this.sounds.playMusic('explore');
 	}
 
 	stop() {

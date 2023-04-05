@@ -1,4 +1,10 @@
-import nodeResolve from 'rollup-plugin-node-resolve';
+// import nodeResolve from 'rollup-plugin-node-resolve';
+import { nodeResolve } from '@rollup/plugin-node-resolve';
+import commonjs from '@rollup/plugin-commonjs';
+
+// This is needed for Howler ^
+// See https://github.com/goldfire/howler.js/issues/688#issuecomment-792357729
+
 // import copy from 'rollup-plugin-copy';
 
 const input = './src/example/game.js';
@@ -7,6 +13,7 @@ const input = './src/example/game.js';
 const external = [];
 const plugins = [
 	nodeResolve(),
+	commonjs(),
 	// copy({
 	// 	targets: [
 	// 		{

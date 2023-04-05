@@ -39,6 +39,7 @@ const legend = {
 		name: 'cyclops',
 		blocked: 1,
 		renderAs: 'plane',
+		// color: [0.1, 0.1, 0.1],
 		texture: 'cyclops_new.png',
 		npc: 'monster',
 		aggro: 1,

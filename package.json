@@ -14,14 +14,16 @@
   "author": "Luke Nickerson",
   "license": "MIT",
   "dependencies": {
+    "howler": "^2.2.3",
     "keyboard-commander": "github:rocket-boots/keyboard-commander",
     "rocket-boots-three-toolbox": "github:rocket-boots/rocket-boots-three-toolbox",
     "three": "^0.150.1"
   },
   "devDependencies": {
+    "@rollup/plugin-commonjs": "^24.0.1",
+    "@rollup/plugin-node-resolve": "^15.0.2",
     "http-server": "^14.1.1",
     "rocket-boots-eslint": "github:rocket-boots/rocket-boots-eslint",
-    "rollup": "^3.20.2",
-    "rollup-plugin-node-resolve": "^5.2.0"
+    "rollup": "^3.20.2"
   }
 }
