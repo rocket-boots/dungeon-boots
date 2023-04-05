@@ -16,12 +16,14 @@ class VoxelWorldMap {
 	}
 
 	static parseWorldMapToBlocks(mapKey, map, legend) {
+	console.log(legend);
 		const blocks = [];
 		map.forEach((floor, z) => {
 			floor.forEach((row, y) => {
 				row.split('').forEach((char, x) => {
 					const startAt = [mapKey, x, y, z];
 					const blockLegend = legend[char];
+					console.log("Tile:" +char);
 					// If it is called "clear", or it is not blocking and not being rendered,
 					// then it's not really a block.
 					if (blockLegend.name === 'clear' || (!blockLegend.renderAs && !blockLegend.blocked)) {

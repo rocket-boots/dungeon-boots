@@ -3,8 +3,8 @@ import worldMaps from './worldMaps.js';
 
 const game = new DungeonCrawlerGame({
 	worldMaps,
-	startAt: ['temple', 8, 4, 1],
-	clearColor: '#221100',
+	startAt: ['forest', 8, 4, 1],
+	clearColor: '#044019',
 });
 window.document.addEventListener('DOMContentLoaded', () => {
 	window.pc = game.makeNewPlayer();

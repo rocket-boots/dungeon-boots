@@ -39,7 +39,7 @@ const legend = {
 		name: 'cyclops',
 		blocked: 1,
 		renderAs: 'plane',
-		texture: 'cyclops_new.png',
+		texture: '/monster/cyclops_new.png',
 		npc: 'monster',
 	},
 	'1': {
@@ -57,6 +57,42 @@ const legend = {
 	'4': {
 		...teleportDoor,
 		teleport: ['temple', 10, 5, 1, 0],
+	},
+	// Forest Tiles
+	'd': {
+		name: 'dirt',
+		blocked: 1,
+		renderAs: 'box',
+		color: [0.8, 0.8, 0.7],
+		texture: '/level_objects/floor/dirt0.png',
+	},
+	'M': {
+		name: 'mangrove',
+		blocked: 1,
+		renderAs: 'box',
+		color: [0, 0, 0],
+		texture: '/level_objects/trees/mangrove1.png',
+	},
+	'N': {
+		name: 'mangrove2',
+		blocked: 1,
+		renderAs: 'box',
+		color: [0, 0, 0],
+		texture: '/level_objects/trees/mangrove2.png',
+	},
+	'T': {
+		name: 'tree_yellow',
+		blocked: 1,
+		renderAs: 'box',
+		color: [0, 0, 0],
+		texture: '/level_objects/trees/tree1_yellow.png',
+	},
+	'W': {
+		name: 'wandering_mushroom',
+		blocked: 1,
+		renderAs: 'plane',
+		texture: '/monsters/fungi_plants/wandering_mushroom.png',
+		npc: 'monster',
 	},
 };
 

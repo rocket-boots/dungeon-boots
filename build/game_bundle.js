@@ -51398,12 +51398,14 @@
 		}
 
 		static parseWorldMapToBlocks(mapKey, map, legend) {
+		console.log(legend);
 			const blocks = [];
 			map.forEach((floor, z) => {
 				floor.forEach((row, y) => {
 					row.split('').forEach((char, x) => {
 						const startAt = [mapKey, x, y, z];
 						const blockLegend = legend[char];
+						console.log("Tile:" +char);
 						// If it is called "clear", or it is not blocking and not being rendered,
 						// then it's not really a block.
 						if (blockLegend.name === 'clear' || (!blockLegend.renderAs && !blockLegend.blocked)) {
@@ -52150,7 +52152,7 @@
 			name: 'cyclops',
 			blocked: 1,
 			renderAs: 'plane',
-			texture: 'cyclops_new.png',
+			texture: '/monster/cyclops_new.png',
 			npc: 'monster',
 		},
 		'1': {
@@ -52169,38 +52171,106 @@
 			...teleportDoor,
 			teleport: ['temple', 10, 5, 1, 0],
 		},
+		// Forest Tiles
+		'd': {
+			name: 'dirt',
+			blocked: 1,
+			renderAs: 'box',
+			color: [0.8, 0.8, 0.7],
+			texture: '/level_objects/floor/dirt0.png',
+		},
+		'M': {
+			name: 'mangrove',
+			blocked: 1,
+			renderAs: 'box',
+			color: [0, 0, 0],
+			texture: '/level_objects/trees/mangrove1.png',
+		},
+		'N': {
+			name: 'mangrove2',
+			blocked: 1,
+			renderAs: 'box',
+			color: [0, 0, 0],
+			texture: '/level_objects/trees/mangrove2.png',
+		},
+		'T': {
+			name: 'tree_yellow',
+			blocked: 1,
+			renderAs: 'box',
+			color: [0, 0, 0],
+			texture: '/level_objects/trees/tree1_yellow.png',
+		},
+		'W': {
+			name: 'wandering_mushroom',
+			blocked: 1,
+			renderAs: 'plane',
+			texture: '/monsters/fungi_plants/wandering_mushroom.png',
+			npc: 'monster',
+		},
 	};
 
 	var worldMaps = {
 		temple: {
+				legend,
+				map: [
+					[
+						'###################',
+						'###################',
+						'###### #&&#########',
+						'###################',
+						'###################',
+						'###################',
+						'########## ########',
+					],
+					[
+						'##########1########',
+						'###    &&| | #    #',
+						'#   #         && # ',
+						'# # #       && &#C#',
+						'### ###C    && &  #',
+						'###   ###         #',
+						'#########&3&&######',
+					],
+					[
+						'##########2       #',
+						'################# #',
+						'######&&&& ########',
+						'########## ########',
+						'###        ## #### ',
+						'###   ####     ####',
+						'#########& ########',
+					],
+				],
+			},
+		forest: {
 			legend,
 			map: [
 				[
-					'###################',
-					'###################',
-					'###### #&&#########',
-					'###################',
-					'###################',
-					'###################',
-					'########## ########',
+					'ddddddddddddddddddd',
+					'ddddddddddddddddddd',
+					'ddddddddddddddddddd',
+					'ddddddddddddddddddd',
+					'ddddddddddddddddddd',
+					'ddddddddddddddddddd',
+					'ddddddddddddddddddd',
 				],
 				[
-					'##########1########',
-					'###    &&| | #    #',
-					'#   #         && #',
-					'# # #       && &#C#',
-					'### ###C    && &  #',
-					'###   ###         #',
-					'#########&3&&######',
+					'MMMMMMMMMMMMMMMMMMM',
+					'M                 M',
+					'M                 M',
+					'M                 M',
+					'M         W       M',
+					'M                 M',
+					'MMMMMMMMMMMMMMMMMMM',
 				],
 				[
-					'##########2       #',
-					'################# #',
-					'######&&&& ########',
-					'########## ########',
-					'###        ## ####',
-					'###   ####     ####',
-					'#########& ########',
+					'                   ',
+					'                   ',
+					'                   ',
+					'                   ',
+					'                   ',
+					'                   ',
+					'                   ',
 				],
 			],
 		},
@@ -52240,8 +52310,8 @@
 
 	const game = new DungeonCrawlerGame({
 		worldMaps,
-		startAt: ['temple', 8, 4, 1],
-		clearColor: '#221100',
+		startAt: ['forest', 8, 4, 1],
+		clearColor: '#044019',
 	});
 	window.document.addEventListener('DOMContentLoaded', () => {
 		window.pc = game.makeNewPlayer();
