@@ -52518,6 +52518,7 @@
 			}
 			if (command === 'wait') {
 				blob.waitHeal(1);
+				if (blob.isPlayerBlob) this.sounds.play('drink');
 				return;
 			}
 			if (TURN_COMMANDS.includes(command)) {
@@ -52547,6 +52548,7 @@
 				const block = blocks[0]; // just look at first block in case there are multiple
 				if (block && block.blocked) {
 					console.log('\t', blob.name, 'blocked at', JSON.stringify(block.coords), 'Desired Move:', mapKey, 'facing', blob.facing, 'forward', forward, 'strafe', strafe, 'up', up);
+					if (blob.isPlayerBlob) this.sounds.play('dud');
 					// console.log('\tBlocked at', JSON.stringify(block.coords), block);
 					return;
 				}
@@ -52561,6 +52563,7 @@
 				}
 				console.log('\t', blob.name, 'moving to', JSON.stringify(moveToCoords), block);
 				blob.moveTo(moveToCoords);
+				if (blob.isPlayerBlob) this.sounds.play('walk');
 				return;
 			}
 			console.log('Unknown command', command, 'from', blob.name || blob.blockId);
@@ -56144,6 +56147,17 @@
 			`${SOUNDS_ROOT}/Warrior grunt-008.wav`,
 		],
 		death: `${SOUNDS_ROOT}/Warrior Death Grunt.wav`,
+		walk: [
+			`${SOUNDS_ROOT}/woosh-001.wav`,
+			`${SOUNDS_ROOT}/woosh-002.wav`,
+			`${SOUNDS_ROOT}/woosh-003.wav`,
+		],
+		dud: `${SOUNDS_ROOT}/menu_inventory selection Wrong.wav`,
+		drink: [
+			`${SOUNDS_ROOT}/Potion Drinking.wav`,
+			`${SOUNDS_ROOT}/Potion Drinking 2.wav`,
+			`${SOUNDS_ROOT}/Potion Drinking 5.wav`,
+		],
 	};
 
 	const musicListing = {

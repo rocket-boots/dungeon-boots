@@ -461,6 +461,7 @@ class DungeonCrawlerGame {
 		}
 		if (command === 'wait') {
 			blob.waitHeal(1);
+			if (blob.isPlayerBlob) this.sounds.play('drink');
 			return;
 		}
 		if (TURN_COMMANDS.includes(command)) {
@@ -490,6 +491,7 @@ class DungeonCrawlerGame {
 			const block = blocks[0]; // just look at first block in case there are multiple
 			if (block && block.blocked) {
 				console.log('\t', blob.name, 'blocked at', JSON.stringify(block.coords), 'Desired Move:', mapKey, 'facing', blob.facing, 'forward', forward, 'strafe', strafe, 'up', up);
+				if (blob.isPlayerBlob) this.sounds.play('dud');
 				// console.log('\tBlocked at', JSON.stringify(block.coords), block);
 				return;
 			}
@@ -504,6 +506,7 @@ class DungeonCrawlerGame {
 			}
 			console.log('\t', blob.name, 'moving to', JSON.stringify(moveToCoords), block);
 			blob.moveTo(moveToCoords);
+			if (blob.isPlayerBlob) this.sounds.play('walk');
 			return;
 		}
 		console.log('Unknown command', command, 'from', blob.name || blob.blockId);

@@ -29,6 +29,17 @@ const soundsListing = {
 		`${SOUNDS_ROOT}/Warrior grunt-008.wav`,
 	],
 	death: `${SOUNDS_ROOT}/Warrior Death Grunt.wav`,
+	walk: [
+		`${SOUNDS_ROOT}/woosh-001.wav`,
+		`${SOUNDS_ROOT}/woosh-002.wav`,
+		`${SOUNDS_ROOT}/woosh-003.wav`,
+	],
+	dud: `${SOUNDS_ROOT}/menu_inventory selection Wrong.wav`,
+	drink: [
+		`${SOUNDS_ROOT}/Potion Drinking.wav`,
+		`${SOUNDS_ROOT}/Potion Drinking 2.wav`,
+		`${SOUNDS_ROOT}/Potion Drinking 5.wav`,
+	],
 };
 
 const musicListing = {
