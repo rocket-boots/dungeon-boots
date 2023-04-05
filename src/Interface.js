@@ -1,4 +1,5 @@
 import abilities from './abilities.js';
+import ArrayCoords from './ArrayCoords.js';
 
 const $ = (selector) => {
 	const elt = window.document.querySelector(selector);
@@ -6,12 +7,18 @@ const $ = (selector) => {
 	return elt;
 };
 
+function capitalizeFirstLetter(string) {
+	return string.charAt(0).toUpperCase() + string.slice(1);
+}
+
 class Interface {
 	constructor() {
 		this.OPTIONS_VIEWS = ['combat', 'talk', 'inventory'];
 		this.optionsView = 'closed'; // 'closed', 'combat', 'talk', 'inventory'
-		this.FULL_VIEWS = ['character', 'abilities', 'spells', 'menu'];
+		this.FULL_VIEWS = ['character', 'abilities', 'spells', 'menu', 'dead'];
 		this.fullView = 'closed'; // 'closed', 'character', 'abilities', 'spells', 'menu'
+		this.miniMapOn = false;
+		this.talkOptions = [];
 	}
 
 	view(what) {
@@ -26,6 +33,12 @@ class Interface {
 			this.fullView = 'closed';
 			this.optionsView = 'closed';
 		}
+	}
+
+	renderMiniMap() {
+		if (!this.miniMapOn) return;
+		const mapHtml = this.getWorldTextRows().join('<br>');
+		$('#mini-map').innerHTML = mapHtml;
 	}
 
 	renderOptions(blob) {
@@ -43,10 +56,10 @@ class Interface {
 				</li>`
 			)).join('');
 		} else if (this.optionsView === 'talk') {
-			html = ['Insult', 'Shout', 'Ignore'].map((ability, i) => (
+			html = this.talkOptions.map((dialogItem, i) => (
 				`<li>
-					<button type="button" data-command="option ${i + 1}">
-						${ability}
+					<button type="button" data-command="dialog ${i + 1}">
+						${capitalizeFirstLetter(dialogItem.question)}
 						<i class="key">${i + 1}</i>
 					</button>
 				</li>`
@@ -105,8 +118,29 @@ class Interface {
 			html = `<h1>Character</h1> ${JSON.stringify(blob, null, ' ')}`;
 		} else if (this.fullView === 'menu') {
 			html = 'Menu - Not implemented yet';
+		} else if (this.fullView === 'dead') {
+			html = '<div class="you-died">YOU DIED</div><p>💀</p>Refresh the page to play again.';
 		}
 		view.innerHTML = html;
+	}
+
+	renderStats(blob) {
+		const leader = blob.getLeader();
+		['hp', 'willpower', 'stamina', 'balance'].forEach((key) => {
+			$(`#${key}-value`).innerText = leader[key].getText();
+		});
+	}
+
+	render(blob) {
+		if (blob.dead) {
+			this.view('dead');
+		}
+		if (this.fullView === 'closed') {
+			$('#direction').innerText = `Direction: ${ArrayCoords.getDirectionName(blob.facing)}`;
+		}
+		this.renderStats(blob);
+		this.renderOptions(blob);
+		this.renderFullView(blob);
 	}
 }
 

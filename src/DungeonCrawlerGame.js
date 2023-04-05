@@ -75,14 +75,11 @@ class DungeonCrawlerGame {
 		this.mapView = false;
 		// Rendering properties
 		this.interface = new Interface();
-		this.miniMapOn = false;
 		this.clearColor = options.clearColor || '#77bbff';
 		this.renderer = null;
 		this.scene = null;
 		this.eyeLight = null;
 		this.autoFacingObjects = []; // Things (like sprite planes) that need to auto-face the camera
-		// this.mainPlayerPositionCurrent = new Vector3();
-		// this.mainPlayerPositionGoal = new Vector3();
 		this.camera = null;
 		this.cameraZOffset = -1; // TODO: why negative for "above"?
 		this.cameraZMapOffset = -80;
@@ -132,7 +129,6 @@ class DungeonCrawlerGame {
 		this.scene = new Scene();
 		this.camera = this.makeCamera();
 		this.makeLight();
-		// this.orbitControls = new OrbitControls(this.camera, this.renderer.domElement);
 
 		// Test code
 		// const geometry = new THREE.BoxGeometry(
@@ -157,11 +153,8 @@ class DungeonCrawlerGame {
 		const p = this.getMainPlayer();
 		const coords = p.getCoords();
 		const [, , pZ] = coords;
-		// const mapKey = p.getMapKey();
-		// const floorBlocks = this.world.getFloorBlocks(mapKey, pZ)
-		// 	.concat(this.world.getFloorBlocks(mapKey, pZ - 1))
-		// 	.concat(this.world.getFloorBlocks(mapKey, pZ + 1));
-		const floorBlocks = this.getMainPlayerMap().getNearbyBlocks(coords, [10, 10, 4]);
+		const floorBlocks = this.getMainPlayerMap().getNearbyBlocks(coords, [20, 20, 4]);
+		// TODO: Fix this ^ - bigger range? until we load/unload blocks dynamically
 		this.blocksAboveGroup = new THREE.Group();
 		this.blocksAtOrBelowGroup = new THREE.Group();
 		this.scene.add(this.blocksAboveGroup);
@@ -232,6 +225,11 @@ class DungeonCrawlerGame {
 	updateBlockPosition(block, t = 0.1) {
 		const [x, y, z] = block.coords;
 		const sceneObject = this.blockSceneObjectMapping[block.blockId];
+		if (!sceneObject) {
+			// console.warn(`Cannot find sceneObject in blockSceneObjectMapping with blockId ${block.blockId}`);
+			// TODO: Investigate and fix this error
+			return;
+		}
 		// sceneObject.iterimPos = new Vector3();
 		const goalPos = new Vector3(
 			x * VISUAL_BLOCK_SIZE,
@@ -303,21 +301,9 @@ class DungeonCrawlerGame {
 		// this.camera.lookAt(this.lookCurrent);
 	}
 
-	renderMiniMap() {
-		if (!this.miniMapOn) return;
-		const mapHtml = this.getWorldTextRows().join('<br>');
-		$('#mini-map').innerHTML = mapHtml;
-	}
-
 	renderUI() {
 		const p = this.getMainPlayer();
-		const pc = p.getLeader();
-		['hp', 'willpower', 'stamina', 'balance'].forEach((key) => {
-			$(`#${key}-value`).innerText = pc[key].getText();
-		});
-		$('#direction').innerText = `Direction: ${ArrayCoords.getDirectionName(p.facing)}`;
-		this.interface.renderOptions(p);
-		this.interface.renderFullView(p);
+		this.interface.render(p);
 	}
 
 	renderScene() { // Just render the three js scene
@@ -337,18 +323,16 @@ class DungeonCrawlerGame {
 
 	animate() {
 		if (this.isStopped) return;
-		requestAnimationFrame(() => this.animate());
-		// this.orbitControls.update();
 		this.renderScene();
 		this.updateCamera();
 		this.renderActors();
+		requestAnimationFrame(() => this.animate());
 	}
 
 	/** Render everything */
 	render() {
 		this.updateCamera();
 		this.renderScene();
-		this.renderMiniMap();
 		this.renderUI();
 		// Update camera
 		// const { x, y, z } = this.convertMapToRenderingVector3(this.getMainPlayer().getCoords());
@@ -407,6 +391,14 @@ class DungeonCrawlerGame {
 	// 	return n;
 	// }
 
+	calculateTalkOptions(blob) {
+		const mapKey = blob.getMapKey();
+		const worldMap = this.world.getMap(mapKey);
+		const talkTo = blob.getFacingActor(worldMap);
+		if (!talkTo) return [];
+		return blob.getDialogOptions(talkTo);
+	}
+
 	/** Take inputs commands and queue them for the main player */
 	handleInputCommand(command) {
 		console.log('Command:', command);
@@ -419,6 +411,15 @@ class DungeonCrawlerGame {
 			this.render();
 			return;
 		}
+		if (command === 'talk') {
+			this.interface.talkOptions = this.calculateTalkOptions(p);
+			if (!this.interface.talkOptions.length) {
+				this.sounds.play('dud');
+				this.interface.view('closed');
+				this.render();
+				return;
+			}
+		}
 		if (this.interface.OPTIONS_VIEWS.includes(command)) {
 			this.interface.view(command);
 			this.render();
@@ -426,6 +427,7 @@ class DungeonCrawlerGame {
 		}
 		if (commandWords[0] === 'option') {
 			if (this.interface.optionsView === 'combat') command = `attack ${commandWords[1]}`;
+			if (this.interface.optionsView === 'talk') command = `dialog ${commandWords[1]}`;
 		}
 		if (command === 'map') {
 			this.mapView = !this.mapView;
@@ -444,19 +446,36 @@ class DungeonCrawlerGame {
 		const mapKey = blob.getMapKey();
 		const worldMap = this.world.getMap(mapKey);
 		const commandWords = command.split(' ');
+		const target = blob.getFacingActor(worldMap);
 		if (commandWords[0] === 'attack') {
-			const target = blob.getFacingActor(worldMap);
-			if (target.isPlayerBlob) {
-				this.sounds.play('hurt');
-			} else {
-				this.sounds.play('hit');
-			}
 			if (target) {
+				if (target.isPlayerBlob) {
+					this.sounds.play('hurt');
+				} else {
+					this.sounds.play('hit');
+				}
 				const dmg = (blob.isPlayerBlob) ? 9 : 1;
 				target.damage(dmg, 'hp');
 				// TODO
 				target.checkDeath();
-			} else console.warn('Nothing to attack');
+			} else {
+				this.sounds.play('dud');
+				console.warn('Nothing to attack');
+			}
+			return;
+		}
+		if (commandWords[0] === 'dialog') {
+			const dialogOptions = this.calculateTalkOptions(blob);
+			if (!dialogOptions.length) {
+				this.sounds.play('dud');
+				return;
+			}
+			const index = (Number(commandWords[1]) || 0) - 1;
+			const { answer = '...' } = dialogOptions[index];
+			// console.log(dialogOptions, index);
+			window.alert(answer);
+			blob.listenToDialog(dialogOptions[index], target);
+			this.interface.talkOptions = this.calculateTalkOptions(blob);
 			return;
 		}
 		if (command === 'wait') {

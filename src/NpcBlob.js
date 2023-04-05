@@ -8,6 +8,10 @@ const BRAINS = {
 		huntPlayers: 1,
 		sight: 10,
 	},
+	still: {
+		wander: 0,
+		//
+	},
 };
 
 /** A blob of NPCs */

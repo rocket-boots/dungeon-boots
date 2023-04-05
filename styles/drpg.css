@@ -143,6 +143,15 @@ button:active {
 	min-height: 0;
 	transform: scale(0);
 }
+.ui-full-view--dead {
+	height: 50vh;
+	text-align: center;
+}
+.you-died {
+	font-size: 500%;
+	font-weight: bold;
+	color: red;
+}
 
 .ability-item {
 	display: block;

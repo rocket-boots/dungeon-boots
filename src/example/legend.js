@@ -10,7 +10,7 @@ const legend = {
 		name: 'clear', blocked: 0, renderAs: false,
 	},
 	'#': {
-		name: 'stone',
+		name: 'cobble',
 		blocked: 1,
 		renderAs: 'box',
 		color: [0.8, 0.8, 0.7],
@@ -18,11 +18,12 @@ const legend = {
 		textureRange: [1, 11],
 	},
 	'&': {
-		name: 'brick',
+		name: 'cave',
 		blocked: 1,
 		renderAs: 'box',
 		color: [0.9, 0.9, 0.9],
-		texture: 'bricks.png',
+		texture: 'lair_new_.png',
+		textureRange: [0, 3],
 	},
 	'|': {
 		name: 'crumbled_column',
@@ -51,6 +52,20 @@ const legend = {
 		texture: 'ogre_new.png',
 		npc: 'monster',
 		aggro: 1,
+	},
+	'p': {
+		name: 'orc priest',
+		blocked: 1,
+		renderAs: 'plane',
+		texture: 'orc_priest_new.png',
+		npc: 'still',
+		aggro: 0,
+		dialog: {
+			hello: 'I have not seen you in Wretchold before.',
+			name: 'I am Zogrod.',
+			job: { a: 'I keep an eye out for intruders.', unlocks: 'intruders' },
+			intruders: { a: 'Intruders like you!', locked: true },
+		},
 	},
 	'1': {
 		...teleportDoor,

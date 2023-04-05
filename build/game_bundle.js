@@ -51306,6 +51306,7 @@
 			// Update defaults for some actor-specific legend properties
 			if (typeof this.aggro !== 'number') this.aggro = 0;
 			this.dead = false;
+			this.interactions = {};
 		}
 
 		turn(n = 0) {
@@ -51386,6 +51387,51 @@
 			return Array.from(allBlobAbilitiesSet);
 		}
 
+		getDialogOptions(actor) {
+			if (!actor || !actor.dialog) return [];
+			const dialogKeys = Object.keys(actor.dialog);
+			const actorInteractions = this.interactions[actor.blobId] || {};
+			const { unlockedDialogKeys = [] } = actorInteractions;
+			const talkableDialogOptions = dialogKeys.filter(
+				(key) => !actor.dialog[key].locked || unlockedDialogKeys.includes(key),
+			).map((key) => {
+				const dialogOption = actor.dialog[key];
+				const dialogOptObj = (typeof dialogOption === 'object') ? dialogOption : {};
+				let { unlocks = [] } = dialogOptObj;
+				if (typeof unlocks === 'string') unlocks = [unlocks];
+				let { locks = [] } = dialogOptObj;
+				if (typeof locks === 'string') locks = [locks];
+				const answer = (
+					dialogOptObj.answer
+					|| dialogOptObj.a
+					|| ((typeof dialogOption === 'string') ? dialogOption : '???')
+				);
+				const { questionAudio, answerAudio, cost, requires } = dialogOptObj;
+				return {
+					// ...dialogOptObj,
+					key,
+					question: dialogOptObj.question || dialogOptObj.q || key,
+					answer,
+					locks,
+					unlocks,
+					questionAudio,
+					answerAudio,
+					cost,
+					requires,
+				};
+			});
+			return talkableDialogOptions;
+		}
+
+		listenToDialog(dialogOption, actor) {
+			if (!dialogOption) throw new Error('Missing dialog option');
+			if (!this.interactions[actor.blobId]) this.interactions[actor.blobId] = {};
+			const actorInteractions = this.interactions[actor.blobId];
+			actorInteractions.unlockedDialogKeys = (actorInteractions.unlockedDialogKeys || [])
+				.concat(dialogOption.unlocks || []);
+			console.log(actorInteractions.unlockedDialogKeys);
+		}
+
 		waitHeal(rounds = 1) {
 			this.blob.forEach((character) => {
 				character.waitHeal(rounds);
@@ -51453,6 +51499,10 @@
 			wander: 0.8,
 			huntPlayers: 1,
 			sight: 10,
+		},
+		still: {
+			wander: 0,
+			//
 		},
 	};
 
@@ -51964,12 +52014,18 @@
 		return elt;
 	};
 
+	function capitalizeFirstLetter(string) {
+		return string.charAt(0).toUpperCase() + string.slice(1);
+	}
+
 	class Interface {
 		constructor() {
 			this.OPTIONS_VIEWS = ['combat', 'talk', 'inventory'];
 			this.optionsView = 'closed'; // 'closed', 'combat', 'talk', 'inventory'
-			this.FULL_VIEWS = ['character', 'abilities', 'spells', 'menu'];
+			this.FULL_VIEWS = ['character', 'abilities', 'spells', 'menu', 'dead'];
 			this.fullView = 'closed'; // 'closed', 'character', 'abilities', 'spells', 'menu'
+			this.miniMapOn = false;
+			this.talkOptions = [];
 		}
 
 		view(what) {
@@ -51984,6 +52040,12 @@
 				this.fullView = 'closed';
 				this.optionsView = 'closed';
 			}
+		}
+
+		renderMiniMap() {
+			if (!this.miniMapOn) return;
+			const mapHtml = this.getWorldTextRows().join('<br>');
+			$$1('#mini-map').innerHTML = mapHtml;
 		}
 
 		renderOptions(blob) {
@@ -52001,10 +52063,10 @@
 				</li>`
 				)).join('');
 			} else if (this.optionsView === 'talk') {
-				html = ['Insult', 'Shout', 'Ignore'].map((ability, i) => (
+				html = this.talkOptions.map((dialogItem, i) => (
 					`<li>
-					<button type="button" data-command="option ${i + 1}">
-						${ability}
+					<button type="button" data-command="dialog ${i + 1}">
+						${capitalizeFirstLetter(dialogItem.question)}
 						<i class="key">${i + 1}</i>
 					</button>
 				</li>`
@@ -52063,8 +52125,29 @@
 				html = `<h1>Character</h1> ${JSON.stringify(blob, null, ' ')}`;
 			} else if (this.fullView === 'menu') {
 				html = 'Menu - Not implemented yet';
+			} else if (this.fullView === 'dead') {
+				html = '<div class="you-died">YOU DIED</div><p>💀</p>Refresh the page to play again.';
 			}
 			view.innerHTML = html;
+		}
+
+		renderStats(blob) {
+			const leader = blob.getLeader();
+			['hp', 'willpower', 'stamina', 'balance'].forEach((key) => {
+				$$1(`#${key}-value`).innerText = leader[key].getText();
+			});
+		}
+
+		render(blob) {
+			if (blob.dead) {
+				this.view('dead');
+			}
+			if (this.fullView === 'closed') {
+				$$1('#direction').innerText = `Direction: ${ArrayCoords.getDirectionName(blob.facing)}`;
+			}
+			this.renderStats(blob);
+			this.renderOptions(blob);
+			this.renderFullView(blob);
 		}
 	}
 
@@ -52132,14 +52215,11 @@
 			this.mapView = false;
 			// Rendering properties
 			this.interface = new Interface();
-			this.miniMapOn = false;
 			this.clearColor = options.clearColor || '#77bbff';
 			this.renderer = null;
 			this.scene = null;
 			this.eyeLight = null;
 			this.autoFacingObjects = []; // Things (like sprite planes) that need to auto-face the camera
-			// this.mainPlayerPositionCurrent = new Vector3();
-			// this.mainPlayerPositionGoal = new Vector3();
 			this.camera = null;
 			this.cameraZOffset = -1; // TODO: why negative for "above"?
 			this.cameraZMapOffset = -80;
@@ -52189,7 +52269,6 @@
 			this.scene = new Scene();
 			this.camera = this.makeCamera();
 			this.makeLight();
-			// this.orbitControls = new OrbitControls(this.camera, this.renderer.domElement);
 
 			// Test code
 			// const geometry = new THREE.BoxGeometry(
@@ -52214,11 +52293,8 @@
 			const p = this.getMainPlayer();
 			const coords = p.getCoords();
 			const [, , pZ] = coords;
-			// const mapKey = p.getMapKey();
-			// const floorBlocks = this.world.getFloorBlocks(mapKey, pZ)
-			// 	.concat(this.world.getFloorBlocks(mapKey, pZ - 1))
-			// 	.concat(this.world.getFloorBlocks(mapKey, pZ + 1));
-			const floorBlocks = this.getMainPlayerMap().getNearbyBlocks(coords, [10, 10, 4]);
+			const floorBlocks = this.getMainPlayerMap().getNearbyBlocks(coords, [20, 20, 4]);
+			// TODO: Fix this ^ - bigger range? until we load/unload blocks dynamically
 			this.blocksAboveGroup = new Group();
 			this.blocksAtOrBelowGroup = new Group();
 			this.scene.add(this.blocksAboveGroup);
@@ -52289,6 +52365,11 @@
 		updateBlockPosition(block, t = 0.1) {
 			const [x, y, z] = block.coords;
 			const sceneObject = this.blockSceneObjectMapping[block.blockId];
+			if (!sceneObject) {
+				// console.warn(`Cannot find sceneObject in blockSceneObjectMapping with blockId ${block.blockId}`);
+				// TODO: Investigate and fix this error
+				return;
+			}
 			// sceneObject.iterimPos = new Vector3();
 			const goalPos = new Vector3(
 				x * VISUAL_BLOCK_SIZE,
@@ -52360,21 +52441,9 @@
 			// this.camera.lookAt(this.lookCurrent);
 		}
 
-		renderMiniMap() {
-			if (!this.miniMapOn) return;
-			const mapHtml = this.getWorldTextRows().join('<br>');
-			$('#mini-map').innerHTML = mapHtml;
-		}
-
 		renderUI() {
 			const p = this.getMainPlayer();
-			const pc = p.getLeader();
-			['hp', 'willpower', 'stamina', 'balance'].forEach((key) => {
-				$(`#${key}-value`).innerText = pc[key].getText();
-			});
-			$('#direction').innerText = `Direction: ${ArrayCoords.getDirectionName(p.facing)}`;
-			this.interface.renderOptions(p);
-			this.interface.renderFullView(p);
+			this.interface.render(p);
 		}
 
 		renderScene() { // Just render the three js scene
@@ -52394,18 +52463,16 @@
 
 		animate() {
 			if (this.isStopped) return;
-			requestAnimationFrame(() => this.animate());
-			// this.orbitControls.update();
 			this.renderScene();
 			this.updateCamera();
 			this.renderActors();
+			requestAnimationFrame(() => this.animate());
 		}
 
 		/** Render everything */
 		render() {
 			this.updateCamera();
 			this.renderScene();
-			this.renderMiniMap();
 			this.renderUI();
 			// Update camera
 			// const { x, y, z } = this.convertMapToRenderingVector3(this.getMainPlayer().getCoords());
@@ -52464,6 +52531,14 @@
 		// 	return n;
 		// }
 
+		calculateTalkOptions(blob) {
+			const mapKey = blob.getMapKey();
+			const worldMap = this.world.getMap(mapKey);
+			const talkTo = blob.getFacingActor(worldMap);
+			if (!talkTo) return [];
+			return blob.getDialogOptions(talkTo);
+		}
+
 		/** Take inputs commands and queue them for the main player */
 		handleInputCommand(command) {
 			console.log('Command:', command);
@@ -52476,6 +52551,15 @@
 				this.render();
 				return;
 			}
+			if (command === 'talk') {
+				this.interface.talkOptions = this.calculateTalkOptions(p);
+				if (!this.interface.talkOptions.length) {
+					this.sounds.play('dud');
+					this.interface.view('closed');
+					this.render();
+					return;
+				}
+			}
 			if (this.interface.OPTIONS_VIEWS.includes(command)) {
 				this.interface.view(command);
 				this.render();
@@ -52483,6 +52567,7 @@
 			}
 			if (commandWords[0] === 'option') {
 				if (this.interface.optionsView === 'combat') command = `attack ${commandWords[1]}`;
+				if (this.interface.optionsView === 'talk') command = `dialog ${commandWords[1]}`;
 			}
 			if (command === 'map') {
 				this.mapView = !this.mapView;
@@ -52501,19 +52586,36 @@
 			const mapKey = blob.getMapKey();
 			const worldMap = this.world.getMap(mapKey);
 			const commandWords = command.split(' ');
+			const target = blob.getFacingActor(worldMap);
 			if (commandWords[0] === 'attack') {
-				const target = blob.getFacingActor(worldMap);
-				if (target.isPlayerBlob) {
-					this.sounds.play('hurt');
-				} else {
-					this.sounds.play('hit');
-				}
 				if (target) {
+					if (target.isPlayerBlob) {
+						this.sounds.play('hurt');
+					} else {
+						this.sounds.play('hit');
+					}
 					const dmg = (blob.isPlayerBlob) ? 9 : 1;
 					target.damage(dmg, 'hp');
 					// TODO
 					target.checkDeath();
-				} else console.warn('Nothing to attack');
+				} else {
+					this.sounds.play('dud');
+					console.warn('Nothing to attack');
+				}
+				return;
+			}
+			if (commandWords[0] === 'dialog') {
+				const dialogOptions = this.calculateTalkOptions(blob);
+				if (!dialogOptions.length) {
+					this.sounds.play('dud');
+					return;
+				}
+				const index = (Number(commandWords[1]) || 0) - 1;
+				const { answer = '...' } = dialogOptions[index];
+				// console.log(dialogOptions, index);
+				window.alert(answer);
+				blob.listenToDialog(dialogOptions[index], target);
+				this.interface.talkOptions = this.calculateTalkOptions(blob);
 				return;
 			}
 			if (command === 'wait') {
@@ -52660,7 +52762,7 @@
 			name: 'clear', blocked: 0, renderAs: false,
 		},
 		'#': {
-			name: 'stone',
+			name: 'cobble',
 			blocked: 1,
 			renderAs: 'box',
 			color: [0.8, 0.8, 0.7],
@@ -52668,11 +52770,12 @@
 			textureRange: [1, 11],
 		},
 		'&': {
-			name: 'brick',
+			name: 'cave',
 			blocked: 1,
 			renderAs: 'box',
 			color: [0.9, 0.9, 0.9],
-			texture: 'bricks.png',
+			texture: 'lair_new_.png',
+			textureRange: [0, 3],
 		},
 		'|': {
 			name: 'crumbled_column',
@@ -52702,6 +52805,20 @@
 			npc: 'monster',
 			aggro: 1,
 		},
+		'p': {
+			name: 'orc priest',
+			blocked: 1,
+			renderAs: 'plane',
+			texture: 'orc_priest_new.png',
+			npc: 'still',
+			aggro: 0,
+			dialog: {
+				hello: 'I have not seen you in Wretchold before.',
+				name: 'I am Zogrod.',
+				job: { a: 'I keep an eye out for intruders.', unlocks: 'intruders' },
+				intruders: { a: 'Intruders like you!', locked: true },
+			},
+		},
 		'1': {
 			...teleportDoor,
 			teleport: ['temple', 11, 0, 2, 1],
@@ -52727,31 +52844,31 @@
 				[
 					'###################',
 					'###################',
-					'###### #&&#########',
+					'######&#&&#########',
 					'###################',
 					'###################',
-					'###################',
-					'###################',
-					'###################',
+					'##&&###############',
+					'##&&###############',
+					'##&&&&#############',
 					'########## ########',
 				],
 				[
 					'##########1########',
 					'###    &&| | #    #',
 					'#   #         && #',
-					'# # #       && &#O#',
-					'### ###C    && &  #',
-					'###   ###         #',
-					'###   ###         #',
-					'###   ###         #',
-					'#########&3&&######',
+					'# & #       && &#O#',
+					'##& ##p     && &  #',
+					'#&   ###          #',
+					'#&    ##          #',
+					'#& C  ##          #',
+					'#&&&&&###&3&&######',
 				],
 				[
 					'##########2       #',
 					'################# #',
 					'######&&&& ########',
 					'########## ########',
-					'###        ## ####',
+					'###  &&#    ## ####',
 					'###   ####     ####',
 					'###   ###         #',
 					'###   ###         #',
@@ -52775,7 +52892,7 @@
 					' #########4####### ',
 					'##|             |##',
 					'#   C             #',
-					'# # O          ##C#',
+					'# # O #        ##C#',
 					'### C          #  #',
 					'###      O   O   ##',
 					' ################# ',

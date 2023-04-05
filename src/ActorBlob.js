@@ -21,6 +21,7 @@ class ActorBlob extends BlockEntity {
 		// Update defaults for some actor-specific legend properties
 		if (typeof this.aggro !== 'number') this.aggro = 0;
 		this.dead = false;
+		this.interactions = {};
 	}
 
 	turn(n = 0) {
@@ -99,6 +100,51 @@ class ActorBlob extends BlockEntity {
 			});
 		});
 		return Array.from(allBlobAbilitiesSet);
+	}
+
+	getDialogOptions(actor) {
+		if (!actor || !actor.dialog) return [];
+		const dialogKeys = Object.keys(actor.dialog);
+		const actorInteractions = this.interactions[actor.blobId] || {};
+		const { unlockedDialogKeys = [] } = actorInteractions;
+		const talkableDialogOptions = dialogKeys.filter(
+			(key) => !actor.dialog[key].locked || unlockedDialogKeys.includes(key),
+		).map((key) => {
+			const dialogOption = actor.dialog[key];
+			const dialogOptObj = (typeof dialogOption === 'object') ? dialogOption : {};
+			let { unlocks = [] } = dialogOptObj;
+			if (typeof unlocks === 'string') unlocks = [unlocks];
+			let { locks = [] } = dialogOptObj;
+			if (typeof locks === 'string') locks = [locks];
+			const answer = (
+				dialogOptObj.answer
+				|| dialogOptObj.a
+				|| ((typeof dialogOption === 'string') ? dialogOption : '???')
+			);
+			const { questionAudio, answerAudio, cost, requires } = dialogOptObj;
+			return {
+				// ...dialogOptObj,
+				key,
+				question: dialogOptObj.question || dialogOptObj.q || key,
+				answer,
+				locks,
+				unlocks,
+				questionAudio,
+				answerAudio,
+				cost,
+				requires,
+			};
+		});
+		return talkableDialogOptions;
+	}
+
+	listenToDialog(dialogOption, actor) {
+		if (!dialogOption) throw new Error('Missing dialog option');
+		if (!this.interactions[actor.blobId]) this.interactions[actor.blobId] = {};
+		const actorInteractions = this.interactions[actor.blobId];
+		actorInteractions.unlockedDialogKeys = (actorInteractions.unlockedDialogKeys || [])
+			.concat(dialogOption.unlocks || []);
+		console.log(actorInteractions.unlockedDialogKeys);
 	}
 
 	waitHeal(rounds = 1) {
