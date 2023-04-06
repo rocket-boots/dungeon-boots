@@ -2,6 +2,7 @@ import SoundController from '../SoundController.js';
 
 const SOUNDS_ROOT = './audio/sounds';
 const MUSIC_ROOT = './audio/music';
+const AMB_ROOT = './audio/ambience';
 
 const soundsListing = {
 	hit: [
@@ -29,10 +30,24 @@ const soundsListing = {
 		`${SOUNDS_ROOT}/Warrior grunt-008.wav`,
 	],
 	death: `${SOUNDS_ROOT}/Warrior Death Grunt.wav`,
-	walk: [
+	woosh: [
 		`${SOUNDS_ROOT}/woosh-001.wav`,
 		`${SOUNDS_ROOT}/woosh-002.wav`,
 		`${SOUNDS_ROOT}/woosh-003.wav`,
+	],
+	door: [
+		`${SOUNDS_ROOT}/Door.wav`,
+	],
+	walk: [
+		`${SOUNDS_ROOT}/Steps-001.wav`,
+		`${SOUNDS_ROOT}/Steps-002.wav`,
+		`${SOUNDS_ROOT}/Steps-003.wav`,
+		`${SOUNDS_ROOT}/Steps-004.wav`,
+		`${SOUNDS_ROOT}/Steps-005.wav`,
+		`${SOUNDS_ROOT}/Steps-006.wav`,
+		`${SOUNDS_ROOT}/Steps-007.wav`,
+		`${SOUNDS_ROOT}/Steps-008.wav`,
+		`${SOUNDS_ROOT}/Steps-009.wav`,
 	],
 	dud: `${SOUNDS_ROOT}/menu_inventory selection Wrong.wav`,
 	drink: [
@@ -44,7 +59,12 @@ const soundsListing = {
 
 const musicListing = {
 	death: `${MUSIC_ROOT}/Dungeon_Crawler_Player_Death_Music.wav`,
-	explore: `${MUSIC_ROOT}/Dungeon_Crawler_Forest_Exploration(Done).wav`,
+	forest: `${MUSIC_ROOT}/Dungeon_Crawler_Forest_Exploration(Done).wav`,
+	dungeon: `${MUSIC_ROOT}/Dungeo_Crawler_Dungeon_Music(Done).wav`,
+	tavern: `${MUSIC_ROOT}/Dungeon_Crawler_Tavern.wav`,
+	boss: `${MUSIC_ROOT}/Dungeo_Crawler_Boss.wav`,
+	darkForest: `${AMB_ROOT}/Dark Forest Ambience Loop.wav`,
+	spooky: `${AMB_ROOT}/Spooky Ambience Loop.wav`,
 };
 
 const sounds = new SoundController(soundsListing, musicListing);
