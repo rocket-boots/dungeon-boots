@@ -22,12 +22,14 @@ class ActorBlob extends BlockEntity {
 		if (typeof this.aggro !== 'number') this.aggro = 0;
 		this.dead = false;
 		this.interactions = {};
+		this.lastSpoken = '';
 	}
 
 	clearLastRound() {
 		this.blob.forEach((actor) => {
 			actor.clearLastRound();
 		});
+		this.lastSpoken = '';
 	}
 
 	getMoodEmoji() {
@@ -157,6 +159,10 @@ class ActorBlob extends BlockEntity {
 		actorInteractions.unlockedDialogKeys = (actorInteractions.unlockedDialogKeys || [])
 			.concat(dialogOption.unlocks || []);
 		console.log(actorInteractions.unlockedDialogKeys);
+	}
+
+	speakDialog(text) {
+		this.lastSpoken = text;
 	}
 
 	waitHeal(rounds = 1) {

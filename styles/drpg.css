@@ -22,7 +22,7 @@ button {
 	background: var(--button-color);
 	color: white;
 	border-style: outset;
-	border-width: 4px;
+	border-width: 0.5vmin;
 	border-color: var(--button-color);
 	padding: 0.5em 1em;
 	cursor: pointer;
@@ -259,6 +259,27 @@ button:active {
 
 #ui-interact-view {
 	height: 40vh;
+}
+
+.dialog-bubble {
+	--dialog-border-color: rgba(255, 255, 255, 0.5);
+	position: relative;
+	border: solid 2px var(--dialog-border-color);
+	background: rgba(255, 255, 255, 0.1);
+	border-radius: 1em;
+	margin: 4vmin;
+	padding: 2vmin;
+	max-width: 12em;
+	font-size: 120%;
+}
+.dialog-bubble::after {
+	content: "";
+	border: solid 1em var(--dialog-border-color);
+	position: absolute;
+	bottom: 4vmin;
+	right: -2em;
+	border-top-color: transparent;
+    border-right-color: transparent;
 }
 
 .key {

@@ -51321,12 +51321,14 @@
 			if (typeof this.aggro !== 'number') this.aggro = 0;
 			this.dead = false;
 			this.interactions = {};
+			this.lastSpoken = '';
 		}
 
 		clearLastRound() {
 			this.blob.forEach((actor) => {
 				actor.clearLastRound();
 			});
+			this.lastSpoken = '';
 		}
 
 		getMoodEmoji() {
@@ -51456,6 +51458,10 @@
 			actorInteractions.unlockedDialogKeys = (actorInteractions.unlockedDialogKeys || [])
 				.concat(dialogOption.unlocks || []);
 			console.log(actorInteractions.unlockedDialogKeys);
+		}
+
+		speakDialog(text) {
+			this.lastSpoken = text;
 		}
 
 		waitHeal(rounds = 1) {
@@ -52263,8 +52269,10 @@
 			$$1('#ui-target-mood').innerText = (facingActorBlob) ? facingActorBlob.getMoodEmoji() : '';
 		}
 
-		renderInteract() {
+		renderInteract(blob, facingActorBlob) {
 			$$1('#ui-interact-view').style.display = (this.fullView === 'closed') ? 'flex' : 'none';
+			$$1('#ui-interact-view').innerHTML = (facingActorBlob && facingActorBlob.lastSpoken)
+				? `<div class="dialog-bubble">${facingActorBlob.lastSpoken}</div>` : '';
 		}
 
 		render(blob, facingActorBlob) {
@@ -52750,8 +52758,7 @@
 				}
 				const index = (Number(commandWords[1]) || 0) - 1;
 				const { answer = '...' } = dialogOptions[index];
-				// console.log(dialogOptions, index);
-				window.alert(answer);
+				target.speakDialog(answer);
 				blob.listenToDialog(dialogOptions[index], target);
 				this.interface.talkOptions = this.calculateTalkOptions(blob);
 				return;
@@ -52831,12 +52838,12 @@
 		}
 
 		doRound() {
+			this.round += 1;
+			console.log('Round', this.round);
 			const npcs = this.getNpcs();
 			[...this.players, ...npcs].forEach((blob) => {
 				blob.clearLastRound();
 			});
-			this.round += 1;
-			console.log('Round', this.round);
 			this.doActorsCommands(this.players);
 			npcs.forEach((a) => a.plan(this.players, this.getMainPlayerMap()));
 			// ^ TODO: More efficient to do the planning while waiting for player input

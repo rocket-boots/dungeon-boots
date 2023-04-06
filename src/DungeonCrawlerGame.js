@@ -482,8 +482,7 @@ class DungeonCrawlerGame {
 			}
 			const index = (Number(commandWords[1]) || 0) - 1;
 			const { answer = '...' } = dialogOptions[index];
-			// console.log(dialogOptions, index);
-			window.alert(answer);
+			target.speakDialog(answer);
 			blob.listenToDialog(dialogOptions[index], target);
 			this.interface.talkOptions = this.calculateTalkOptions(blob);
 			return;
@@ -563,12 +562,12 @@ class DungeonCrawlerGame {
 	}
 
 	doRound() {
+		this.round += 1;
+		console.log('Round', this.round);
 		const npcs = this.getNpcs();
 		[...this.players, ...npcs].forEach((blob) => {
 			blob.clearLastRound();
 		});
-		this.round += 1;
-		console.log('Round', this.round);
 		this.doActorsCommands(this.players);
 		npcs.forEach((a) => a.plan(this.players, this.getMainPlayerMap()));
 		// ^ TODO: More efficient to do the planning while waiting for player input

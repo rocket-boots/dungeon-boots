@@ -229,8 +229,10 @@ class Interface {
 		$('#ui-target-mood').innerText = (facingActorBlob) ? facingActorBlob.getMoodEmoji() : '';
 	}
 
-	renderInteract() {
+	renderInteract(blob, facingActorBlob) {
 		$('#ui-interact-view').style.display = (this.fullView === 'closed') ? 'flex' : 'none';
+		$('#ui-interact-view').innerHTML = (facingActorBlob && facingActorBlob.lastSpoken)
+			? `<div class="dialog-bubble">${facingActorBlob.lastSpoken}</div>` : '';
 	}
 
 	render(blob, facingActorBlob) {
