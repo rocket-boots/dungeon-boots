@@ -1,14 +1,21 @@
 import Pool from './Pool.js';
 
+const DEFAULT_POOL_MAX = 10;
+
 class Actor {
-	constructor(/* blob */) {
-		// this.blob = blob;
+	constructor(blob) {
 		this.isActor = true;
 		this.statPools = ['hp', 'stamina', 'willpower', 'balance'];
-		this.hp = new Pool(10, 10);
-		this.willpower = new Pool(10, 10);
-		this.stamina = new Pool(10, 10);
-		this.balance = new Pool(10, 10);
+		const poolMaxes = this.statPools.map((poolName) => (
+			blob[poolName] || DEFAULT_POOL_MAX
+		));
+		this.statPools.forEach((poolName, i) => {
+			this[poolName] = new Pool(poolMaxes[i]);
+		});
+		// this.hp = new Pool(10, 10);
+		// this.willpower = new Pool(10, 10);
+		// this.stamina = new Pool(10, 10);
+		// this.balance = new Pool(10, 10);
 		this.xp = 0;
 		this.knownAbilities = ['hack', 'slash', 'dodge'];
 	}

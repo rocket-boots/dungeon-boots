@@ -12,6 +12,9 @@ const BRAINS = {
 		wander: 0,
 		//
 	},
+	villager: {
+		wander: 0.1,
+	},
 };
 
 /** A blob of NPCs */
@@ -51,6 +54,7 @@ class NpcBlob extends ActorBlob {
 		const nearPrey = prey.filter((a) => {
 			// TODO: figure out prey based on faction rather than player
 			if (!a.isPlayerBlob) return false;
+			if (a.dead) return false;
 			const dist = ArrayCoords.getDistance(a.coords, this.coords);
 			if (dist > this.sight) return false;
 			if (dist < nearestDist) {

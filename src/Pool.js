@@ -1,8 +1,11 @@
 class Pool {
-	constructor(value, max) {
-		this.value = value;
+	constructor(max = 0, value = undefined) {
 		this.max = max;
 		this.min = 0;
+		this.value = (typeof value === 'undefined') ? max : value;
+		if (typeof this.max !== 'number' || typeof this.value !== 'number') {
+			throw new Error('Need numbers for max and value');
+		}
 		this.lastDelta = 0; // track the last change for display purposes
 	}
 
@@ -35,6 +38,14 @@ class Pool {
 		this.set(this.value - maxToSubtract);
 		return maxToSubtract;
 	}
+
+	belowMax() { return this.value < this.max; }
+
+	atMax() { return this.value === this.max; }
+
+	atMin() { return this.value === this.min; }
+
+	aboveMin() { return this.value > this.min; }
 
 	clearLastDelta() {
 		this.lastDelta = 0;

@@ -51117,10 +51117,13 @@
 	window.ArrayCoords = ArrayCoords;
 
 	class Pool {
-		constructor(value, max) {
-			this.value = value;
+		constructor(max = 0, value = undefined) {
 			this.max = max;
 			this.min = 0;
+			this.value = (typeof value === 'undefined') ? max : value;
+			if (typeof this.max !== 'number' || typeof this.value !== 'number') {
+				throw new Error('Need numbers for max and value');
+			}
 			this.lastDelta = 0; // track the last change for display purposes
 		}
 
@@ -51154,20 +51157,35 @@
 			return maxToSubtract;
 		}
 
+		belowMax() { return this.value < this.max; }
+
+		atMax() { return this.value === this.max; }
+
+		atMin() { return this.value === this.min; }
+
+		aboveMin() { return this.value > this.min; }
+
 		clearLastDelta() {
 			this.lastDelta = 0;
 		}
 	}
 
+	const DEFAULT_POOL_MAX = 10;
+
 	class Actor {
-		constructor(/* blob */) {
-			// this.blob = blob;
+		constructor(blob) {
 			this.isActor = true;
 			this.statPools = ['hp', 'stamina', 'willpower', 'balance'];
-			this.hp = new Pool(10, 10);
-			this.willpower = new Pool(10, 10);
-			this.stamina = new Pool(10, 10);
-			this.balance = new Pool(10, 10);
+			const poolMaxes = this.statPools.map((poolName) => (
+				blob[poolName] || DEFAULT_POOL_MAX
+			));
+			this.statPools.forEach((poolName, i) => {
+				this[poolName] = new Pool(poolMaxes[i]);
+			});
+			// this.hp = new Pool(10, 10);
+			// this.willpower = new Pool(10, 10);
+			// this.stamina = new Pool(10, 10);
+			// this.balance = new Pool(10, 10);
 			this.xp = 0;
 			this.knownAbilities = ['hack', 'slash', 'dodge'];
 		}
@@ -51222,6 +51240,11 @@
 	}
 
 	const clone = (value) => JSON.parse(JSON.stringify(value));
+	const objEqual = (o1, o2) => {
+		const value1 = (typeof o1 === 'object') ? JSON.stringify(o1) : o1;
+		const value2 = (typeof o2 === 'object') ? JSON.stringify(o2) : o2;
+		return value1 === value2;
+	};
 
 	/** A block entity is jjust something that exists at a space in the grid/voxel world */
 	class BlockEntity {
@@ -51229,6 +51252,7 @@
 			const [mapKey, x, y, z] = startAt;
 			this.mapKey = mapKey;
 			this.coords = [x, y, z];
+			this.tags = [];
 			this.blockId = Number(new Date()).toString(36) + Math.round(Math.random() * 99999).toString(36);
 			// Add all properties from legend
 			Object.keys(blockLegend).forEach((key) => {
@@ -51294,34 +51318,68 @@
 			this.moveTo(newCoords);
 		}
 
-		changeTexture(newTexture) {
-			if (this.texture === newTexture) return;
-			this.texture = newTexture;
-			this.redraw = true;
+		changeRendering(changes = { /* texture, onGround, renderAs */ }) {
+			let changeCount = 0;
+			Object.keys(changes).forEach((changeKey) => {
+				if (objEqual(this[changeKey], changes[changeKey])) return;
+				this[changeKey] = changes[changeKey];
+				changeCount += 1;
+			});
+			if (changeCount > 0) this.redraw = true;
+		}
+
+		getTags() {
+			return this.tags;
+		}
+
+		hasTag(tag) {
+			const blobTags = this.getTags();
+			return blobTags.includes(tag);
+		}
+
+		hasOneOfTags(tags = []) {
+			const blobTags = this.getTags();
+			const matchingTags = blobTags.filter((tag) => tags.includes(tag));
+			return (matchingTags.length > 0);
+		}
+
+		getVisibilityTo(lookerBlob) {
+			if (!this.invisible) return true;
+			if (this.invisible instanceof Array) {
+				return lookerBlob.hasOneOfTags(this.invisible);
+			}
+			return false;
 		}
 	}
 
 	const MAX_COMMAND_QUEUE_SIZE = 3;
-	const GHOST_TEXTURE = 'ghost_new.png';
+	const BASE_INV_ITEM = {
+		key: '?unknown_item?',
+		name: '?unknown_item?',
+		quantity: 1,
+		description: '',
+	};
 
 	/** A blob of characters that can interact with the world */
 	class ActorBlob extends BlockEntity {
 		constructor(ActorClass, startAt = [], blockLegend = {}) {
 			super(startAt, blockLegend);
-			this.blob = [
-				new (ActorClass || Actor)(this),
-			];
 			this.isActorBlob = true;
-			this.facing = 0;
+			this.facing = blockLegend.facing || 0;
+			this.active = true; // Inactive characters don't need to be ready
 			this.ready = false; // Ready for next turn?
 			this.commandQueue = [];
 			this.blobId = Number(new Date()).toString(36) + Math.round(Math.random() * 99999).toString(36);
 			this.inventory = [null, null, null, null, null, null];
+			if (blockLegend.inventory) this.setInventory(blockLegend.inventory);
 			// Update defaults for some actor-specific legend properties
 			if (typeof this.aggro !== 'number') this.aggro = 0;
 			this.dead = false;
 			this.interactions = {};
 			this.lastSpoken = '';
+			this.blob = [
+				new (ActorClass || Actor)(this),
+			];
 		}
 
 		clearLastRound() {
@@ -51380,6 +51438,7 @@
 		}
 
 		checkReady() {
+			if (!this.active) return true;
 			return (this.commandQueue.length > 0);
 		}
 
@@ -51399,7 +51458,9 @@
 
 		getFacingActor(worldMap) {
 			const blocksAhead = this.getFacingBlocks(worldMap);
-			const actorsAhead = blocksAhead.filter((block) => block.isActorBlob);
+			const actorsAhead = blocksAhead.filter((block) => (
+				block.isActorBlob && block.getVisibilityTo(this)
+			));
 			if (actorsAhead.length > 1) console.warn('More than 1 actor ahead of', this.name, '. that probably should not happen', actorsAhead);
 			if (actorsAhead.length) return actorsAhead[0];
 			return null;
@@ -51480,9 +51541,17 @@
 			this.blob.forEach((character) => {
 				character.damage(Infinity, 'hp');
 			});
+			if (this.dead) return;
 			this.dead = true;
 			this.blocked = 0;
-			this.changeTexture(this.deadTexture || this.ghostTexture || GHOST_TEXTURE);
+			this.changeRendering({
+				texture: this.deadTexture || this.texture,
+				onGround: true,
+				renderAs: 'plane',
+				// TODO: set rotation based on facing value
+				opacity: 0.5,
+				color: [1, 0, 0],
+			});
 		}
 
 		checkDeath() {
@@ -51493,6 +51562,35 @@
 				return true;
 			}
 			return false;
+		}
+
+		/** Overwrite block entity's method so we dynamically create the tags */
+		getTags() {
+			const invTags = this.inventory.filter((invItem) => invItem)
+				.map((invItem) => `item:${invItem.key}`);
+			this.tags = invTags; // cache it
+			return invTags;
+		}
+
+		setInventory(inv = []) {
+			inv.forEach((invItem, i) => {
+				if (i > this.inventory.length - 1) {
+					console.warn('Item', invItem, 'could not fit in inventory');
+					return;
+				}
+				if (typeof invItem === 'string') {
+					this.inventory[i] = { ...BASE_INV_ITEM, key: invItem, name: invItem };
+					// TODO: ^ set this based on looking up an item from a legend of items
+					// based on the invItem being a key
+					return;
+				}
+				if (typeof invItem !== 'object') throw new Error('Bad invItem type');
+				this.inventory[i] = { ...BASE_INV_ITEM, ...invItem };
+			});
+		}
+
+		getInventoryItem(i) {
+			return this.inventory[i];
 		}
 	}
 
@@ -51515,8 +51613,8 @@
 			this.isPlayerBlob = true;
 			this.blocked = 1;
 			this.color = [1, 1, 1];
-			this.renderAs = 'plane';
-			this.texture = 'human_male.png';
+			this.renderAs = 'billboard';
+			if (!this.texture) this.texture = 'human_male.png';
 		}
 	}
 
@@ -51536,6 +51634,9 @@
 		still: {
 			wander: 0,
 			//
+		},
+		villager: {
+			wander: 0.1,
 		},
 	};
 
@@ -51576,6 +51677,7 @@
 			const nearPrey = prey.filter((a) => {
 				// TODO: figure out prey based on faction rather than player
 				if (!a.isPlayerBlob) return false;
+				if (a.dead) return false;
 				const dist = ArrayCoords.getDistance(a.coords, this.coords);
 				if (dist > this.sight) return false;
 				if (dist < nearestDist) {
@@ -51617,6 +51719,7 @@
 			this.mapKey = mapKey;
 			this.world = world; // parent
 			this.sourceMap = sourceMap || world.sourceMaps[mapKey];
+			this.music = this.sourceMap.music || null;
 			// console.log('Making', mapKey, 'from', this.sourceMap);
 			const { map, legend } = this.sourceMap;
 			this.originalMap = map;
@@ -51632,6 +51735,7 @@
 					row.split('').forEach((char, x) => {
 						const startAt = [mapKey, x, y, z];
 						const blockLegend = legend[char];
+						if (!blockLegend) console.error(char, 'not found in legend', legend);
 						// If it is called "clear", or it is not blocking and not being rendered,
 						// then it's not really a block.
 						if (blockLegend.name === 'clear' || (!blockLegend.renderAs && !blockLegend.blocked)) {
@@ -51681,6 +51785,10 @@
 
 		getNpcs() {
 			return this.blocks.filter((block) => block.isNpcBlob);
+		}
+
+		getPlayerBlobs() {
+			return this.blocks.filter((block) => block.isPlayerBlob);
 		}
 
 		findBlock(block) {
@@ -51922,12 +52030,12 @@
 			combat: true,
 			replenish: { willpower: [1, 5], stamina: [1, 5] },
 		},
-		dodge: {
-			name: 'Dodge',
-			combat: true,
-			cost: { balance: 2 },
-			effect: { evasion: 0.75, rounds: 1 },
-		},
+		// dodge: {
+		// 	name: 'Dodge',
+		// 	combat: true,
+		// 	cost: { balance: 2 },
+		// 	effect: { evasion: 0.75, rounds: 1 },
+		// },
 		tactics: {
 			name: 'Tactics',
 			combat: true,
@@ -51952,20 +52060,20 @@
 			cost: { balance: 4 },
 			damage: { hp: [5, 12] },
 		},
-		feint: {
-			name: 'Feint',
-			combat: true,
-			cost: { balance: 5 },
-			damage: { balance: [1, 5] },
-			replenish: { balance: [0, 4] },
-			effect: { evasion: 0.25, rounds: 1 },
-		},
-		parry: {
-			name: 'Parry',
-			combat: true,
-			cost: { stamina: 1, balance: 1 },
-			effect: { evasion: 0.5, rounds: 1 },
-		},
+		// feint: {
+		// 	name: 'Feint',
+		// 	combat: true,
+		// 	cost: { balance: 5 },
+		// 	damage: { balance: [1, 5] },
+		// 	replenish: { balance: [0, 4] },
+		// 	effect: { evasion: 0.25, rounds: 1 },
+		// },
+		// parry: {
+		// 	name: 'Parry',
+		// 	combat: true,
+		// 	cost: { stamina: 1, balance: 1 },
+		// 	effect: { evasion: 0.5, rounds: 1 },
+		// },
 		reprise: {
 			name: 'Reprise',
 			combat: true,
@@ -52011,12 +52119,12 @@
 			replenish: { stamina: 1, hp: 1 },
 		},
 		// --- Spells ---
-		light: {
-			name: 'Light',
-			spell: true,
-			cost: { willpower: 1 },
-			effect: { brightness: 10, rounds: 20 },
-		},
+		// light: {
+		// 	name: 'Light',
+		// 	spell: true,
+		// 	cost: { willpower: 1 },
+		// 	effect: { brightness: 10, rounds: 20 },
+		// },
 		focus: {
 			name: 'Mental Focus',
 			spell: true,
@@ -52043,9 +52151,9 @@
 
 	/* eslint-disable class-methods-use-this */
 
-	const $$1 = (selector) => {
+	const $$1 = (selector, warn = true) => {
 		const elt = window.document.querySelector(selector);
-		if (!elt) console.warn('Could not find', selector);
+		if (!elt && warn) console.warn('Could not find', selector);
 		return elt;
 	};
 	// const $all = (selector) => {
@@ -52085,6 +52193,21 @@
 				this.fullView = 'closed';
 				this.optionsView = 'closed';
 			}
+			return this;
+		}
+
+		goBack() {
+			if (this.fullView === 'closed') ; else {
+				this.view('closed');
+			}
+			return this;
+		}
+
+		reset() {
+			this.optionsView = 'closed';
+			this.dungeoneerView = 'explore';
+			this.fullView = 'closed';
+			return this;
 		}
 
 		flashBorder(color = '#f00', duration = 1000) {
@@ -52201,7 +52324,13 @@
 						Balance
 						<span id="balance-value"></span>
 					</li>
-				</ul>`
+				</ul>
+				<div>
+					<button type="button" class="ui-close-button" data-command="view character">
+						Close <i class="key">v</i>
+					</button>
+				</div>
+				`
 					// ${JSON.stringify(blob, null, ' ')}`
 				);
 			} else if (this.fullView === 'menu') {
@@ -52215,7 +52344,7 @@
 		renderStats(blob) {
 			const leader = blob.getLeader();
 			['hp', 'willpower', 'stamina', 'balance'].forEach((key) => {
-				const elt = $$1(`#${key}-value`);
+				const elt = $$1(`#${key}-value`, false);
 				if (!elt) return;
 				elt.innerText = leader[key].getText();
 			});
@@ -52321,10 +52450,11 @@
 	const { Vector3, Object3D } = THREE;
 	const { Z } = ArrayCoords;
 	const { PI } = Math;
-	// const TAU = PI * 2;
+	const TAU = PI * 2;
 
 	const WORLD_VOXEL_LIMITS = [64, 64, 12];
 	const VISUAL_BLOCK_SIZE = 20;
+	const VISUAL_PLANE_SIZE = 19;
 	// const HALF_BLOCK_SIZE = VISUAL_BLOCK_SIZE / 2;
 
 	const KB_MAPPING = {
@@ -52343,7 +52473,7 @@
 		b: 'view abilities',
 		g: 'view spells',
 		Tab: 'inventory',
-		'\\': 'special \\',
+		'\\': 'switch next-player',
 		1: 'option 1',
 		2: 'option 2',
 		3: 'option 3',
@@ -52353,8 +52483,11 @@
 		7: 'option 7',
 		8: 'option 8',
 		9: 'option 9',
+		Esc: 'menu back',
+		Backspace: 'menu back',
 	};
 
+	const BACKGROUND_COLOR = '#77bbff';
 	const TURN_COMMANDS = ['turnLeft', 'turnRight'];
 	const MOVE_COMMANDS = ['forward', 'back', 'strafeLeft', 'strafeRight'];
 	const DEFAULT_SOUNDS = {
@@ -52383,14 +52516,16 @@
 			this.mapView = false;
 			// Rendering properties
 			this.interface = new Interface();
-			this.clearColor = options.clearColor || '#77bbff';
+			this.clearColor = options.clearColor || BACKGROUND_COLOR;
 			this.renderer = null;
 			this.scene = null;
 			this.eyeLight = null;
 			this.autoFacingObjects = []; // Things (like sprite planes) that need to auto-face the camera
 			this.camera = null;
 			this.cameraZOffset = -1; // TODO: why negative for "above"?
-			this.cameraZMapOffset = -80;
+			this.cameraZMapBaseOffset = -80;
+			this.cameraZMapMaxOffset = -800;
+			this.cameraZMapOffset = this.cameraZMapBaseOffset;
 			this.cameraGoal = new Object3D();
 			this.cameraCurrent = new Object3D();
 			this.lookGoal = new Vector3();
@@ -52413,6 +52548,13 @@
 			const p = this.getMainPlayer();
 			const mapKey = p.getMapKey();
 			return this.world.getMap(mapKey);
+		}
+
+		playMusic() {
+			const map = this.getMainPlayerMap();
+			const { music, ambience } = map;
+			this.sounds.playMusic(music);
+			this.sounds.playAmbience(ambience);
 		}
 
 		// ----------------------------------- Rendering
@@ -52473,9 +52615,18 @@
 			});
 		}
 
+		getBlockGoalPosition(block) { // eslint-disable-line class-methods-use-this
+			const [x, y, z] = block.coords;
+			return new Vector3(
+				x * VISUAL_BLOCK_SIZE,
+				y * VISUAL_BLOCK_SIZE,
+				-z * VISUAL_BLOCK_SIZE + ((block.onGround) ? VISUAL_BLOCK_SIZE * 0.4 : 0),
+				// ^ 0.4 instead of 0.5 so that it is slightly above the ground
+			);
+		}
+
 		addMapBlock(block, group) {
 			if (!block.renderAs) return;
-			const [x, y, z] = block.coords;
 			let texture;
 			let sceneObj; // mesh, plane, sprite, etc.
 			let color;
@@ -52505,23 +52656,53 @@
 				const sprite = new Sprite(material);
 				sprite.scale.set(VISUAL_BLOCK_SIZE, VISUAL_BLOCK_SIZE, VISUAL_BLOCK_SIZE);
 				sceneObj = sprite;
-			} else if (block.renderAs === 'plane') {
-				const geometry = new PlaneGeometry(18, 18);
+			} else if (block.renderAs === 'billboard' || block.renderAs === 'plane') {
+				// TODO: render a plane differently without auto-facing
+				const geometry = new PlaneGeometry(VISUAL_PLANE_SIZE, VISUAL_PLANE_SIZE);
 				const material = new MeshStandardMaterial({
 					color: 0xffffff,
 					side: DoubleSide,
 					map: texture,
 					transparent: true,
 				});
+				if (typeof block.opacity === 'number') material.opacity = block.opacity;
 				const plane = new Mesh(geometry, material);
-				this.autoFacingObjects.push(plane);
+				if (block.renderAs === 'billboard') {
+					this.autoFacingObjects.push(plane);
+				} else { // plane
+					let { rotateX = 0, rotateY = 0, rotateZ = 0 } = block;
+					rotateX += -0.25;
+					rotateY += 0;
+					rotateZ += 0;
+					if (block.onGround) {
+						rotateX += 0.25;
+						rotateY += 0;
+						rotateZ += 0;
+					}
+					plane.rotation.setFromVector3(new Vector3$1(0, 0, 0), 'YZX');
+					plane.rotateY(rotateY * TAU);
+					plane.rotateZ(rotateZ * TAU);
+					plane.rotateX(rotateX * TAU);
+				}
 				sceneObj = plane;
 			}
 			if (sceneObj) {
 				this.blockSceneObjectMapping[block.blockId] = sceneObj;
-				sceneObj.position.set(x * VISUAL_BLOCK_SIZE, y * VISUAL_BLOCK_SIZE, -z * VISUAL_BLOCK_SIZE);
-				if (block.isPlayerBlob) { // TODO: only hide the current main player
+				sceneObj.position.copy(this.getBlockGoalPosition(block));
+				// Hide the current main character
+				const mainBlob = this.getMainPlayer();
+				if (block.isPlayerBlob && mainBlob.blockId === block.blockId) {
 					sceneObj.visible = this.mapView;
+				}
+				// Check for block invisibility
+				if (block.invisible) {
+					sceneObj.visible = block.getVisibilityTo(mainBlob);
+				}
+				if (block.light) {
+					const [intensity, distance] = block.light;
+					const pointLight = new PointLight(0xb4b0dd, intensity, distance * VISUAL_BLOCK_SIZE);
+					sceneObj.add(pointLight);
+					window.torch = sceneObj;
 				}
 				if (group) group.add(sceneObj);
 				else this.scene.add(sceneObj);
@@ -52531,7 +52712,6 @@
 		}
 
 		updateBlockPosition(block, t = 0.1) {
-			const [x, y, z] = block.coords;
 			const sceneObject = this.blockSceneObjectMapping[block.blockId];
 			if (!sceneObject) {
 				// console.warn(`Cannot find sceneObject in blockSceneObjectMapping with blockId ${block.blockId}`);
@@ -52539,11 +52719,7 @@
 				return;
 			}
 			// sceneObject.iterimPos = new Vector3();
-			const goalPos = new Vector3(
-				x * VISUAL_BLOCK_SIZE,
-				y * VISUAL_BLOCK_SIZE,
-				-z * VISUAL_BLOCK_SIZE,
-			);
+			const goalPos = this.getBlockGoalPosition(block);
 			const q = 1.0 - (0.24 ** t); // This q & lerp logic is from simondev
 			// sceneObject.iterimPos.lerp(goalPos, q);
 			// sceneObject.position.copy(sceneObject.iterimPos);
@@ -52675,7 +52851,7 @@
 			// pointLight.position.set(-100, -100, -100);
 			// this.scene.add(pointLight);
 
-			const ambientLight = new AmbientLight(0x404040, 0.34);
+			const ambientLight = new AmbientLight(0x404040, 0.25);
 			this.scene.add(ambientLight);
 
 			// const sphereSize = 1;
@@ -52712,12 +52888,33 @@
 			return blob.getDialogOptions(talkTo);
 		}
 
+		switchMainPlayer(indexParam = 0, doRender = true) {
+			this.mainPlayerIndex = indexParam % this.players.length;
+			this.players.forEach((blob, i) => {
+				// eslint-disable-next-line no-param-reassign
+				blob.active = (i === this.mainPlayerIndex);
+			});
+			this.interface.reset().view('character');
+			if (!doRender) return;
+			this.setupScene();
+			this.render();
+		}
+
 		/** Take inputs commands and queue them for the main player */
 		handleInputCommand(command) {
 			console.log('Command:', command);
 			// this.sounds.play('button');
 			const p = this.getMainPlayer();
 			const commandWords = command.split(' ');
+			if (command === 'menu back') {
+				this.interface.goBack();
+				this.render();
+				return;
+			}
+			if (command === 'switch next-player') {
+				this.switchMainPlayer(this.mainPlayerIndex + 1, true);
+				return;
+			}
 			if (commandWords[0] === 'view') {
 				const [, page] = commandWords;
 				this.interface.view(page);
@@ -52742,6 +52939,7 @@
 			if (commandWords[0] === 'option') {
 				if (this.interface.optionsView === 'combat') command = `attack ${commandWords[1]}`;
 				if (this.interface.optionsView === 'talk') command = `dialog ${commandWords[1]}`;
+				if (this.interface.optionsView === 'inventory') command = `inventory ${commandWords[1]}`;
 			}
 			if (command === 'map') {
 				this.mapView = !this.mapView;
@@ -52757,13 +52955,15 @@
 
 		doActorCommand(blob, command) {
 			if (!command) return;
+			const mainBlob = this.getMainPlayer();
+			const isMain = (b) => mainBlob.blockId === b.blockId;
 			const mapKey = blob.getMapKey();
 			const worldMap = this.world.getMap(mapKey);
 			const commandWords = command.split(' ');
 			const target = blob.getFacingActor(worldMap);
 			if (commandWords[0] === 'attack') {
 				if (target) {
-					if (target.isPlayerBlob) {
+					if (target.isPlayerBlob && isMain(target)) {
 						this.interface.flashBorder('#f00');
 						this.sounds.play('hurt');
 					} else {
@@ -52780,6 +52980,11 @@
 				}
 				return;
 			}
+			if (commandWords[0] === 'inventory') {
+				const index = (Number(commandWords[1]) || 0) - 1;
+				const invItem = mainBlob.getInventoryItem(index);
+				alert(`This is a ${invItem.name}. You have ${invItem.quantity} of these. ${invItem.description}`);
+			}
 			if (commandWords[0] === 'dialog') {
 				const dialogOptions = this.calculateTalkOptions(blob);
 				if (!dialogOptions.length) {
@@ -52794,8 +52999,14 @@
 				return;
 			}
 			if (command === 'wait') {
-				blob.waitHeal(1);
-				if (blob.isPlayerBlob) this.sounds.play('drink');
+				if (blob.isPlayerBlob && isMain(blob)) {
+					if (blob.getLeader().hp.belowMax()) {
+						this.sounds.play('drink');
+					}
+					blob.waitHeal(2);
+				} else {
+					blob.waitHeal(1);
+				}
 				return;
 			}
 			if (TURN_COMMANDS.includes(command)) {
@@ -52835,6 +53046,7 @@
 				let moveToCoords = newCoords;
 				if (block && block.teleport) {
 					const [destMapKey, x, y, z, turn] = block.teleport;
+					this.sounds.play(block.soundTeleport || block.soundOn || block.sound);
 					moveToCoords = [x, y, z];
 					blob.turnTo(turn);
 					if (destMapKey !== mapKey) {
@@ -52853,10 +53065,20 @@
 			if (currentMapKey === destMapKey) return;
 			const currentMap = this.world.getMap(currentMapKey);
 			const destMap = this.world.getMap(destMapKey);
+			if (!destMap) throw new Error(`No destination map of ${destMapKey}`);
 			currentMap.removeBlock(blob);
 			blob.switchMap(destMapKey);
 			destMap.addBlock(blob);
 			this.setupScene();
+			this.playMusic();
+		}
+
+		checkDeath() {
+			if (!this.getMainPlayer().checkDeath()) return;
+			this.sounds.playMusic('death'); // dead
+			this.sounds.play('death');
+			this.interface.view('dead');
+			this.render();
 		}
 
 		doActorsCommands(actors = []) {
@@ -52878,11 +53100,7 @@
 			npcs.forEach((a) => a.plan(this.players, this.getMainPlayerMap()));
 			// ^ TODO: More efficient to do the planning while waiting for player input
 			this.doActorsCommands(npcs);
-			// Death checks
-			if (this.getMainPlayer().checkDeath()) {
-				this.sounds.playMusic('death');
-				this.sounds.play('death');
-			}
+			this.checkDeath();
 			let redraws = 0;
 			npcs.forEach((a) => {
 				a.checkDeath();
@@ -52908,7 +53126,8 @@
 		}
 
 		/** Only run this once */
-		start() {
+		start(playerIndex = 0) {
+			this.switchMainPlayer(playerIndex, false);
 			this.isStopped = false;
 			// this.makeNewPlayer();
 			this.kbCommander.on('command', (cmd) => this.handleInputCommand(cmd));
@@ -52923,7 +53142,7 @@
 			this.render();
 			this.tick();
 			this.animate();
-			this.sounds.playMusic('explore');
+			this.playMusic();
 		}
 
 		stop() {
@@ -52937,6 +53156,34 @@
 		blocked: 0,
 		renderAs: 'box',
 		texture: 'runed_door.png',
+		soundOn: 'door',
+	};
+	const ghost = {
+		name: 'ghost',
+		blocked: 0,
+		renderAs: 'billboard',
+		texture: 'shadow_new.png',
+		npc: 'still',
+		opacity: 0.7,
+		invisible: ['item:ghostMask'],
+		dialog: {
+			hi: { q: 'Hello?', a: 'I did not deserve to die.' },
+		},
+	};
+	const townFolk = {
+		name: 'Townfolk',
+		blocked: 1,
+		renderAs: 'billboard',
+		faction: 'townfolk',
+		npc: 'villager',
+	};
+	const monster = {
+		name: 'monster',
+		blocked: 1,
+		renderAs: 'billboard',
+		// texture: 'cyclops_new.png',
+		npc: 'monster',
+		aggro: 1,
 	};
 	const legend = {
 		' ': {
@@ -52958,38 +53205,136 @@
 			texture: 'lair_new_.png',
 			textureRange: [0, 3],
 		},
+		'G': {
+			name: 'grass',
+			blocked: 1,
+			renderAs: 'box',
+			color: [0.9, 0.9, 0.9],
+			texture: 'grass_.png',
+			textureRange: [0, 2],
+		},
+		'D': {
+			name: 'door',
+			blocked: 1,
+			renderAs: 'box',
+			texture: 'runed_door.png',
+		},
+		'+': {
+			name: 'unlocked door',
+			blocked: 0,
+			renderAs: 'box',
+			texture: 'runed_door.png',
+			soundOn: 'door',
+		},
+		'T': {
+			name: 'tree',
+			blocked: 1,
+			renderAs: 'billboard',
+			texture: 'tree_.png',
+			textureRange: [0, 8],
+		},
 		'|': {
 			name: 'crumbled_column',
 			blocked: 1,
 			color: [0.8, 0.8, 0.7],
-			renderAs: 'plane',
+			renderAs: 'billboard',
 			texture: 'crumbled_column_.png',
 			textureRange: [1, 6],
+		},
+		'^': {
+			name: 'torch',
+			blocked: 0,
+			color: [1, 1, 1],
+			light: [1, 6],
+			renderAs: 'billboard',
+			texture: 'torch_.png',
+			textureRange: [1, 4],
 		},
 		// 'X': {
 		// name: 'cyclops', blocked: 1, renderAs: 'sprite', texture: 'cyclops_new.png',
 		// },
+		'a': {
+			...townFolk,
+			name: 'Townfolk',
+			texture: 'human_slave.png',
+			dialog: {
+				hello: 'Please help us!',
+				help: 'There are too many beasts at nearby Wretchhold in the south.',
+				goblins: 'When I was a kid, I wanted to be a goblin one day. I know better now.',
+			},
+		},
+		'b': {
+			...townFolk,
+			name: 'Townfolk',
+			texture: 'human_old.png',
+			dialog: {
+				goblins: 'Goblins are ruining this neighbourhood!',
+				taxes: 'The Mayor said the goblins are why taxes are so high.',
+				hero: 'Your jawline is incredible!',
+			},
+		},
+		'c': {
+			...townFolk,
+			name: 'Townfolk',
+			texture: 'halfling_new.png',
+			dialog: {
+				'sheep': 'A goblin stole one of my sheep, and shaved it weird.',
+				goblin: 'I saw the goblin fortress in the woods. It looked scary.',
+				axe: 'Can I "axe" you a question? Just kidding!',
+			},
+		},
+		'd': {
+			...townFolk,
+			name: 'Townfolk',
+			texture: 'dwarf_new.png',
+			dialog: {
+				attacks: 'They haven\'t attacked yet... must be planning something big.',
+				arms: 'Can I feel your arm? It\'s rock solid!',
+				axe: 'Nice axe! Is it heavy?',
+			},
+		},
+		'e': {
+			...townFolk,
+			name: 'Townfolk',
+			texture: 'elf_new.png',
+			dialog: {
+				goblins: 'I killed a goblin once... I think. It might have been a frog.',
+				hero: 'What\'s the biggest monster you ever killed?',
+				fortress: 'Wretchhold is south along the path. That\'s where the beasts are gathering.',
+			},
+		},
+		'f': {
+			...townFolk,
+			name: 'Townfolk',
+			texture: 'gnome.png',
+			dialog: {
+				fear: 'I\'m living in fear!',
+				goblins: 'Goblins are so ugly. And short. And they smell bad. Right?',
+			}
+		},
+		'g': {
+			...ghost,
+		},
 		'C': {
+			...monster,
 			name: 'cyclops',
-			blocked: 1,
-			renderAs: 'plane',
-			// color: [0.1, 0.1, 0.1],
 			texture: 'cyclops_new.png',
-			npc: 'monster',
-			aggro: 1,
 		},
 		'O': {
+			...monster,
 			name: 'ogre',
-			blocked: 1,
-			renderAs: 'plane',
 			texture: 'ogre_new.png',
-			npc: 'monster',
-			aggro: 1,
+			death: {
+				spawn: {
+					...ghost,
+					name: 'ogre ghost',
+				},
+			},
 		},
 		'p': {
 			name: 'orc priest',
 			blocked: 1,
-			renderAs: 'plane',
+			renderAs: 'billboard',
 			texture: 'orc_priest_new.png',
 			npc: 'still',
 			aggro: 0,
@@ -53000,64 +53345,228 @@
 				intruders: { a: 'Intruders like you!', locked: true },
 			},
 		},
+		'w': {
+			...monster,
+			name: 'orc warrior',
+			texture: 'orc_warrior_new.png',
+		},
 		'1': {
 			...teleportDoor,
-			teleport: ['temple', 11, 0, 2, 1],
+			teleport: ['forest', 5, 1, 1, 2],
 		},
 		'2': {
 			...teleportDoor,
-			teleport: ['temple', 10, 1, 1, 2],
+			teleport: ['town', 7, 11, 1, 0],
 		},
 		'3': {
 			...teleportDoor,
-			teleport: ['arena', 10, 1, 1, 2],
+			teleport: ['fortress', 16, 1, 1, 2],
 		},
 		'4': {
 			...teleportDoor,
-			teleport: ['temple', 10, 5, 1, 0],
+			teleport: ['forest', 5, 7, 1, 0],
+		},
+		'5': {
+			...teleportDoor,
+			teleport: ['tavern', 15, 5, 1, 0],
+		},
+		'6': {
+			...teleportDoor,
+			teleport: ['fortress', 10, 1, 1, 2],
+		},
+		'7': {
+			...teleportDoor,
+			teleport: ['tower1', 4, 1, 1, 2],
+		},
+		'8': {
+			...teleportDoor,
+			teleport: ['tavern', 2, 5, 1, 2],
+		},
+		'9': {
+			...teleportDoor,
+			teleport: ['tower2', 14, 1, 1, 2],
+		},
+		'0': {
+			...teleportDoor,
+			teleport: ['tower1', 13, 1, 1, 2],
 		},
 	};
 
 	var worldMaps = {
-		temple: {
+		town: {
+			music: 'forest',
+			ambience: 'darkForest',
 			legend,
 			map: [
 				[
-					'###################',
-					'###################',
-					'######&#&&#########',
-					'###################',
-					'###################',
-					'##&&###############',
-					'##&&###############',
+					'                   ',
+					'GGG&GGGGGGGGGGGGGGG',
+					'GGG&GGGGGGGGGGGGGGG',
+					'GGG&&&&&&&&&GGGGGGG',
+					'GGGGGGG&GGGGGGGGGGG',
+					'GGGGGGG&GGGGGGGGGGG',
+					'GG&&GGG&GGGGGGGGGGG',
+					'GG&&GGG&GGGGGGGGGGG',
+					'GG&&&&&&GGGGGGGGGGG',
+					'GG&&GGG&&&&&&&GGGGG',
+					'GG&&GGG&GGGGGGGGGGG',
+					'GG&&&&G&GGGGGGGGGGG',
+					'GGGGGGG&GGGGGGGGGGG',
+					'GGGGGGG&GGGGGGGGGGG',
+				],
+				[
+					'###D###############',
+					'### ###############',
+					'#^       d T   T  #',
+					'T                 T',
+					'T b       ####    T',
+					'T ####^e  #  #T   T',
+					'T #  #   T#  ##   T',
+					'T ##+#^   #   #   T',
+					'T   a   c #+###   T',
+					'T         | |     T',
+					'GT            T  TG',
+					'GT  f   ^  T     TG',
+					'TTTTTT#1#TTTTTTTTTT',
+					'GGTTTT# #TTGGTTTTGG',
+				],
+				[
+					'# ###              ',
+					'# ### # #^# # # # #',
+					'#                 ^',
+					'                   ',
+					'           ^       ',
+					'  ####    ####     ',
+					'  #  #    #  #     ',
+					'  ####    #  #     ',
+					'          #  #     ',
+					'          ####     ',
+					'                   ',
+					'T                  ',
+					'      ###          ',
+					'TT    # #   T    TT',
+				],
+			],
+		},
+		forest: {
+			music: 'forest',
+			ambience: 'darkForest',
+			legend,
+			map: [
+				[
+					'GGGGG&GGGGG',
+					'GGGGG&GGGGG',
+					'GGGGG&GGGGG',
+					'GGGGG&GGGGG',
+					'GGGGG&GGGGG',
+					'GGGGG&GGGGG',
+					'GGGGG&GGGGG',
+					'GGGGG&GGGGG',
+					'GGGGG&GGGGG',
+				],
+				[
+					'GTTT#2#TTTG',
+					'GTTT^  TTTG',
+					'GTTT   TTTG',
+					'GTTT    TTG',
+					'GTTT   TTTG',
+					'GTT    TTTG',
+					'&TTT    TTG',
+					'&TTT   TTTG',
+					'&&&&&3&&&&&',
+				],
+				[
+					'           ',
+					'           ',
+					'           ',
+					'           ',
+					'           ',
+					'           ',
+					'           ',
+					'G          ',
+					'&&  &&& &  ',
+					'&&&&&&&&&&&',
+				],
+				[
+					'           ',
+					'           ',
+					'           ',
+					'           ',
+					'           ',
+					'           ',
+					'           ',
+					'G          ',
+					'&&         ',
+					'&&&&&&&&&& ',
+				],
+			],
+		},
+		fortress: {
+			music: 'dungeon',
+			ambience: 'spooky',
+			legend,
+			map: [
+				[
+					'################&&&',
+					'###############&&&&',
+					'######&#&&#####&&&&',
+					'################&&&',
+					'###############&&&&',
+					'##&&###########&&&&',
+					'##&&############&&&',
+					'##&&#############&&',
+					'##&&#############&&',
+					'##&&#############&&',
 					'##&&&&#############',
 					'########## ########',
 				],
 				[
-					'##########1########',
-					'###    &&| | #    #',
-					'#   #         && #',
-					'# & #       && &#O#',
-					'##& ##p     && &  #',
-					'#&   ###          #',
-					'#&    ##          #',
-					'#& C  ##          #',
-					'#&&&&&###&3&&######',
+					'##########5###&&4&&',
+					'# #    &&| |^#&   &',
+					'#   #         &&  &',
+					'# & #^     g&& & O&',
+					'# &###p &&&&&& &  &',
+					'# #  ###   ^   &  &',
+					'& #          # &  &',
+					'& # #####      #  &',
+					'& #    #      #   &',
+					'& # # ####    ## ##',
+					'#  C   #          #',
+					'#&&&&&###&&&&###&&&',
 				],
 				[
-					'##########2       #',
-					'################# #',
-					'######&&&& ########',
-					'########## ########',
-					'###  &&#    ## ####',
-					'###   ####     ####',
-					'###   ###         #',
+					'##########        #',
+					'###############&&&&',
+					'######&&&& ####&&&&',
+					'########## ####&&&&',
+					'###  &&#    ## && &',
+					'###   ####   &&&&&&',
+					'###   ####    #####',
+					'##########    #####',
+					'#&&&&&####    #####',
+					'#########     #####',
 					'###   ###         #',
 					'#########& ########',
 				],
+				[
+					'##############&&&&&',
+					'#      &&    #&    ',
+					'#   #         &&   ',
+					'#   #       && &&&&',
+					'# &###  &&&&&& &&&&',
+					'# #  ###       &  &',
+					'& #          # &  &',
+					'& # #####      #  &',
+					'& #    #########   &',
+					'& # # ####    ## ##',
+					'#      #          #',
+					'#&&&&&###&&&&###&&&',
+				],
 			],
 		},
-		arena: {
+		tavern: {
+			music: 'tavern',
+			ambience: 'spooky',
 			legend, // Note that not all maps need to use the same legend, they can be different
 			map: [
 				[ // Right now its best to have the "floor" levels be completely filled in
@@ -53066,25 +53575,129 @@
 					'###################',
 					'###################',
 					'###################',
+					'&&&&&&#############',
+					'&&#################',
+				],
+				[
+					' &&&&&############ ',
+					'####      ^      |#',
+					'####C #^          #',
+					'####  #        ## #',
+					'##7#  #^          #',
+					'&     #| O^  |   |#',
+					' &&&&& ########6## ',
+				],
+				[
+					'                   ',
+					' ##   #############',
+					'####  #          ##',
+					'####           #^##',
+					' ##   #          ##',
+					'      #############',
+					' #####             ',
+				],
+				[
+					'                   ',
+					' ##                ',
+					'#  #  #############',
+					'#  #           #   ',
+					' ##   #############',
+					'                   ',
+					'                   ',
+				],
+				[
+					'                   ',
+					' ##                ',
+					'#  #               ',
+					'#  #  #############',
+					' ##                ',
+					'                   ',
+					'                   ',
+				],
+			],
+		},
+		tower1: {
+			music: 'dungeon',
+			ambience: 'spooky',
+			legend,
+			map: [
+				[
+					'###################',
+					'###################',
+					'###################',
+					'###################',
+					'###################',
 					'###################',
 					'###################',
 				],
 				[
-					' #########4####### ',
-					'##|             |##',
-					'#   C             #',
-					'# # O #        ##C#',
-					'### C          #  #',
-					'###      O   O   ##',
+					' ###8########9#### ',
+					'#### ######## #####',
+					'#                 #',
+					'#                 #',
+					'#                 #',
+					'#                 #',
+					' #################',
+				],
+				[
+					'###################',
+					'###################',
+					'###################',
+					'###################',
+					'###################',
+					'###################',
+					'###################',
+				],
+			],
+		},
+		tower2: {
+			music: 'boss',
+			ambience: 'spooky',
+			legend,
+			map: [
+				[
+					'###################',
+					'###################',
+					'###################',
+					'###################',
+					'###################',
+					'###################',
+					'###################',
+				],
+				[
+					' #############0### ',
+					'#            # #  #',
+					'##   |||   |||    #',
+					'#                ^#',
+					'##   |||   |||    #',
+					'#                 #',
+					' ################# ',
+				],
+				[
+					' ############# ### ',
+					'#            ###  #',
+					'#^                #',
+					'#                 #',
+					'#^                #',
+					'#                 #',
+					' ################# ',
+				],
+				[
+					' ################# ',
+					'#                 #',
+					'##                #',
+					'#                 #',
+					'##                #',
+					'#                 #',
 					' ################# ',
 				],
 				[
 					' ################# ',
 					'###################',
-					'#                 #',
-					'#                 #',
-					'#                 #',
-					'#                 #',
+					'###################',
+					'###################',
+					'###################',
+					'###################',
 					' ################# ',
 				],
 			],
@@ -56347,6 +56960,7 @@
 			this.setupSounds(soundsListing);
 			this.music = musicListing;
 			this.stopMusic = NOOP;
+			this.stopAmbience = NOOP;
 		}
 
 		setupSounds(soundsListing = {}) {
@@ -56405,11 +57019,24 @@
 			const soundThing = this.music[soundName];
 			if (!soundThing) {
 				console.warn('No music found for', soundName);
-				return;
+				return NOOP;
 			}
 			if (typeof this.stopMusic === 'function') this.stopMusic();
 			const { loop = true } = options;
 			this.stopMusic = this.playThing(soundThing, soundName, { loop });
+			return this.stopMusic;
+		}
+
+		playAmbience(soundName, options = {}) {
+			const soundThing = this.music[soundName];
+			if (!soundThing) {
+				console.warn('No music found for', soundName);
+				return NOOP;
+			}
+			if (typeof this.stopAmbience === 'function') this.stopAmbience();
+			const { loop = true } = options;
+			this.stopAmbience = this.playThing(soundThing, soundName, { loop });
+			return this.stopAmbience;
 		}
 	}
 
@@ -56418,6 +57045,7 @@
 
 	const SOUNDS_ROOT = './audio/sounds';
 	const MUSIC_ROOT = './audio/music';
+	const AMB_ROOT = './audio/ambience';
 
 	const soundsListing = {
 		hit: [
@@ -56445,10 +57073,24 @@
 			`${SOUNDS_ROOT}/Warrior grunt-008.wav`,
 		],
 		death: `${SOUNDS_ROOT}/Warrior Death Grunt.wav`,
-		walk: [
+		woosh: [
 			`${SOUNDS_ROOT}/woosh-001.wav`,
 			`${SOUNDS_ROOT}/woosh-002.wav`,
 			`${SOUNDS_ROOT}/woosh-003.wav`,
+		],
+		door: [
+			`${SOUNDS_ROOT}/Door.wav`,
+		],
+		walk: [
+			`${SOUNDS_ROOT}/Steps-001.wav`,
+			`${SOUNDS_ROOT}/Steps-002.wav`,
+			`${SOUNDS_ROOT}/Steps-003.wav`,
+			`${SOUNDS_ROOT}/Steps-004.wav`,
+			`${SOUNDS_ROOT}/Steps-005.wav`,
+			`${SOUNDS_ROOT}/Steps-006.wav`,
+			`${SOUNDS_ROOT}/Steps-007.wav`,
+			`${SOUNDS_ROOT}/Steps-008.wav`,
+			`${SOUNDS_ROOT}/Steps-009.wav`,
 		],
 		dud: `${SOUNDS_ROOT}/menu_inventory selection Wrong.wav`,
 		drink: [
@@ -56460,7 +57102,12 @@
 
 	const musicListing = {
 		death: `${MUSIC_ROOT}/Dungeon_Crawler_Player_Death_Music.wav`,
-		explore: `${MUSIC_ROOT}/Dungeon_Crawler_Forest_Exploration(Done).wav`,
+		forest: `${MUSIC_ROOT}/Dungeon_Crawler_Forest_Exploration(Done).wav`,
+		dungeon: `${MUSIC_ROOT}/Dungeo_Crawler_Dungeon_Music(Done).wav`,
+		tavern: `${MUSIC_ROOT}/Dungeon_Crawler_Tavern.wav`,
+		boss: `${MUSIC_ROOT}/Dungeo_Crawler_Boss.wav`,
+		darkForest: `${AMB_ROOT}/Dark Forest Ambience Loop.wav`,
+		spooky: `${AMB_ROOT}/Spooky Ambience Loop.wav`,
 	};
 
 	const sounds = new SoundController(soundsListing, musicListing);
@@ -56475,14 +57122,26 @@
 		worldMaps,
 		customEvents,
 		sounds,
-		startAt: ['temple', 8, 4, 1],
-		clearColor: '#221100',
+		startAt: ['town', 1, 1, 1],
+		clearColor: '#161013',
 	});
 	window.document.addEventListener('DOMContentLoaded', () => {
 		window.pc = game.makeNewPlayer(
-			['temple', 8, 4, 1],
+			['town', 3, 2, 1],
 			{
 				name: 'Barrett Boulderfist',
+				texture: 'rupert_new.png',
+				hp: 20,
+				stamina: 20,
+				facing: 2,
+				dialog: {
+					hi: 'Stay out of my way while I crush all these vile vermin!',
+				},
+				inventory: [{
+					key: 'giantAxe',
+					name: 'Giant Battleaxe',
+					description: 'It is well-balanced, sharp, and good for beheading.',
+				}],
 				characterSheetIntroHtml: (
 					`<img src="./images/Slayer_portrait.jpeg" class="character-sheet-portrait" />
 				Barret Boulderfist is a hyper-competent one man army in his prime. He has cleared
@@ -56493,7 +57152,35 @@
 				),
 			},
 		);
-		game.start();
+		window.pc = game.makeNewPlayer(
+			['town', 17, 9, 1],
+			{
+				name: 'Druid McDruidface',
+				texture: 'human_new.png',
+				willpower: 20,
+				facing: 3,
+				dialog: {
+					hi: { a: 'I came to Wretchhold because I sensed violence.', unlocks: 'wretchhold' },
+					wretchhold: { a: 'Do the people of Wretchhold deserve to die?', locked: true },
+				},
+				inventory: [{
+					key: 'ghostMask',
+					name: 'Ghost Mask',
+					description: 'It allows you to see and speak with ghosts.',
+				}],
+				characterSheetIntroHtml: (
+					`<img src="./images/Druid_portrait.jpeg" class="character-sheet-portrait" />
+				Druid McDruidface is a junior druid who's rapidly becoming disillusioned.
+				He entered the vocation as a naive idealist, thinking he would be able to do
+				some good for all the creatures who live in the land, but he's been disturbed
+				by what he's seen so far: unnecessary suffering is a moral wrong, and so many of
+				the battles seem unnecessary. He never meant to get involved here, but he
+				heard cries for help, and couldn't turn away from that.
+				<hr style="margin: 1em 0" />`
+				),
+			},
+		);
+		game.start(0);
 		window.game = game;
 		window.g = game;
 		window.world = game.world;

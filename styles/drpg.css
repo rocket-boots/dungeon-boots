@@ -312,3 +312,10 @@ button:active {
 	float: right;
 	margin: 0 0 1em 1em;
 }
+
+.ui-close-button {
+	max-width: 8em;
+}
+.ui-close-button .key {
+	display: inline-block;
+}

@@ -21,6 +21,7 @@ class SoundController {
 		this.setupSounds(soundsListing);
 		this.music = musicListing;
 		this.stopMusic = NOOP;
+		this.stopAmbience = NOOP;
 	}
 
 	setupSounds(soundsListing = {}) {
@@ -79,11 +80,24 @@ class SoundController {
 		const soundThing = this.music[soundName];
 		if (!soundThing) {
 			console.warn('No music found for', soundName);
-			return;
+			return NOOP;
 		}
 		if (typeof this.stopMusic === 'function') this.stopMusic();
 		const { loop = true } = options;
 		this.stopMusic = this.playThing(soundThing, soundName, { loop });
+		return this.stopMusic;
+	}
+
+	playAmbience(soundName, options = {}) {
+		const soundThing = this.music[soundName];
+		if (!soundThing) {
+			console.warn('No music found for', soundName);
+			return NOOP;
+		}
+		if (typeof this.stopAmbience === 'function') this.stopAmbience();
+		const { loop = true } = options;
+		this.stopAmbience = this.playThing(soundThing, soundName, { loop });
+		return this.stopAmbience;
 	}
 }
 

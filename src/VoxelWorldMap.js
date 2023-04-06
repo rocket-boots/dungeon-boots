@@ -7,6 +7,7 @@ class VoxelWorldMap {
 		this.mapKey = mapKey;
 		this.world = world; // parent
 		this.sourceMap = sourceMap || world.sourceMaps[mapKey];
+		this.music = this.sourceMap.music || null;
 		// console.log('Making', mapKey, 'from', this.sourceMap);
 		const { map, legend } = this.sourceMap;
 		this.originalMap = map;
@@ -22,6 +23,7 @@ class VoxelWorldMap {
 				row.split('').forEach((char, x) => {
 					const startAt = [mapKey, x, y, z];
 					const blockLegend = legend[char];
+					if (!blockLegend) console.error(char, 'not found in legend', legend);
 					// If it is called "clear", or it is not blocking and not being rendered,
 					// then it's not really a block.
 					if (blockLegend.name === 'clear' || (!blockLegend.renderAs && !blockLegend.blocked)) {
@@ -71,6 +73,10 @@ class VoxelWorldMap {
 
 	getNpcs() {
 		return this.blocks.filter((block) => block.isNpcBlob);
+	}
+
+	getPlayerBlobs() {
+		return this.blocks.filter((block) => block.isPlayerBlob);
 	}
 
 	findBlock(block) {

@@ -2,9 +2,9 @@
 import abilities from './abilities.js';
 import ArrayCoords from './ArrayCoords.js';
 
-const $ = (selector) => {
+const $ = (selector, warn = true) => {
 	const elt = window.document.querySelector(selector);
-	if (!elt) console.warn('Could not find', selector);
+	if (!elt && warn) console.warn('Could not find', selector);
 	return elt;
 };
 // const $all = (selector) => {
@@ -44,6 +44,23 @@ class Interface {
 			this.fullView = 'closed';
 			this.optionsView = 'closed';
 		}
+		return this;
+	}
+
+	goBack() {
+		if (this.fullView === 'closed') {
+			// TODO: Open title screen
+		} else {
+			this.view('closed');
+		}
+		return this;
+	}
+
+	reset() {
+		this.optionsView = 'closed';
+		this.dungeoneerView = 'explore';
+		this.fullView = 'closed';
+		return this;
 	}
 
 	flashBorder(color = '#f00', duration = 1000) {
@@ -160,7 +177,13 @@ class Interface {
 						Balance
 						<span id="balance-value"></span>
 					</li>
-				</ul>`
+				</ul>
+				<div>
+					<button type="button" class="ui-close-button" data-command="view character">
+						Close <i class="key">v</i>
+					</button>
+				</div>
+				`
 				// ${JSON.stringify(blob, null, ' ')}`
 			);
 		} else if (this.fullView === 'menu') {
@@ -174,7 +197,7 @@ class Interface {
 	renderStats(blob) {
 		const leader = blob.getLeader();
 		['hp', 'willpower', 'stamina', 'balance'].forEach((key) => {
-			const elt = $(`#${key}-value`);
+			const elt = $(`#${key}-value`, false);
 			if (!elt) return;
 			elt.innerText = leader[key].getText();
 		});

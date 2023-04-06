@@ -18,10 +18,12 @@ window.THREE = THREE;
 const { Vector3, Object3D } = THREE;
 const { Z } = ArrayCoords;
 const { PI } = Math;
-// const TAU = PI * 2;
+const TAU = PI * 2;
+const NOOP = () => {};
 
 const WORLD_VOXEL_LIMITS = [64, 64, 12];
 const VISUAL_BLOCK_SIZE = 20;
+const VISUAL_PLANE_SIZE = 19;
 // const HALF_BLOCK_SIZE = VISUAL_BLOCK_SIZE / 2;
 
 const KB_MAPPING = {
@@ -40,7 +42,7 @@ const KB_MAPPING = {
 	b: 'view abilities',
 	g: 'view spells',
 	Tab: 'inventory',
-	'\\': 'special \\',
+	'\\': 'switch next-player',
 	1: 'option 1',
 	2: 'option 2',
 	3: 'option 3',
@@ -50,8 +52,11 @@ const KB_MAPPING = {
 	7: 'option 7',
 	8: 'option 8',
 	9: 'option 9',
+	Esc: 'menu back',
+	Backspace: 'menu back',
 };
 
+const BACKGROUND_COLOR = '#77bbff';
 const TURN_COMMANDS = ['turnLeft', 'turnRight'];
 const MOVE_COMMANDS = ['forward', 'back', 'strafeLeft', 'strafeRight'];
 const DEFAULT_SOUNDS = {
@@ -80,14 +85,16 @@ class DungeonCrawlerGame {
 		this.mapView = false;
 		// Rendering properties
 		this.interface = new Interface();
-		this.clearColor = options.clearColor || '#77bbff';
+		this.clearColor = options.clearColor || BACKGROUND_COLOR;
 		this.renderer = null;
 		this.scene = null;
 		this.eyeLight = null;
 		this.autoFacingObjects = []; // Things (like sprite planes) that need to auto-face the camera
 		this.camera = null;
 		this.cameraZOffset = -1; // TODO: why negative for "above"?
-		this.cameraZMapOffset = -80;
+		this.cameraZMapBaseOffset = -80;
+		this.cameraZMapMaxOffset = -800;
+		this.cameraZMapOffset = this.cameraZMapBaseOffset;
 		this.cameraGoal = new Object3D();
 		this.cameraCurrent = new Object3D();
 		this.lookGoal = new Vector3();
@@ -110,6 +117,13 @@ class DungeonCrawlerGame {
 		const p = this.getMainPlayer();
 		const mapKey = p.getMapKey();
 		return this.world.getMap(mapKey);
+	}
+
+	playMusic() {
+		const map = this.getMainPlayerMap();
+		const { music, ambience } = map;
+		this.sounds.playMusic(music);
+		this.sounds.playAmbience(ambience);
 	}
 
 	// ----------------------------------- Rendering
@@ -170,9 +184,18 @@ class DungeonCrawlerGame {
 		});
 	}
 
+	getBlockGoalPosition(block) { // eslint-disable-line class-methods-use-this
+		const [x, y, z] = block.coords;
+		return new Vector3(
+			x * VISUAL_BLOCK_SIZE,
+			y * VISUAL_BLOCK_SIZE,
+			-z * VISUAL_BLOCK_SIZE + ((block.onGround) ? VISUAL_BLOCK_SIZE * 0.4 : 0),
+			// ^ 0.4 instead of 0.5 so that it is slightly above the ground
+		);
+	}
+
 	addMapBlock(block, group) {
 		if (!block.renderAs) return;
-		const [x, y, z] = block.coords;
 		let texture;
 		let sceneObj; // mesh, plane, sprite, etc.
 		let color;
@@ -202,23 +225,53 @@ class DungeonCrawlerGame {
 			const sprite = new THREE.Sprite(material);
 			sprite.scale.set(VISUAL_BLOCK_SIZE, VISUAL_BLOCK_SIZE, VISUAL_BLOCK_SIZE);
 			sceneObj = sprite;
-		} else if (block.renderAs === 'plane') {
-			const geometry = new THREE.PlaneGeometry(18, 18);
+		} else if (block.renderAs === 'billboard' || block.renderAs === 'plane') {
+			// TODO: render a plane differently without auto-facing
+			const geometry = new THREE.PlaneGeometry(VISUAL_PLANE_SIZE, VISUAL_PLANE_SIZE);
 			const material = new THREE.MeshStandardMaterial({
 				color: 0xffffff,
 				side: THREE.DoubleSide,
 				map: texture,
 				transparent: true,
 			});
+			if (typeof block.opacity === 'number') material.opacity = block.opacity;
 			const plane = new THREE.Mesh(geometry, material);
-			this.autoFacingObjects.push(plane);
+			if (block.renderAs === 'billboard') {
+				this.autoFacingObjects.push(plane);
+			} else { // plane
+				let { rotateX = 0, rotateY = 0, rotateZ = 0 } = block;
+				rotateX += -0.25;
+				rotateY += 0;
+				rotateZ += 0;
+				if (block.onGround) {
+					rotateX += 0.25;
+					rotateY += 0;
+					rotateZ += 0;
+				}
+				plane.rotation.setFromVector3(new THREE.Vector3(0, 0, 0), 'YZX');
+				plane.rotateY(rotateY * TAU);
+				plane.rotateZ(rotateZ * TAU);
+				plane.rotateX(rotateX * TAU);
+			}
 			sceneObj = plane;
 		}
 		if (sceneObj) {
 			this.blockSceneObjectMapping[block.blockId] = sceneObj;
-			sceneObj.position.set(x * VISUAL_BLOCK_SIZE, y * VISUAL_BLOCK_SIZE, -z * VISUAL_BLOCK_SIZE);
-			if (block.isPlayerBlob) { // TODO: only hide the current main player
+			sceneObj.position.copy(this.getBlockGoalPosition(block));
+			// Hide the current main character
+			const mainBlob = this.getMainPlayer();
+			if (block.isPlayerBlob && mainBlob.blockId === block.blockId) {
 				sceneObj.visible = this.mapView;
+			}
+			// Check for block invisibility
+			if (block.invisible) {
+				sceneObj.visible = block.getVisibilityTo(mainBlob);
+			}
+			if (block.light) {
+				const [intensity, distance] = block.light;
+				const pointLight = new THREE.PointLight(0xb4b0dd, intensity, distance * VISUAL_BLOCK_SIZE);
+				sceneObj.add(pointLight);
+				window.torch = sceneObj;
 			}
 			if (group) group.add(sceneObj);
 			else this.scene.add(sceneObj);
@@ -228,7 +281,6 @@ class DungeonCrawlerGame {
 	}
 
 	updateBlockPosition(block, t = 0.1) {
-		const [x, y, z] = block.coords;
 		const sceneObject = this.blockSceneObjectMapping[block.blockId];
 		if (!sceneObject) {
 			// console.warn(`Cannot find sceneObject in blockSceneObjectMapping with blockId ${block.blockId}`);
@@ -236,11 +288,7 @@ class DungeonCrawlerGame {
 			return;
 		}
 		// sceneObject.iterimPos = new Vector3();
-		const goalPos = new Vector3(
-			x * VISUAL_BLOCK_SIZE,
-			y * VISUAL_BLOCK_SIZE,
-			-z * VISUAL_BLOCK_SIZE,
-		);
+		const goalPos = this.getBlockGoalPosition(block);
 		const q = 1.0 - (0.24 ** t); // This q & lerp logic is from simondev
 		// sceneObject.iterimPos.lerp(goalPos, q);
 		// sceneObject.position.copy(sceneObject.iterimPos);
@@ -372,7 +420,7 @@ class DungeonCrawlerGame {
 		// pointLight.position.set(-100, -100, -100);
 		// this.scene.add(pointLight);
 
-		const ambientLight = new THREE.AmbientLight(0x404040, 0.34);
+		const ambientLight = new THREE.AmbientLight(0x404040, 0.25);
 		this.scene.add(ambientLight);
 
 		// const sphereSize = 1;
@@ -409,12 +457,33 @@ class DungeonCrawlerGame {
 		return blob.getDialogOptions(talkTo);
 	}
 
+	switchMainPlayer(indexParam = 0, doRender = true) {
+		this.mainPlayerIndex = indexParam % this.players.length;
+		this.players.forEach((blob, i) => {
+			// eslint-disable-next-line no-param-reassign
+			blob.active = (i === this.mainPlayerIndex);
+		});
+		this.interface.reset().view('character');
+		if (!doRender) return;
+		this.setupScene();
+		this.render();
+	}
+
 	/** Take inputs commands and queue them for the main player */
 	handleInputCommand(command) {
 		console.log('Command:', command);
 		// this.sounds.play('button');
 		const p = this.getMainPlayer();
 		const commandWords = command.split(' ');
+		if (command === 'menu back') {
+			this.interface.goBack();
+			this.render();
+			return;
+		}
+		if (command === 'switch next-player') {
+			this.switchMainPlayer(this.mainPlayerIndex + 1, true);
+			return;
+		}
 		if (commandWords[0] === 'view') {
 			const [, page] = commandWords;
 			this.interface.view(page);
@@ -439,6 +508,7 @@ class DungeonCrawlerGame {
 		if (commandWords[0] === 'option') {
 			if (this.interface.optionsView === 'combat') command = `attack ${commandWords[1]}`;
 			if (this.interface.optionsView === 'talk') command = `dialog ${commandWords[1]}`;
+			if (this.interface.optionsView === 'inventory') command = `inventory ${commandWords[1]}`;
 		}
 		if (command === 'map') {
 			this.mapView = !this.mapView;
@@ -454,13 +524,15 @@ class DungeonCrawlerGame {
 
 	doActorCommand(blob, command) {
 		if (!command) return;
+		const mainBlob = this.getMainPlayer();
+		const isMain = (b) => mainBlob.blockId === b.blockId;
 		const mapKey = blob.getMapKey();
 		const worldMap = this.world.getMap(mapKey);
 		const commandWords = command.split(' ');
 		const target = blob.getFacingActor(worldMap);
 		if (commandWords[0] === 'attack') {
 			if (target) {
-				if (target.isPlayerBlob) {
+				if (target.isPlayerBlob && isMain(target)) {
 					this.interface.flashBorder('#f00');
 					this.sounds.play('hurt');
 				} else {
@@ -477,6 +549,11 @@ class DungeonCrawlerGame {
 			}
 			return;
 		}
+		if (commandWords[0] === 'inventory') {
+			const index = (Number(commandWords[1]) || 0) - 1;
+			const invItem = mainBlob.getInventoryItem(index);
+			alert(`This is a ${invItem.name}. You have ${invItem.quantity} of these. ${invItem.description}`);
+		}
 		if (commandWords[0] === 'dialog') {
 			const dialogOptions = this.calculateTalkOptions(blob);
 			if (!dialogOptions.length) {
@@ -491,8 +568,14 @@ class DungeonCrawlerGame {
 			return;
 		}
 		if (command === 'wait') {
-			blob.waitHeal(1);
-			if (blob.isPlayerBlob) this.sounds.play('drink');
+			if (blob.isPlayerBlob && isMain(blob)) {
+				if (blob.getLeader().hp.belowMax()) {
+					this.sounds.play('drink');
+				}
+				blob.waitHeal(2);
+			} else {
+				blob.waitHeal(1);
+			}
 			return;
 		}
 		if (TURN_COMMANDS.includes(command)) {
@@ -532,6 +615,7 @@ class DungeonCrawlerGame {
 			let moveToCoords = newCoords;
 			if (block && block.teleport) {
 				const [destMapKey, x, y, z, turn] = block.teleport;
+				this.sounds.play(block.soundTeleport || block.soundOn || block.sound);
 				moveToCoords = [x, y, z];
 				blob.turnTo(turn);
 				if (destMapKey !== mapKey) {
@@ -550,10 +634,20 @@ class DungeonCrawlerGame {
 		if (currentMapKey === destMapKey) return;
 		const currentMap = this.world.getMap(currentMapKey);
 		const destMap = this.world.getMap(destMapKey);
+		if (!destMap) throw new Error(`No destination map of ${destMapKey}`);
 		currentMap.removeBlock(blob);
 		blob.switchMap(destMapKey);
 		destMap.addBlock(blob);
 		this.setupScene();
+		this.playMusic();
+	}
+
+	checkDeath() {
+		if (!this.getMainPlayer().checkDeath()) return;
+		this.sounds.playMusic('death'); // dead
+		this.sounds.play('death');
+		this.interface.view('dead');
+		this.render();
 	}
 
 	doActorsCommands(actors = []) {
@@ -575,11 +669,7 @@ class DungeonCrawlerGame {
 		npcs.forEach((a) => a.plan(this.players, this.getMainPlayerMap()));
 		// ^ TODO: More efficient to do the planning while waiting for player input
 		this.doActorsCommands(npcs);
-		// Death checks
-		if (this.getMainPlayer().checkDeath()) {
-			this.sounds.playMusic('death');
-			this.sounds.play('death');
-		}
+		this.checkDeath();
 		let redraws = 0;
 		npcs.forEach((a) => {
 			a.checkDeath();
@@ -605,7 +695,8 @@ class DungeonCrawlerGame {
 	}
 
 	/** Only run this once */
-	start() {
+	start(playerIndex = 0) {
+		this.switchMainPlayer(playerIndex, false);
 		this.isStopped = false;
 		// this.makeNewPlayer();
 		this.kbCommander.on('command', (cmd) => this.handleInputCommand(cmd));
@@ -620,7 +711,7 @@ class DungeonCrawlerGame {
 		this.render();
 		this.tick();
 		this.animate();
-		this.sounds.playMusic('explore');
+		this.playMusic();
 	}
 
 	stop() {

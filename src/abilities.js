@@ -23,12 +23,12 @@ const abilities = {
 		combat: true,
 		replenish: { willpower: [1, 5], stamina: [1, 5] },
 	},
-	dodge: {
-		name: 'Dodge',
-		combat: true,
-		cost: { balance: 2 },
-		effect: { evasion: 0.75, rounds: 1 },
-	},
+	// dodge: {
+	// 	name: 'Dodge',
+	// 	combat: true,
+	// 	cost: { balance: 2 },
+	// 	effect: { evasion: 0.75, rounds: 1 },
+	// },
 	tactics: {
 		name: 'Tactics',
 		combat: true,
@@ -53,20 +53,20 @@ const abilities = {
 		cost: { balance: 4 },
 		damage: { hp: [5, 12] },
 	},
-	feint: {
-		name: 'Feint',
-		combat: true,
-		cost: { balance: 5 },
-		damage: { balance: [1, 5] },
-		replenish: { balance: [0, 4] },
-		effect: { evasion: 0.25, rounds: 1 },
-	},
-	parry: {
-		name: 'Parry',
-		combat: true,
-		cost: { stamina: 1, balance: 1 },
-		effect: { evasion: 0.5, rounds: 1 },
-	},
+	// feint: {
+	// 	name: 'Feint',
+	// 	combat: true,
+	// 	cost: { balance: 5 },
+	// 	damage: { balance: [1, 5] },
+	// 	replenish: { balance: [0, 4] },
+	// 	effect: { evasion: 0.25, rounds: 1 },
+	// },
+	// parry: {
+	// 	name: 'Parry',
+	// 	combat: true,
+	// 	cost: { stamina: 1, balance: 1 },
+	// 	effect: { evasion: 0.5, rounds: 1 },
+	// },
 	reprise: {
 		name: 'Reprise',
 		combat: true,
@@ -112,12 +112,12 @@ const abilities = {
 		replenish: { stamina: 1, hp: 1 },
 	},
 	// --- Spells ---
-	light: {
-		name: 'Light',
-		spell: true,
-		cost: { willpower: 1 },
-		effect: { brightness: 10, rounds: 20 },
-	},
+	// light: {
+	// 	name: 'Light',
+	// 	spell: true,
+	// 	cost: { willpower: 1 },
+	// 	effect: { brightness: 10, rounds: 20 },
+	// },
 	focus: {
 		name: 'Mental Focus',
 		spell: true,
