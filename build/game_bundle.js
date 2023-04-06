@@ -51121,6 +51121,7 @@
 			this.value = value;
 			this.max = max;
 			this.min = 0;
+			this.lastDelta = 0; // track the last change for display purposes
 		}
 
 		get() {
@@ -51129,7 +51130,9 @@
 
 		set(v) {
 			if (typeof v !== 'number') throw new Error('Cannot set to a non-number');
+			const ogValue = this.value;
 			this.value = Math.max(Math.min(this.max, v), this.min);
+			this.lastDelta = this.value - ogValue;
 			return this.value;
 		}
 
@@ -51150,18 +51153,29 @@
 			this.set(this.value - maxToSubtract);
 			return maxToSubtract;
 		}
+
+		clearLastDelta() {
+			this.lastDelta = 0;
+		}
 	}
 
 	class Actor {
 		constructor(/* blob */) {
 			// this.blob = blob;
 			this.isActor = true;
+			this.statPools = ['hp', 'stamina', 'willpower', 'balance'];
 			this.hp = new Pool(10, 10);
 			this.willpower = new Pool(10, 10);
 			this.stamina = new Pool(10, 10);
 			this.balance = new Pool(10, 10);
 			this.xp = 0;
 			this.knownAbilities = ['hack', 'slash', 'dodge'];
+		}
+
+		clearLastRound() {
+			this.statPools.forEach((statName) => {
+				this[statName].clearLastDelta();
+			});
 		}
 
 		hurt(dmg = 0) {
@@ -51307,6 +51321,18 @@
 			if (typeof this.aggro !== 'number') this.aggro = 0;
 			this.dead = false;
 			this.interactions = {};
+		}
+
+		clearLastRound() {
+			this.blob.forEach((actor) => {
+				actor.clearLastRound();
+			});
+		}
+
+		getMoodEmoji() {
+			if (this.dead) return '💀';
+			if (this.aggro) return '😡';
+			return '☮';
 		}
 
 		turn(n = 0) {
@@ -52015,6 +52041,11 @@
 		if (!elt) console.warn('Could not find', selector);
 		return elt;
 	};
+	// const $all = (selector) => {
+	// 	const elt = window.document.querySelectorAll(selector);
+	// 	if (!elt) console.warn('Could not find', selector);
+	// 	return elt;
+	// };
 
 	function capitalizeFirstLetter(string) {
 		return string.charAt(0).toUpperCase() + string.slice(1);
@@ -52026,6 +52057,8 @@
 			this.optionsView = 'closed'; // 'closed', 'combat', 'talk', 'inventory'
 			this.FULL_VIEWS = ['character', 'abilities', 'spells', 'menu', 'dead'];
 			this.fullView = 'closed'; // 'closed', 'character', 'abilities', 'spells', 'menu'
+			this.DUNGEONEER_VIEWS = ['engage', 'explore']; // or 'closed'
+			this.dungeoneerView = 'explore';
 			this.miniMapOn = false;
 			this.talkOptions = [];
 		}
@@ -52037,6 +52070,9 @@
 			} else if (this.OPTIONS_VIEWS.includes(what)) {
 				this.fullView = 'closed';
 				this.optionsView = (this.optionsView === what) ? 'closed' : what;
+			} else if (this.DUNGEONEER_VIEWS.includes(what)) {
+				this.fullView = 'closed';
+				this.dungeoneerView = what;
 			}
 			if (what === 'closed') {
 				this.fullView = 'closed';
@@ -52152,13 +52188,91 @@
 			});
 		}
 
-		render(blob) {
+		getBarPercents(pool = {}) {
+			const deltaDownPercent = (pool.lastDelta < 0) ? 100 * (Math.abs(pool.lastDelta) / pool.max) : 0;
+			const deltaUpPercent = (pool.lastDelta > 0) ? 100 * (pool.lastDelta / pool.max) : 0;
+			const valuePercent = (100 * (pool.value / pool.max)) - deltaUpPercent;
+			const spacerPercent = 100 - valuePercent - deltaDownPercent - deltaUpPercent;
+			return { deltaDownPercent, deltaUpPercent, valuePercent, spacerPercent };
+		}
+
+		getBlobBars(blob) {
+			if (!blob) return [];
+			const leader = blob.getLeader();
+			const STYLE_KEYS = {
+				hp: 'hp',
+				stamina: 'st',
+				willpower: 'wp',
+				balance: 'ba',
+			};
+			const bars = leader.statPools.map((statName) => {
+				const pool = leader[statName];
+				const { value, max, lastDelta } = pool;
+				const {
+					deltaDownPercent, deltaUpPercent, valuePercent, spacerPercent,
+				} = this.getBarPercents(pool);
+				return {
+					value,
+					max,
+					lastDelta,
+					styleKey: STYLE_KEYS[statName],
+					deltaDownPercent,
+					deltaUpPercent,
+					valuePercent,
+					spacerPercent,
+				};
+			});
+			return bars;
+		}
+
+		renderBars(uiName, bars = []) {
+			const container = $$1(`#ui-${uiName}`);
+			const noBars = (bars.length === 0);
+			container.style.display = (noBars) ? 'none' : 'block';
+			if (noBars) return;
+			container.querySelector('.bar-numbers').innerHTML = bars.filter((bar) => bar.lastDelta !== 0)
+				.map((bar) => `<span class="bar-number bar-number-${bar.styleKey}">${bar.lastDelta}</span>`)
+				.join('');
+			const barSections = [
+				['.bar-spacer', 'spacerPercent'],
+				['.bar-delta-down', 'deltaDownPercent'],
+				['.bar-delta-up', 'deltaUpPercent'],
+				['.bar-value', 'valuePercent'],
+			];
+			bars.forEach((bar) => {
+				container.querySelectorAll(`.bar-list-item-${bar.styleKey}`).forEach((li) => {
+					barSections.forEach(([selector, barPropName]) => {
+						// eslint-disable-next-line no-param-reassign
+						li.querySelector(selector).style.height = `${bar[barPropName]}%`;
+					});
+				});
+			});
+		}
+
+		renderDungeoneerRow(blob, facingActorBlob) {
+			let { dungeoneerView } = this;
+			if (this.fullView !== 'closed') dungeoneerView = 'closed';
+			const view = $$1('#ui-dungeoneer-row');
+			view.classList.remove(...view.classList);
+			view.classList.add(`ui-view--${dungeoneerView}`);
+			if (dungeoneerView === 'closed') return;
+			$$1('#ui-direction-value').innerText = ArrayCoords.getDirectionName(blob.facing);
+			this.renderBars('target-stats', this.getBlobBars(facingActorBlob));
+			this.renderBars('player-stats', this.getBlobBars(blob));
+			$$1('#ui-target-name').innerText = (facingActorBlob) ? facingActorBlob.name : '';
+			$$1('#ui-target-mood').innerText = (facingActorBlob) ? facingActorBlob.getMoodEmoji() : '';
+		}
+
+		renderInteract() {
+			$$1('#ui-interact-view').style.display = (this.fullView === 'closed') ? 'flex' : 'none';
+		}
+
+		render(blob, facingActorBlob) {
 			if (blob.dead) {
 				this.view('dead');
 			}
-			if (this.fullView === 'closed') {
-				$$1('#direction').innerText = `Direction: ${ArrayCoords.getDirectionName(blob.facing)}`;
-			}
+			this.renderInteract(blob, facingActorBlob);
+			this.renderDungeoneerRow(blob, facingActorBlob);
 			this.renderStats(blob);
 			this.renderOptions(blob);
 			this.renderFullView(blob);
@@ -52174,6 +52288,7 @@
 	const { PI } = Math;
 	// const TAU = PI * 2;
 
+	const WORLD_VOXEL_LIMITS = [64, 64, 12];
 	const VISUAL_BLOCK_SIZE = 20;
 	// const HALF_BLOCK_SIZE = VISUAL_BLOCK_SIZE / 2;
 
@@ -52307,7 +52422,7 @@
 			const p = this.getMainPlayer();
 			const coords = p.getCoords();
 			const [, , pZ] = coords;
-			const floorBlocks = this.getMainPlayerMap().getNearbyBlocks(coords, [20, 20, 4]);
+			const floorBlocks = this.getMainPlayerMap().getNearbyBlocks(coords, WORLD_VOXEL_LIMITS);
 			// TODO: Fix this ^ - bigger range? until we load/unload blocks dynamically
 			this.blocksAboveGroup = new Group();
 			this.blocksAtOrBelowGroup = new Group();
@@ -52456,8 +52571,11 @@
 		}
 
 		renderUI() {
-			const p = this.getMainPlayer();
-			this.interface.render(p);
+			const blob = this.getMainPlayer();
+			const mapKey = blob.getMapKey();
+			const worldMap = this.world.getMap(mapKey);
+			const facingActorBlob = blob.getFacingActor(worldMap);
+			this.interface.render(blob, facingActorBlob);
 		}
 
 		renderScene() { // Just render the three js scene
@@ -52613,7 +52731,7 @@
 					} else {
 						this.sounds.play('hit');
 					}
-					const dmg = (blob.isPlayerBlob) ? 9 : 1;
+					const dmg = Math.floor(Math.random() * ((blob.isPlayerBlob) ? 8 : 2)) + 1;
 					target.damage(dmg, 'hp');
 					// TODO
 					target.checkDeath();
@@ -52713,10 +52831,13 @@
 		}
 
 		doRound() {
+			const npcs = this.getNpcs();
+			[...this.players, ...npcs].forEach((blob) => {
+				blob.clearLastRound();
+			});
 			this.round += 1;
 			console.log('Round', this.round);
 			this.doActorsCommands(this.players);
-			const npcs = this.getNpcs();
 			npcs.forEach((a) => a.plan(this.players, this.getMainPlayerMap()));
 			// ^ TODO: More efficient to do the planning while waiting for player input
 			this.doActorsCommands(npcs);

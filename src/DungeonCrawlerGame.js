@@ -20,6 +20,7 @@ const { Z } = ArrayCoords;
 const { PI } = Math;
 // const TAU = PI * 2;
 
+const WORLD_VOXEL_LIMITS = [64, 64, 12];
 const VISUAL_BLOCK_SIZE = 20;
 // const HALF_BLOCK_SIZE = VISUAL_BLOCK_SIZE / 2;
 
@@ -153,7 +154,7 @@ class DungeonCrawlerGame {
 		const p = this.getMainPlayer();
 		const coords = p.getCoords();
 		const [, , pZ] = coords;
-		const floorBlocks = this.getMainPlayerMap().getNearbyBlocks(coords, [20, 20, 4]);
+		const floorBlocks = this.getMainPlayerMap().getNearbyBlocks(coords, WORLD_VOXEL_LIMITS);
 		// TODO: Fix this ^ - bigger range? until we load/unload blocks dynamically
 		this.blocksAboveGroup = new THREE.Group();
 		this.blocksAtOrBelowGroup = new THREE.Group();
@@ -302,8 +303,11 @@ class DungeonCrawlerGame {
 	}
 
 	renderUI() {
-		const p = this.getMainPlayer();
-		this.interface.render(p);
+		const blob = this.getMainPlayer();
+		const mapKey = blob.getMapKey();
+		const worldMap = this.world.getMap(mapKey);
+		const facingActorBlob = blob.getFacingActor(worldMap);
+		this.interface.render(blob, facingActorBlob);
 	}
 
 	renderScene() { // Just render the three js scene
@@ -459,7 +463,7 @@ class DungeonCrawlerGame {
 				} else {
 					this.sounds.play('hit');
 				}
-				const dmg = (blob.isPlayerBlob) ? 9 : 1;
+				const dmg = Math.floor(Math.random() * ((blob.isPlayerBlob) ? 8 : 2)) + 1;
 				target.damage(dmg, 'hp');
 				// TODO
 				target.checkDeath();
@@ -559,10 +563,13 @@ class DungeonCrawlerGame {
 	}
 
 	doRound() {
+		const npcs = this.getNpcs();
+		[...this.players, ...npcs].forEach((blob) => {
+			blob.clearLastRound();
+		});
 		this.round += 1;
 		console.log('Round', this.round);
 		this.doActorsCommands(this.players);
-		const npcs = this.getNpcs();
 		npcs.forEach((a) => a.plan(this.players, this.getMainPlayerMap()));
 		// ^ TODO: More efficient to do the planning while waiting for player input
 		this.doActorsCommands(npcs);

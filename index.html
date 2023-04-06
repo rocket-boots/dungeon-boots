@@ -17,8 +17,52 @@
 			<div id="mini-map"></div>
 		</section>
 		<div id="ui">
+			<div id="ui-dungeoneer-row">
+				<div>
+					<!-- space left for something in the future -->
+				</div>
+				<div id="ui-target-info">
+					<div id="ui-target-name-mood">
+						<div id="ui-target-name"></div>
+						<div id="ui-target-mood"></div>
+					</div>
+					<div id="ui-target-stats" class="bar-container">
+						<div class="bar-numbers"></div>
+						<ul class="bar-list">
+							<li class="bar-list-item bar-list-item-hp">
+								<div class="bar bar-spacer"></div>
+								<div class="bar bar-delta-down"></div>
+								<div class="bar bar-delta-up"></div>
+								<div class="bar bar-value"></div>
+							</li>
+							<li class="bar-list-item bar-list-item-st">
+								<div class="bar bar-spacer"></div>
+								<div class="bar bar-delta-down"></div>
+								<div class="bar bar-delta-up"></div>
+								<div class="bar bar-value"></div>
+							</li>
+							<li class="bar-list-item bar-list-item-wp">
+								<div class="bar bar-spacer"></div>
+								<div class="bar bar-delta-down"></div>
+								<div class="bar bar-delta-up"></div>
+								<div class="bar bar-value"></div>
+							</li>
+							<li class="bar-list-item bar-list-item-ba">
+								<div class="bar bar-spacer"></div>
+								<div class="bar bar-delta-down"></div>
+								<div class="bar bar-delta-up"></div>
+								<div class="bar bar-value"></div>
+							</li>
+						</ul>
+					</div>
+				</div>
+				<div id="ui-direction">Direction: <span id="ui-direction-value"></span></div>
+			</div>
+			<div id="ui-interact-view">
+				<!-- populate with js -->
+			</div>
 			<div id="ui-full-view" class="ui-full-view--closed">
-				
+				<!-- populate with js -->
 			</div>
 			<div id="ui-options-row" class="ui-options-row--closed">
 				<ol id="ui-options-list">
@@ -41,9 +85,6 @@
 				</div>
 				<div>
 					<button type="button" data-command="view character">Character <i class="key">v</i></button>
-				</div>
-				<div>
-					<!-- <button type="button">Character <i class="key">v</i></button> -->
 					<ul class="stats-list">
 						<li>
 							Health
@@ -62,6 +103,38 @@
 							<span id="balance-value"></span>
 						</li>
 					</ul>
+				</div>
+				<div>
+					<!-- <button type="button">Character <i class="key">v</i></button> -->
+					<div id="ui-player-stats" class="bar-container">
+						<div class="bar-numbers"></div>
+						<ul class="bar-list">
+							<li class="bar-list-item bar-list-item-hp">
+								<div class="bar bar-spacer"></div>
+								<div class="bar bar-delta-down"></div>
+								<div class="bar bar-delta-up"></div>
+								<div class="bar bar-value"></div>
+							</li>
+							<li class="bar-list-item bar-list-item-st">
+								<div class="bar bar-spacer"></div>
+								<div class="bar bar-delta-down"></div>
+								<div class="bar bar-delta-up"></div>
+								<div class="bar bar-value"></div>
+							</li>
+							<li class="bar-list-item bar-list-item-wp">
+								<div class="bar bar-spacer"></div>
+								<div class="bar bar-delta-down"></div>
+								<div class="bar bar-delta-up"></div>
+								<div class="bar bar-value"></div>
+							</li>
+							<li class="bar-list-item bar-list-item-ba">
+								<div class="bar bar-spacer"></div>
+								<div class="bar bar-delta-down"></div>
+								<div class="bar bar-delta-up"></div>
+								<div class="bar bar-value"></div>
+							</li>
+						</ul>
+					</div>
 				</div>
 				<section class="ui-actions">
 					<div class="ui-button-row">

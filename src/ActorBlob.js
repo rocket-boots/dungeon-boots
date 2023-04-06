@@ -24,6 +24,18 @@ class ActorBlob extends BlockEntity {
 		this.interactions = {};
 	}
 
+	clearLastRound() {
+		this.blob.forEach((actor) => {
+			actor.clearLastRound();
+		});
+	}
+
+	getMoodEmoji() {
+		if (this.dead) return '💀';
+		if (this.aggro) return '😡';
+		return '☮';
+	}
+
 	turn(n = 0) {
 		this.facing = ArrayCoords.normalizeDirection(this.facing + n);
 	}

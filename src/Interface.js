@@ -7,6 +7,11 @@ const $ = (selector) => {
 	if (!elt) console.warn('Could not find', selector);
 	return elt;
 };
+// const $all = (selector) => {
+// 	const elt = window.document.querySelectorAll(selector);
+// 	if (!elt) console.warn('Could not find', selector);
+// 	return elt;
+// };
 
 function capitalizeFirstLetter(string) {
 	return string.charAt(0).toUpperCase() + string.slice(1);
@@ -18,6 +23,8 @@ class Interface {
 		this.optionsView = 'closed'; // 'closed', 'combat', 'talk', 'inventory'
 		this.FULL_VIEWS = ['character', 'abilities', 'spells', 'menu', 'dead'];
 		this.fullView = 'closed'; // 'closed', 'character', 'abilities', 'spells', 'menu'
+		this.DUNGEONEER_VIEWS = ['engage', 'explore']; // or 'closed'
+		this.dungeoneerView = 'explore';
 		this.miniMapOn = false;
 		this.talkOptions = [];
 	}
@@ -29,6 +36,9 @@ class Interface {
 		} else if (this.OPTIONS_VIEWS.includes(what)) {
 			this.fullView = 'closed';
 			this.optionsView = (this.optionsView === what) ? 'closed' : what;
+		} else if (this.DUNGEONEER_VIEWS.includes(what)) {
+			this.fullView = 'closed';
+			this.dungeoneerView = what;
 		}
 		if (what === 'closed') {
 			this.fullView = 'closed';
@@ -144,13 +154,91 @@ class Interface {
 		});
 	}
 
-	render(blob) {
+	getBarPercents(pool = {}) {
+		const deltaDownPercent = (pool.lastDelta < 0) ? 100 * (Math.abs(pool.lastDelta) / pool.max) : 0;
+		const deltaUpPercent = (pool.lastDelta > 0) ? 100 * (pool.lastDelta / pool.max) : 0;
+		const valuePercent = (100 * (pool.value / pool.max)) - deltaUpPercent;
+		const spacerPercent = 100 - valuePercent - deltaDownPercent - deltaUpPercent;
+		return { deltaDownPercent, deltaUpPercent, valuePercent, spacerPercent };
+	}
+
+	getBlobBars(blob) {
+		if (!blob) return [];
+		const leader = blob.getLeader();
+		const STYLE_KEYS = {
+			hp: 'hp',
+			stamina: 'st',
+			willpower: 'wp',
+			balance: 'ba',
+		};
+		const bars = leader.statPools.map((statName) => {
+			const pool = leader[statName];
+			const { value, max, lastDelta } = pool;
+			const {
+				deltaDownPercent, deltaUpPercent, valuePercent, spacerPercent,
+			} = this.getBarPercents(pool);
+			return {
+				value,
+				max,
+				lastDelta,
+				styleKey: STYLE_KEYS[statName],
+				deltaDownPercent,
+				deltaUpPercent,
+				valuePercent,
+				spacerPercent,
+			};
+		});
+		return bars;
+	}
+
+	renderBars(uiName, bars = []) {
+		const container = $(`#ui-${uiName}`);
+		const noBars = (bars.length === 0);
+		container.style.display = (noBars) ? 'none' : 'block';
+		if (noBars) return;
+		container.querySelector('.bar-numbers').innerHTML = bars.filter((bar) => bar.lastDelta !== 0)
+			.map((bar) => `<span class="bar-number bar-number-${bar.styleKey}">${bar.lastDelta}</span>`)
+			.join('');
+		const barSections = [
+			['.bar-spacer', 'spacerPercent'],
+			['.bar-delta-down', 'deltaDownPercent'],
+			['.bar-delta-up', 'deltaUpPercent'],
+			['.bar-value', 'valuePercent'],
+		];
+		bars.forEach((bar) => {
+			container.querySelectorAll(`.bar-list-item-${bar.styleKey}`).forEach((li) => {
+				barSections.forEach(([selector, barPropName]) => {
+					// eslint-disable-next-line no-param-reassign
+					li.querySelector(selector).style.height = `${bar[barPropName]}%`;
+				});
+			});
+		});
+	}
+
+	renderDungeoneerRow(blob, facingActorBlob) {
+		let { dungeoneerView } = this;
+		if (this.fullView !== 'closed') dungeoneerView = 'closed';
+		const view = $('#ui-dungeoneer-row');
+		view.classList.remove(...view.classList);
+		view.classList.add(`ui-view--${dungeoneerView}`);
+		if (dungeoneerView === 'closed') return;
+		$('#ui-direction-value').innerText = ArrayCoords.getDirectionName(blob.facing);
+		this.renderBars('target-stats', this.getBlobBars(facingActorBlob));
+		this.renderBars('player-stats', this.getBlobBars(blob));
+		$('#ui-target-name').innerText = (facingActorBlob) ? facingActorBlob.name : '';
+		$('#ui-target-mood').innerText = (facingActorBlob) ? facingActorBlob.getMoodEmoji() : '';
+	}
+
+	renderInteract() {
+		$('#ui-interact-view').style.display = (this.fullView === 'closed') ? 'flex' : 'none';
+	}
+
+	render(blob, facingActorBlob) {
 		if (blob.dead) {
 			this.view('dead');
 		}
-		if (this.fullView === 'closed') {
-			$('#direction').innerText = `Direction: ${ArrayCoords.getDirectionName(blob.facing)}`;
-		}
+		this.renderInteract(blob, facingActorBlob);
+		this.renderDungeoneerRow(blob, facingActorBlob);
 		this.renderStats(blob);
 		this.renderOptions(blob);
 		this.renderFullView(blob);
