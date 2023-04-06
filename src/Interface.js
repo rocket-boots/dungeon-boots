@@ -1,3 +1,4 @@
+/* eslint-disable class-methods-use-this */
 import abilities from './abilities.js';
 import ArrayCoords from './ArrayCoords.js';
 
@@ -33,6 +34,18 @@ class Interface {
 			this.fullView = 'closed';
 			this.optionsView = 'closed';
 		}
+	}
+
+	flashBorder(color = '#f00', duration = 1000) {
+		const elt = $('#main');
+		const keyFrames = [ // Keyframes
+			{ borderColor: color },
+			{ borderColor: '#000' },
+		];
+		const keyFrameSettings = { duration, direction: 'alternate', easing: 'linear' };
+		const effect = new KeyframeEffect(elt, keyFrames, keyFrameSettings);
+		const animation = new Animation(effect, document.timeline);
+		animation.play();
 	}
 
 	renderMiniMap() {

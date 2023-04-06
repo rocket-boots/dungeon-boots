@@ -45,13 +45,16 @@ button:active {
 	right: 0;
 }
 
-#ui {
+#ui { /* take up the whole screen and sub-divide it with flex */
 	display: flex;
 	flex-direction: column;
+	justify-content: flex-end;
 	position: absolute;
 	bottom: 0;
 	left: 0;
 	right: 0;
+	bottom: 0;
+	top: 0;
 }
 #ui-options-row {
 	display: flex;
@@ -146,6 +149,7 @@ button:active {
 .ui-full-view--dead {
 	height: 50vh;
 	text-align: center;
+	text-align: 0.5em 0 1em #000;
 }
 .you-died {
 	font-size: 500%;

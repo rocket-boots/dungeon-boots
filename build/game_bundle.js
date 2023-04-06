@@ -52008,6 +52008,8 @@
 	});
 	var abilities$1 = Object.freeze(abilities);
 
+	/* eslint-disable class-methods-use-this */
+
 	const $$1 = (selector) => {
 		const elt = window.document.querySelector(selector);
 		if (!elt) console.warn('Could not find', selector);
@@ -52040,6 +52042,18 @@
 				this.fullView = 'closed';
 				this.optionsView = 'closed';
 			}
+		}
+
+		flashBorder(color = '#f00', duration = 1000) {
+			const elt = $$1('#main');
+			const keyFrames = [ // Keyframes
+				{ borderColor: color },
+				{ borderColor: '#000' },
+			];
+			const keyFrameSettings = { duration, direction: 'alternate', easing: 'linear' };
+			const effect = new KeyframeEffect(elt, keyFrames, keyFrameSettings);
+			const animation = new Animation(effect, document.timeline);
+			animation.play();
 		}
 
 		renderMiniMap() {
@@ -52500,9 +52514,12 @@
 			this.eyeLight = new PointLight(0xffffff, 0.9, VISUAL_BLOCK_SIZE * 6);
 			this.scene.add(this.eyeLight);
 
-			const pointLight = new PointLight(0xffffff, 0.15, 1000);
-			pointLight.position.set(-100, -100, -100);
-			this.scene.add(pointLight);
+			// const pointLight = new THREE.PointLight(0xffffff, 0.15, 1000);
+			// pointLight.position.set(-100, -100, -100);
+			// this.scene.add(pointLight);
+
+			const ambientLight = new AmbientLight(0x404040, 0.34);
+			this.scene.add(ambientLight);
 
 			// const sphereSize = 1;
 			// const pointLightHelper = new THREE.PointLightHelper(pointLight, sphereSize);
@@ -52555,6 +52572,7 @@
 				this.interface.talkOptions = this.calculateTalkOptions(p);
 				if (!this.interface.talkOptions.length) {
 					this.sounds.play('dud');
+					this.interface.flashBorder('#111');
 					this.interface.view('closed');
 					this.render();
 					return;
@@ -52590,6 +52608,7 @@
 			if (commandWords[0] === 'attack') {
 				if (target) {
 					if (target.isPlayerBlob) {
+						this.interface.flashBorder('#f00');
 						this.sounds.play('hurt');
 					} else {
 						this.sounds.play('hit');
@@ -52600,6 +52619,7 @@
 					target.checkDeath();
 				} else {
 					this.sounds.play('dud');
+					this.interface.flashBorder('#111');
 					console.warn('Nothing to attack');
 				}
 				return;
@@ -52650,7 +52670,10 @@
 				const block = blocks[0]; // just look at first block in case there are multiple
 				if (block && block.blocked) {
 					console.log('\t', blob.name, 'blocked at', JSON.stringify(block.coords), 'Desired Move:', mapKey, 'facing', blob.facing, 'forward', forward, 'strafe', strafe, 'up', up);
-					if (blob.isPlayerBlob) this.sounds.play('dud');
+					if (blob.isPlayerBlob) {
+						this.sounds.play('dud');
+						this.interface.flashBorder('#333');
+					}
 					// console.log('\tBlocked at', JSON.stringify(block.coords), block);
 					return;
 				}

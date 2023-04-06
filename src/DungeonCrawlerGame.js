@@ -360,9 +360,12 @@ class DungeonCrawlerGame {
 		this.eyeLight = new THREE.PointLight(0xffffff, 0.9, VISUAL_BLOCK_SIZE * 6);
 		this.scene.add(this.eyeLight);
 
-		const pointLight = new THREE.PointLight(0xffffff, 0.15, 1000);
-		pointLight.position.set(-100, -100, -100);
-		this.scene.add(pointLight);
+		// const pointLight = new THREE.PointLight(0xffffff, 0.15, 1000);
+		// pointLight.position.set(-100, -100, -100);
+		// this.scene.add(pointLight);
+
+		const ambientLight = new THREE.AmbientLight(0x404040, 0.34);
+		this.scene.add(ambientLight);
 
 		// const sphereSize = 1;
 		// const pointLightHelper = new THREE.PointLightHelper(pointLight, sphereSize);
@@ -415,6 +418,7 @@ class DungeonCrawlerGame {
 			this.interface.talkOptions = this.calculateTalkOptions(p);
 			if (!this.interface.talkOptions.length) {
 				this.sounds.play('dud');
+				this.interface.flashBorder('#111');
 				this.interface.view('closed');
 				this.render();
 				return;
@@ -450,6 +454,7 @@ class DungeonCrawlerGame {
 		if (commandWords[0] === 'attack') {
 			if (target) {
 				if (target.isPlayerBlob) {
+					this.interface.flashBorder('#f00');
 					this.sounds.play('hurt');
 				} else {
 					this.sounds.play('hit');
@@ -460,6 +465,7 @@ class DungeonCrawlerGame {
 				target.checkDeath();
 			} else {
 				this.sounds.play('dud');
+				this.interface.flashBorder('#111');
 				console.warn('Nothing to attack');
 			}
 			return;
@@ -510,7 +516,10 @@ class DungeonCrawlerGame {
 			const block = blocks[0]; // just look at first block in case there are multiple
 			if (block && block.blocked) {
 				console.log('\t', blob.name, 'blocked at', JSON.stringify(block.coords), 'Desired Move:', mapKey, 'facing', blob.facing, 'forward', forward, 'strafe', strafe, 'up', up);
-				if (blob.isPlayerBlob) this.sounds.play('dud');
+				if (blob.isPlayerBlob) {
+					this.sounds.play('dud');
+					this.interface.flashBorder('#333');
+				}
 				// console.log('\tBlocked at', JSON.stringify(block.coords), block);
 				return;
 			}
