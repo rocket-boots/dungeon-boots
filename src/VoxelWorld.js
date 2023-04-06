@@ -4,7 +4,7 @@ import VoxelWorldMap from './VoxelWorldMap.js';
 // import BlockEntity from './BlockEntity.js';
 // import NpcBlob from './NpcBlob.js';
 import PseudoRandomizer from './PseudoRandomizer.js';
-import ArrayCoords from './ArrayCoords.js';
+// import ArrayCoords from './ArrayCoords.js';
 
 // const DEFAULT_BLOCK_TYPES = {
 // ' ': { name: 'clear', blocked: 0, renderAs: false },
@@ -161,32 +161,27 @@ class VoxelWorld {
 		return block;
 	}
 
-	getBlock(mapKey, coords) {
-		const [x = 0, y = 0, z = 0] = coords;
-		const isBelow = (z < 0);
-		// x and y are effectively indices in an array, so they can't be negative
-		if (x < 0 || y < 0) {
-			return this.getBeyondBlock(mapKey, isBelow, coords);
-		}
-		const floor = this.getFloor(mapKey, z);
-		if (!floor) { // If nothing defined for that z level
-			return this.getBeyondBlock(mapKey, isBelow, coords);
-		}
-		const row = floor[y];
-		if (!row) {
-			return this.getBeyondBlock(mapKey, isBelow, coords);
-		}
-		const blockChar = row.charAt(x);
-		if (!blockChar) {
-			return this.getBeyondBlock(mapKey, isBelow, coords);
-		}
-		return this.getBlockByType(mapKey, blockChar, coords);
-	}
-
-	getBlockAtMoveCoordinates(mapKey, coords, facing, forward = 0, strafe = 0, up = 0) {
-		const newCoords = ArrayCoords.getRelativeCoordsInDirection(coords, facing, forward, strafe, up);
-		return this.getBlock(mapKey, newCoords);
-	}
+	// getBlock(mapKey, coords) {
+	// 	const [x = 0, y = 0, z = 0] = coords;
+	// 	const isBelow = (z < 0);
+	// 	// x and y are effectively indices in an array, so they can't be negative
+	// 	if (x < 0 || y < 0) {
+	// 		return this.getBeyondBlock(mapKey, isBelow, coords);
+	// 	}
+	// 	const floor = this.getFloor(mapKey, z);
+	// 	if (!floor) { // If nothing defined for that z level
+	// 		return this.getBeyondBlock(mapKey, isBelow, coords);
+	// 	}
+	// 	const row = floor[y];
+	// 	if (!row) {
+	// 		return this.getBeyondBlock(mapKey, isBelow, coords);
+	// 	}
+	// 	const blockChar = row.charAt(x);
+	// 	if (!blockChar) {
+	// 		return this.getBeyondBlock(mapKey, isBelow, coords);
+	// 	}
+	// 	return this.getBlockByType(mapKey, blockChar, coords);
+	// }
 }
 
 export default VoxelWorld;

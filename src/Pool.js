@@ -3,6 +3,7 @@ class Pool {
 		this.value = value;
 		this.max = max;
 		this.min = 0;
+		this.lastDelta = 0; // track the last change for display purposes
 	}
 
 	get() {
@@ -11,7 +12,9 @@ class Pool {
 
 	set(v) {
 		if (typeof v !== 'number') throw new Error('Cannot set to a non-number');
+		const ogValue = this.value;
 		this.value = Math.max(Math.min(this.max, v), this.min);
+		this.lastDelta = this.value - ogValue;
 		return this.value;
 	}
 
@@ -31,6 +34,10 @@ class Pool {
 		const maxToSubtract = Math.min(this.value, n);
 		this.set(this.value - maxToSubtract);
 		return maxToSubtract;
+	}
+
+	clearLastDelta() {
+		this.lastDelta = 0;
 	}
 }
 
