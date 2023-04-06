@@ -18,7 +18,7 @@ const { Z } = ArrayCoords;
 const { PI } = Math;
 // const TAU = PI * 2;
 
-const VISUAL_BLOCK_SIZE = 20;
+const VISUAL_BLOCK_SIZE = 40;
 // const HALF_BLOCK_SIZE = VISUAL_BLOCK_SIZE / 2;
 
 const KB_MAPPING = {
