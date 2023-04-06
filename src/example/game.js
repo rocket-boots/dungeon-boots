@@ -16,7 +16,20 @@ const game = new DungeonCrawlerGame({
 	clearColor: '#221100',
 });
 window.document.addEventListener('DOMContentLoaded', () => {
-	window.pc = game.makeNewPlayer();
+	window.pc = game.makeNewPlayer(
+		['temple', 8, 4, 1],
+		{
+			name: 'Barrett Boulderfist',
+			characterSheetIntroHtml: (
+				`<img src="./images/Slayer_portrait.jpeg" class="character-sheet-portrait" />
+				Barret Boulderfist is a hyper-competent one man army in his prime. He has cleared
+				a hundred dungeons full of violent creatures, and is unperturbed by facing another one.
+				He is known to be brutal but intelligent, a combat obsessive who takes pride in his
+				work and enjoys it too. After all, the dungeons need to be cleared, and nobody can do it
+				better.<hr style="margin: 1em 0" />`
+			),
+		},
+	);
 	game.start();
 	window.game = game;
 	window.g = game;

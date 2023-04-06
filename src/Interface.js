@@ -138,7 +138,31 @@ class Interface {
 				.join('');
 			html = `<h1>Spells</h1>${html}`;
 		} else if (this.fullView === 'character') {
-			html = `<h1>Character</h1> ${JSON.stringify(blob, null, ' ')}`;
+			html = (
+				`<h1>Character</h1>
+				<div class="character-sheet-intro">
+					${blob.characterSheetIntroHtml || ''}
+				</div>
+				<ul class="stats-list">
+					<li>
+						Health
+						<span id="hp-value"></span>
+					</li>
+					<li>
+						Willpower
+						<span id="willpower-value"></span>
+					</li>
+					<li>
+						Stamina
+						<span id="stamina-value"></span>
+					</li>
+					<li>
+						Balance
+						<span id="balance-value"></span>
+					</li>
+				</ul>`
+				// ${JSON.stringify(blob, null, ' ')}`
+			);
 		} else if (this.fullView === 'menu') {
 			html = 'Menu - Not implemented yet';
 		} else if (this.fullView === 'dead') {
@@ -150,7 +174,9 @@ class Interface {
 	renderStats(blob) {
 		const leader = blob.getLeader();
 		['hp', 'willpower', 'stamina', 'balance'].forEach((key) => {
-			$(`#${key}-value`).innerText = leader[key].getText();
+			const elt = $(`#${key}-value`);
+			if (!elt) return;
+			elt.innerText = leader[key].getText();
 		});
 	}
 
@@ -241,9 +267,9 @@ class Interface {
 		}
 		this.renderInteract(blob, facingActorBlob);
 		this.renderDungeoneerRow(blob, facingActorBlob);
-		this.renderStats(blob);
 		this.renderOptions(blob);
 		this.renderFullView(blob);
+		this.renderStats(blob);
 	}
 }
 

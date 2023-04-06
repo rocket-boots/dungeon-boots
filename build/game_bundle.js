@@ -51505,8 +51505,9 @@
 
 	/** A Player and the blob of characters they control */
 	class PlayerBlob extends ActorBlob {
-		constructor(startAt = []) {
+		constructor(startAt = [], playerBlockLegendParam = {}) {
 			const playerBlockLegend = {
+				...playerBlockLegendParam,
 				blocked: 1,
 				//
 			};
@@ -52178,7 +52179,31 @@
 					.join('');
 				html = `<h1>Spells</h1>${html}`;
 			} else if (this.fullView === 'character') {
-				html = `<h1>Character</h1> ${JSON.stringify(blob, null, ' ')}`;
+				html = (
+					`<h1>Character</h1>
+				<div class="character-sheet-intro">
+					${blob.characterSheetIntroHtml || ''}
+				</div>
+				<ul class="stats-list">
+					<li>
+						Health
+						<span id="hp-value"></span>
+					</li>
+					<li>
+						Willpower
+						<span id="willpower-value"></span>
+					</li>
+					<li>
+						Stamina
+						<span id="stamina-value"></span>
+					</li>
+					<li>
+						Balance
+						<span id="balance-value"></span>
+					</li>
+				</ul>`
+					// ${JSON.stringify(blob, null, ' ')}`
+				);
 			} else if (this.fullView === 'menu') {
 				html = 'Menu - Not implemented yet';
 			} else if (this.fullView === 'dead') {
@@ -52190,7 +52215,9 @@
 		renderStats(blob) {
 			const leader = blob.getLeader();
 			['hp', 'willpower', 'stamina', 'balance'].forEach((key) => {
-				$$1(`#${key}-value`).innerText = leader[key].getText();
+				const elt = $$1(`#${key}-value`);
+				if (!elt) return;
+				elt.innerText = leader[key].getText();
 			});
 		}
 
@@ -52281,9 +52308,9 @@
 			}
 			this.renderInteract(blob, facingActorBlob);
 			this.renderDungeoneerRow(blob, facingActorBlob);
-			this.renderStats(blob);
 			this.renderOptions(blob);
 			this.renderFullView(blob);
+			this.renderStats(blob);
 		}
 	}
 
@@ -52312,7 +52339,11 @@
 		f: 'combat',
 		t: 'talk',
 		i: 'inventory',
+		v: 'view character',
+		b: 'view abilities',
+		g: 'view spells',
 		Tab: 'inventory',
+		'\\': 'special \\',
 		1: 'option 1',
 		2: 'option 2',
 		3: 'option 3',
@@ -52655,9 +52686,8 @@
 		// ----------------------------------- Gameplay
 
 		/** Make a new player blob, which arrives in the middle of the map */
-		makeNewPlayer(startAt = this.startAt) {
-			const p = new PlayerBlob(startAt);
-			p.name = 'Hero';
+		makeNewPlayer(startAt = this.startAt, playerBlockLegend = {}) {
+			const p = new PlayerBlob(startAt, playerBlockLegend);
 			// const coords = this.world.getFloorCenter(mapKey, 1);
 			// coords[Z] = 1;
 			// p.moveTo(coords);
@@ -56449,7 +56479,20 @@
 		clearColor: '#221100',
 	});
 	window.document.addEventListener('DOMContentLoaded', () => {
-		window.pc = game.makeNewPlayer();
+		window.pc = game.makeNewPlayer(
+			['temple', 8, 4, 1],
+			{
+				name: 'Barrett Boulderfist',
+				characterSheetIntroHtml: (
+					`<img src="./images/Slayer_portrait.jpeg" class="character-sheet-portrait" />
+				Barret Boulderfist is a hyper-competent one man army in his prime. He has cleared
+				a hundred dungeons full of violent creatures, and is unperturbed by facing another one.
+				He is known to be brutal but intelligent, a combat obsessive who takes pride in his
+				work and enjoys it too. After all, the dungeons need to be cleared, and nobody can do it
+				better.<hr style="margin: 1em 0" />`
+				),
+			},
+		);
 		game.start();
 		window.game = game;
 		window.g = game;

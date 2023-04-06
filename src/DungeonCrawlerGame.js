@@ -36,7 +36,11 @@ const KB_MAPPING = {
 	f: 'combat',
 	t: 'talk',
 	i: 'inventory',
+	v: 'view character',
+	b: 'view abilities',
+	g: 'view spells',
 	Tab: 'inventory',
+	'\\': 'special \\',
 	1: 'option 1',
 	2: 'option 2',
 	3: 'option 3',
@@ -379,9 +383,8 @@ class DungeonCrawlerGame {
 	// ----------------------------------- Gameplay
 
 	/** Make a new player blob, which arrives in the middle of the map */
-	makeNewPlayer(startAt = this.startAt) {
-		const p = new PlayerBlob(startAt);
-		p.name = 'Hero';
+	makeNewPlayer(startAt = this.startAt, playerBlockLegend = {}) {
+		const p = new PlayerBlob(startAt, playerBlockLegend);
 		// const coords = this.world.getFloorCenter(mapKey, 1);
 		// coords[Z] = 1;
 		// p.moveTo(coords);

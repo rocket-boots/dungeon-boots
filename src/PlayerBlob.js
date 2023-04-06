@@ -3,8 +3,9 @@ import PlayerCharacter from './PlayerCharacter.js';
 
 /** A Player and the blob of characters they control */
 class PlayerBlob extends ActorBlob {
-	constructor(startAt = []) {
+	constructor(startAt = [], playerBlockLegendParam = {}) {
 		const playerBlockLegend = {
+			...playerBlockLegendParam,
 			blocked: 1,
 			//
 		};
