@@ -23,9 +23,7 @@ class VoxelWorldMap {
 				row.split('').forEach((char, x) => {
 					const startAt = [mapKey, x, y, z];
 					const blockLegend = legend[char];
-
 					if (!blockLegend) console.error(char, 'not found in legend', legend);
-					
 					// If it is called "clear", or it is not blocking and not being rendered,
 					// then it's not really a block.
 					if (blockLegend.name === 'clear' || (!blockLegend.renderAs && !blockLegend.blocked)) {

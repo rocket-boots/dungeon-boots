@@ -51,6 +51,7 @@ window.document.addEventListener('DOMContentLoaded', () => {
 				and nobody can do it better than him.
 				<hr style="margin: 1em 0" />`
 			),
+			abilities: ['hack', 'slash', 'bash', 'rally', 'berserk'],
 		},
 	);
 	window.pc = game.makeNewPlayer(
@@ -82,6 +83,7 @@ window.document.addEventListener('DOMContentLoaded', () => {
 				moment seems worthy, chooses to play a part in their stories.
 				<hr style="margin: 1em 0" />`
 			),
+			abilities: ['hack', 'swift', 'reprise', 'heal', 'heal2'],
 		},
 	);
 	game.start(0);

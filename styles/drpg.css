@@ -185,6 +185,10 @@ button:active {
 .ability-item--unknown div {
 	opacity: 0.35;
 }
+.ability-details {
+	text-align: left;
+	font-size: 80%;
+}
 
 #ui-dungeoneer-row {
 	align-self: flex-start;

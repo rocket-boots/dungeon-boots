@@ -2,6 +2,10 @@
 import abilities from './abilities.js';
 import ArrayCoords from './ArrayCoords.js';
 
+const POOL_ABBREV = {
+	hp: 'HP', willpower: 'W', balance: 'B', stamina: 'S',
+};
+
 const $ = (selector, warn = true) => {
 	const elt = window.document.querySelector(selector);
 	if (!elt && warn) console.warn('Could not find', selector);
@@ -81,16 +85,37 @@ class Interface {
 		$('#mini-map').innerHTML = mapHtml;
 	}
 
+	static getPoolObjHtml(poolObj) {
+		if (!poolObj) return '---';
+		return Object.keys(poolObj).map((poolKey) => {
+			let value = poolObj[poolKey];
+			if (value instanceof Array) value = value.join('-');
+			return `${value} ${POOL_ABBREV[poolKey]}`;
+		}).join(', ');
+	}
+
+	static getAbilityStatsHtml(abil) {
+		return (
+			`<div class="ability-details">
+				<div>Use: ${Interface.getPoolObjHtml(abil.cost)}</div>
+				<div>Gain: ${Interface.getPoolObjHtml(abil.replenish)}</div>
+				<div>Damage: ${Interface.getPoolObjHtml(abil.damage)}</div>
+			</div>`
+		);
+	}
+
 	renderOptions(blob) {
 		const uiOptionsRow = $('#ui-options-row');
 		uiOptionsRow.classList.remove(...uiOptionsRow.classList);
 		uiOptionsRow.classList.add(`ui-options-row--${this.optionsView}`);
 		let html = '';
 		if (this.optionsView === 'combat') {
-			html = ['Hack', 'Slash', 'Smash'].map((ability, i) => (
+			const abils = blob.getKnownAbilities().map((key) => abilities[key]);
+			html = abils.map((ability, i) => (
 				`<li>
 					<button type="button" data-command="attack ${i + 1}">
-						${ability}
+						${ability.name}
+						${Interface.getAbilityStatsHtml(ability)}
 						<i class="key">${i + 1}</i>
 					</button>
 				</li>`
@@ -121,15 +146,11 @@ class Interface {
 	static getAbilityItemHtml(blob, ability) {
 		const knownAbilities = blob.getKnownAbilities();
 		const isKnown = knownAbilities.includes(ability.key);
-		const rows = [isKnown ? 'Known' : 'Not known'];
-		if (ability.cost) rows.push(`Cost: ${JSON.stringify(ability.cost, null, ' ')}`);
-		if (ability.replenish) rows.push(`Replenish: ${JSON.stringify(ability.replenish, null, ' ')}`);
-		if (ability.damage) rows.push(`Damage: ${JSON.stringify(ability.damage, null, ' ')}`);
-		if (ability.effect) rows.push(`Effect: ${JSON.stringify(ability.effect, null, ' ')}`);
 		return (
 			`<li class="ability-item ${isKnown ? 'ability-item--known' : 'ability-item--unknown'}">
 				${ability.name || ability.key}
-				${rows.map((row) => `<div>${row}</div>`).join('')}
+				${isKnown ? 'Known' : 'Not known'}
+				${Interface.getAbilityStatsHtml(ability)}
 			</li>`
 		);
 	}
@@ -162,19 +183,19 @@ class Interface {
 				</div>
 				<ul class="stats-list">
 					<li>
-						Health
+						(HP) Health
 						<span id="hp-value"></span>
 					</li>
 					<li>
-						Willpower
+						(W) Willpower
 						<span id="willpower-value"></span>
 					</li>
 					<li>
-						Stamina
+						(S) Stamina
 						<span id="stamina-value"></span>
 					</li>
 					<li>
-						Balance
+						(B) Balance
 						<span id="balance-value"></span>
 					</li>
 				</ul>

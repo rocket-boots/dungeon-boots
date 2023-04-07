@@ -9,8 +9,8 @@ const abilities = {
 	slash: {
 		name: 'Slash',
 		combat: true,
-		cost: { stamina: 1, balance: 2 },
-		damage: { hp: [5, 7] },
+		cost: { stamina: 2, balance: 4 },
+		damage: { hp: [8, 10] },
 	},
 	bash: {
 		name: 'Bash',
@@ -21,8 +21,14 @@ const abilities = {
 	rally: {
 		name: 'Rally',
 		combat: true,
-		replenish: { willpower: [1, 5], stamina: [1, 5] },
+		cost: { willpower: 10 },
+		replenish: { hp: [2, 8], stamina: [2, 10] },
 	},
+	// rally: {
+	// 	name: 'Rally',
+	// 	combat: true,
+	// 	replenish: { willpower: [1, 5], stamina: [1, 5] },
+	// },
 	// dodge: {
 	// 	name: 'Dodge',
 	// 	combat: true,
@@ -128,13 +134,13 @@ const abilities = {
 		name: 'Heal I',
 		spell: true,
 		cost: { willpower: 2 },
-		replenish: { hp: [2, 6] },
+		replenish: { hp: [5, 10] },
 	},
 	heal2: {
 		name: 'Heal II',
 		spell: true,
 		cost: { willpower: 5 },
-		replenish: { hp: [4, 12] },
+		replenish: { hp: [10, 16] },
 	},
 };
 Object.keys(abilities).forEach((key) => {

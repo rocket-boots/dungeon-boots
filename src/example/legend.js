@@ -6,11 +6,19 @@ const teleportDoor = {
 	texture: 'runed_door.png',
 	soundOn: 'door',
 };
+const forestDoor = {
+	name: 'forest path (door)',
+	blocked: 0,
+	renderAs: 'box',
+	texture: 'stone_arch.png',
+	soundOn: 'steps',
+};
 const ghost = {
 	name: 'ghost',
 	blocked: 0,
 	renderAs: 'billboard',
 	texture: 'shadow_new.png',
+	aggro: 0,
 	npc: 'wanderer',
 	opacity: 0.7,
 	hp: 1,
@@ -58,7 +66,7 @@ const monster = {
 	renderAs: 'billboard',
 	// texture: 'cyclops_new.png',
 	npc: 'monster',
-	faction: 'neutral',
+	faction: 'wretch',
 	battleYell: 'goblinBattleYell',
 	hurtSound: 'goblinDamaged',
 	deathSound: 'goblinDeath',
@@ -349,7 +357,7 @@ const legend = {
 	},
 	'4': {
 		...teleportDoor,
-		teleport: ['forest', 5, 7, 1, 0],
+		teleport: ['forest', 5, 13, 1, 0],
 	},
 	'5': {
 		...teleportDoor,
@@ -374,6 +382,22 @@ const legend = {
 	'0': {
 		...teleportDoor,
 		teleport: ['tower1', 13, 1, 1, 2],
+	},
+	'[': {
+		...forestDoor,
+		teleport: ['forestOutside', 30, 2, 1, 3],
+	},
+	']': {
+		...forestDoor,
+		teleport: ['forest', 1, 4, 1, 1],
+	},
+	'{': {
+		...forestDoor,
+		teleport: ['forestOutside', 30, 31, 1, 3],
+	},
+	'}': {
+		...forestDoor,
+		teleport: ['forest', 1, 11, 1, 1],
 	},
 };
 

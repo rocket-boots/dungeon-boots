@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 // External modules
 import * as THREE from 'three';
 import { Scene, PerspectiveCamera } from 'three';
@@ -10,7 +11,7 @@ import ArrayCoords from './ArrayCoords.js';
 import PlayerBlob from './PlayerBlob.js';
 import VoxelWorld from './VoxelWorld.js';
 import NpcBlob from './NpcBlob.js';
-// import abilities from './abilities.js';
+import abilities from './abilities.js';
 import Interface from './Interface.js';
 // import Renderer from './Renderer.js';
 
@@ -20,7 +21,7 @@ const { X, Y, Z } = ArrayCoords;
 const { PI } = Math;
 
 const TAU = PI * 2;
-const NOOP = () => {};
+// const NOOP = () => {};
 
 const WORLD_VOXEL_LIMITS = [64, 64, 12];
 const VISUAL_BLOCK_SIZE = 20;
@@ -436,9 +437,9 @@ class DungeonCrawlerGame {
 	/** Make a new player blob, which arrives in the middle of the map */
 	makeNewPlayer(startAt = this.startAt, playerBlockLegend = {}) {
 		const p = new PlayerBlob(startAt, playerBlockLegend);
-		// const coords = this.world.getFloorCenter(mapKey, 1);
-		// coords[Z] = 1;
-		// p.moveTo(coords);
+		if (playerBlockLegend.abilities) {
+			p.getLeader().knownAbilities = [...playerBlockLegend.abilities];
+		}
 		this.players.push(p);
 		const map = this.getMainPlayerMap();
 		map.addBlock(p);
@@ -539,6 +540,7 @@ class DungeonCrawlerGame {
 		const commandWords = command.split(' ');
 		const remainderCommandWords = [...commandWords];
 		const firstCommandWord = remainderCommandWords.shift(); // remove the first word
+		const commandIndex = (Number(commandWords[1]) || 0) - 1;
 		const target = blob.getFacingActor(worldMap);
 		if (firstCommandWord === 'spawn') {
 			const blockLegendStr = remainderCommandWords.join(' ');
@@ -550,7 +552,11 @@ class DungeonCrawlerGame {
 		if (blob.dead) return;
 		// ----- Below here are all things that can only be done by living blobs
 		if (firstCommandWord === 'attack') {
+			const abils = blob.getKnownAbilities().map((key) => abilities[key]);
+			const attackAbility = abils[commandIndex] || abilities.hack;
 			if (target) {
+				const effectiveness = blob.useAbility(attackAbility);
+				target.applyAbility(attackAbility, effectiveness, blob.damageScale);
 				const isMainPlayerGettingHit = target.isPlayerBlob && isMain(target);
 				if (isMainPlayerGettingHit) {
 					this.interface.flashBorder('#f00');
@@ -558,9 +564,9 @@ class DungeonCrawlerGame {
 					this.sounds.play('hit');
 				}
 				this.sounds.play(blob.battleYell, { delay: 500, random: 0.2 });
-				const dmg = blob.getDamage();
-				target.damage(dmg, 'hp');
-				// TODO ^ improve this
+				// const dmg = blob.getDamage();
+				// target.damage(dmg, 'hp');
+
 				const died = target.checkDeath();
 				const hurtSoundChance = (isMainPlayerGettingHit) ? 1 : 0.2;
 				if (died) this.sounds.play(target.deathSound, { delay: 100 });
@@ -571,6 +577,7 @@ class DungeonCrawlerGame {
 					);
 				}
 			} else {
+				if (!attackAbility.combat) blob.useAbility(attackAbility);
 				this.sounds.play('dud');
 				this.interface.flashBorder('#111');
 				console.warn('Nothing to attack');
@@ -578,8 +585,7 @@ class DungeonCrawlerGame {
 			return;
 		}
 		if (firstCommandWord === 'inventory') {
-			const index = (Number(commandWords[1]) || 0) - 1;
-			const invItem = mainBlob.getInventoryItem(index);
+			const invItem = mainBlob.getInventoryItem(commandIndex);
 			alert(`This is a ${invItem.name}. You have ${invItem.quantity} of these. ${invItem.description}`);
 		}
 		if (firstCommandWord === 'dialog') {
@@ -588,10 +594,9 @@ class DungeonCrawlerGame {
 				this.sounds.play('dud');
 				return;
 			}
-			const index = (Number(commandWords[1]) || 0) - 1;
-			const { answer = '...' } = dialogOptions[index];
-			target.speakDialog(dialogOptions[index]);
-			blob.listenToDialog(dialogOptions[index], target);
+			// const { answer = '...' } = dialogOptions[index];
+			target.speakDialog(dialogOptions[commandIndex]);
+			blob.listenToDialog(dialogOptions[commandIndex], target);
 			this.interface.talkOptions = this.calculateTalkOptions(blob);
 			return;
 		}
@@ -726,7 +731,6 @@ class DungeonCrawlerGame {
 	start(playerIndex = 0) {
 		this.switchMainPlayer(playerIndex, false);
 		this.isStopped = false;
-		// this.makeNewPlayer();
 		this.kbCommander.on('command', (cmd) => this.handleInputCommand(cmd));
 		window.document.addEventListener('click', (event) => {
 			const commandElt = event.target.closest('[data-command]');

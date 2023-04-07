@@ -51187,7 +51187,7 @@
 			// this.stamina = new Pool(10, 10);
 			// this.balance = new Pool(10, 10);
 			this.xp = 0;
-			this.knownAbilities = ['hack', 'slash', 'dodge'];
+			this.knownAbilities = ['hack'];
 		}
 
 		clearLastRound() {
@@ -51200,8 +51200,8 @@
 			return this.hp.subtract(dmg);
 		}
 
-		heal(healing = 0) {
-			return this.hp.add(healing);
+		heal(healing = 0, poolType = 'hp') {
+			return this[poolType].add(healing);
 		}
 
 		waitHeal(rounds = 1) {
@@ -51482,6 +51482,66 @@
 			return Array.from(allBlobAbilitiesSet);
 		}
 
+		static getPoolAmount(numOrArray) {
+			if (typeof numOrArray === 'number') return numOrArray;
+			if (numOrArray instanceof Array) {
+				const [min, max] = numOrArray;
+				const spread = max - min;
+				return Math.floor(Math.random() * spread) + Math.round(min);
+			}
+			throw new Error('bad numOrarray');
+		}
+
+		static getDamageAmount(numOrArray, effectiveness = 1, scale = 1) {
+			if (typeof numOrArray === 'number') {
+				return Math.floor(numOrArray * scale * effectiveness);
+			}
+			if (numOrArray instanceof Array) {
+				let [min, max] = numOrArray;
+				min *= scale;
+				max *= scale;
+				const spread = max - min;
+				return Math.floor(((Math.random() * spread) + min) * effectiveness);
+			}
+			throw new Error('bad numOrarray');
+		}
+
+		payAbilityCost(cost = {}) {
+			let effectiveness = 1;
+			Object.keys(cost).forEach((poolKey) => {
+				const costAmount = ActorBlob.getPoolAmount(cost[poolKey]);
+				const actualCostSpent = this.getLeader().damage(costAmount, poolKey);
+				const diff = costAmount - actualCostSpent;
+				if (diff > 0) effectiveness = 1 - (diff / costAmount);
+			});
+			return effectiveness;
+		}
+
+		replenish(replenish = {}) {
+			Object.keys(replenish).forEach((poolKey) => {
+				const healAmount = ActorBlob.getPoolAmount(replenish[poolKey]);
+				this.getLeader().heal(healAmount, poolKey);
+			});
+		}
+
+		/** Uses an ability for the blob, paying the cost, and returning the effectiveness 0-1 */
+		useAbility(ability = {}) {
+			const { cost, replenish } = ability;
+			const effectiveness = (cost) ? this.payAbilityCost(cost) : 1;
+			if (replenish) this.replenish(replenish);
+			return effectiveness;
+		}
+
+		applyAbility(ability = {}, effectiveness = 1, damageScale = 1) {
+			const { damage } = ability;
+			if (!damage) return 0;
+			Object.keys(damage).forEach((poolKey) => {
+				const dmgAmount = ActorBlob.getDamageAmount(damage[poolKey], effectiveness, damageScale);
+				this.getLeader().damage(dmgAmount, poolKey);
+			});
+			return 1;
+		}
+
 		getDialogOptions(actor) {
 			if (!actor || !actor.dialog) return [];
 			const dialogKeys = Object.keys(actor.dialog);
@@ -51626,7 +51686,7 @@
 	class PlayerCharacter extends Actor {
 		constructor(playerBlob, startAt = []) {
 			super(playerBlob, startAt);
-			this.knownAbilities = ['hack', 'slash'];
+			this.knownAbilities = ['hack', 'slash', 'bash', 'rally'];
 		}
 	}
 
@@ -51650,7 +51710,7 @@
 	class NonPlayerCharacter extends Actor {
 		constructor(blob, startAt = []) {
 			super(blob, startAt);
-			this.knownAbilities = ['hack', 'slash'];
+			this.knownAbilities = ['hack', 'slash', 'bash'];
 		}
 	}
 
@@ -51772,9 +51832,7 @@
 					row.split('').forEach((char, x) => {
 						const startAt = [mapKey, x, y, z];
 						const blockLegend = legend[char];
-
 						if (!blockLegend) console.error(char, 'not found in legend', legend);
-						
 						// If it is called "clear", or it is not blocking and not being rendered,
 						// then it's not really a block.
 						if (blockLegend.name === 'clear' || (!blockLegend.renderAs && !blockLegend.blocked)) {
@@ -52055,8 +52113,8 @@
 		slash: {
 			name: 'Slash',
 			combat: true,
-			cost: { stamina: 1, balance: 2 },
-			damage: { hp: [5, 7] },
+			cost: { stamina: 2, balance: 4 },
+			damage: { hp: [8, 10] },
 		},
 		bash: {
 			name: 'Bash',
@@ -52067,8 +52125,14 @@
 		rally: {
 			name: 'Rally',
 			combat: true,
-			replenish: { willpower: [1, 5], stamina: [1, 5] },
+			cost: { willpower: 10 },
+			replenish: { hp: [2, 8], stamina: [2, 10] },
 		},
+		// rally: {
+		// 	name: 'Rally',
+		// 	combat: true,
+		// 	replenish: { willpower: [1, 5], stamina: [1, 5] },
+		// },
 		// dodge: {
 		// 	name: 'Dodge',
 		// 	combat: true,
@@ -52174,13 +52238,13 @@
 			name: 'Heal I',
 			spell: true,
 			cost: { willpower: 2 },
-			replenish: { hp: [2, 6] },
+			replenish: { hp: [5, 10] },
 		},
 		heal2: {
 			name: 'Heal II',
 			spell: true,
 			cost: { willpower: 5 },
-			replenish: { hp: [4, 12] },
+			replenish: { hp: [10, 16] },
 		},
 	};
 	Object.keys(abilities).forEach((key) => {
@@ -52189,6 +52253,10 @@
 	var abilities$1 = Object.freeze(abilities);
 
 	/* eslint-disable class-methods-use-this */
+
+	const POOL_ABBREV = {
+		hp: 'HP', willpower: 'W', balance: 'B', stamina: 'S',
+	};
 
 	const $$1 = (selector, warn = true) => {
 		const elt = window.document.querySelector(selector);
@@ -52267,16 +52335,37 @@
 			$$1('#mini-map').innerHTML = mapHtml;
 		}
 
+		static getPoolObjHtml(poolObj) {
+			if (!poolObj) return '---';
+			return Object.keys(poolObj).map((poolKey) => {
+				let value = poolObj[poolKey];
+				if (value instanceof Array) value = value.join('-');
+				return `${value} ${POOL_ABBREV[poolKey]}`;
+			}).join(', ');
+		}
+
+		static getAbilityStatsHtml(abil) {
+			return (
+				`<div class="ability-details">
+				<div>Use: ${Interface.getPoolObjHtml(abil.cost)}</div>
+				<div>Gain: ${Interface.getPoolObjHtml(abil.replenish)}</div>
+				<div>Damage: ${Interface.getPoolObjHtml(abil.damage)}</div>
+			</div>`
+			);
+		}
+
 		renderOptions(blob) {
 			const uiOptionsRow = $$1('#ui-options-row');
 			uiOptionsRow.classList.remove(...uiOptionsRow.classList);
 			uiOptionsRow.classList.add(`ui-options-row--${this.optionsView}`);
 			let html = '';
 			if (this.optionsView === 'combat') {
-				html = ['Hack', 'Slash', 'Smash'].map((ability, i) => (
+				const abils = blob.getKnownAbilities().map((key) => abilities$1[key]);
+				html = abils.map((ability, i) => (
 					`<li>
 					<button type="button" data-command="attack ${i + 1}">
-						${ability}
+						${ability.name}
+						${Interface.getAbilityStatsHtml(ability)}
 						<i class="key">${i + 1}</i>
 					</button>
 				</li>`
@@ -52307,15 +52396,11 @@
 		static getAbilityItemHtml(blob, ability) {
 			const knownAbilities = blob.getKnownAbilities();
 			const isKnown = knownAbilities.includes(ability.key);
-			const rows = [isKnown ? 'Known' : 'Not known'];
-			if (ability.cost) rows.push(`Cost: ${JSON.stringify(ability.cost, null, ' ')}`);
-			if (ability.replenish) rows.push(`Replenish: ${JSON.stringify(ability.replenish, null, ' ')}`);
-			if (ability.damage) rows.push(`Damage: ${JSON.stringify(ability.damage, null, ' ')}`);
-			if (ability.effect) rows.push(`Effect: ${JSON.stringify(ability.effect, null, ' ')}`);
 			return (
 				`<li class="ability-item ${isKnown ? 'ability-item--known' : 'ability-item--unknown'}">
 				${ability.name || ability.key}
-				${rows.map((row) => `<div>${row}</div>`).join('')}
+				${isKnown ? 'Known' : 'Not known'}
+				${Interface.getAbilityStatsHtml(ability)}
 			</li>`
 			);
 		}
@@ -52348,19 +52433,19 @@
 				</div>
 				<ul class="stats-list">
 					<li>
-						Health
+						(HP) Health
 						<span id="hp-value"></span>
 					</li>
 					<li>
-						Willpower
+						(W) Willpower
 						<span id="willpower-value"></span>
 					</li>
 					<li>
-						Stamina
+						(S) Stamina
 						<span id="stamina-value"></span>
 					</li>
 					<li>
-						Balance
+						(B) Balance
 						<span id="balance-value"></span>
 					</li>
 				</ul>
@@ -52488,7 +52573,7 @@
 		}
 	}
 
-	// External modules
+	/* eslint-disable max-lines */
 	// import Renderer from './Renderer.js';
 
 	window.THREE = THREE;
@@ -52497,6 +52582,7 @@
 	const { PI } = Math;
 
 	const TAU = PI * 2;
+	// const NOOP = () => {};
 
 	const WORLD_VOXEL_LIMITS = [64, 64, 12];
 	const VISUAL_BLOCK_SIZE = 20;
@@ -52912,9 +52998,9 @@
 		/** Make a new player blob, which arrives in the middle of the map */
 		makeNewPlayer(startAt = this.startAt, playerBlockLegend = {}) {
 			const p = new PlayerBlob(startAt, playerBlockLegend);
-			// const coords = this.world.getFloorCenter(mapKey, 1);
-			// coords[Z] = 1;
-			// p.moveTo(coords);
+			if (playerBlockLegend.abilities) {
+				p.getLeader().knownAbilities = [...playerBlockLegend.abilities];
+			}
 			this.players.push(p);
 			const map = this.getMainPlayerMap();
 			map.addBlock(p);
@@ -53015,6 +53101,7 @@
 			const commandWords = command.split(' ');
 			const remainderCommandWords = [...commandWords];
 			const firstCommandWord = remainderCommandWords.shift(); // remove the first word
+			const commandIndex = (Number(commandWords[1]) || 0) - 1;
 			const target = blob.getFacingActor(worldMap);
 			if (firstCommandWord === 'spawn') {
 				const blockLegendStr = remainderCommandWords.join(' ');
@@ -53026,7 +53113,11 @@
 			if (blob.dead) return;
 			// ----- Below here are all things that can only be done by living blobs
 			if (firstCommandWord === 'attack') {
+				const abils = blob.getKnownAbilities().map((key) => abilities$1[key]);
+				const attackAbility = abils[commandIndex] || abilities$1.hack;
 				if (target) {
+					const effectiveness = blob.useAbility(attackAbility);
+					target.applyAbility(attackAbility, effectiveness, blob.damageScale);
 					const isMainPlayerGettingHit = target.isPlayerBlob && isMain(target);
 					if (isMainPlayerGettingHit) {
 						this.interface.flashBorder('#f00');
@@ -53034,9 +53125,9 @@
 						this.sounds.play('hit');
 					}
 					this.sounds.play(blob.battleYell, { delay: 500, random: 0.2 });
-					const dmg = blob.getDamage();
-					target.damage(dmg, 'hp');
-					// TODO ^ improve this
+					// const dmg = blob.getDamage();
+					// target.damage(dmg, 'hp');
+
 					const died = target.checkDeath();
 					const hurtSoundChance = (isMainPlayerGettingHit) ? 1 : 0.2;
 					if (died) this.sounds.play(target.deathSound, { delay: 100 });
@@ -53047,6 +53138,7 @@
 						);
 					}
 				} else {
+					if (!attackAbility.combat) blob.useAbility(attackAbility);
 					this.sounds.play('dud');
 					this.interface.flashBorder('#111');
 					console.warn('Nothing to attack');
@@ -53054,8 +53146,7 @@
 				return;
 			}
 			if (firstCommandWord === 'inventory') {
-				const index = (Number(commandWords[1]) || 0) - 1;
-				const invItem = mainBlob.getInventoryItem(index);
+				const invItem = mainBlob.getInventoryItem(commandIndex);
 				alert(`This is a ${invItem.name}. You have ${invItem.quantity} of these. ${invItem.description}`);
 			}
 			if (firstCommandWord === 'dialog') {
@@ -53064,10 +53155,9 @@
 					this.sounds.play('dud');
 					return;
 				}
-				const index = (Number(commandWords[1]) || 0) - 1;
-				dialogOptions[index];
-				target.speakDialog(dialogOptions[index]);
-				blob.listenToDialog(dialogOptions[index], target);
+				// const { answer = '...' } = dialogOptions[index];
+				target.speakDialog(dialogOptions[commandIndex]);
+				blob.listenToDialog(dialogOptions[commandIndex], target);
 				this.interface.talkOptions = this.calculateTalkOptions(blob);
 				return;
 			}
@@ -53202,7 +53292,6 @@
 		start(playerIndex = 0) {
 			this.switchMainPlayer(playerIndex, false);
 			this.isStopped = false;
-			// this.makeNewPlayer();
 			this.kbCommander.on('command', (cmd) => this.handleInputCommand(cmd));
 			window.document.addEventListener('click', (event) => {
 				const commandElt = event.target.closest('[data-command]');
@@ -53262,21 +53351,21 @@
 			name: 'statue_archer',
 			blocked: 1,
 			color: [0.8, 0.8, 0.7],
-			renderAs: 'plane',
+			renderAs: 'billboard',
 			texture: 'statue_archer.png',
 		},
 		'c': {
 			name: 'statue_centaur',
 			blocked: 1,
 			color: [0.8, 0.8, 0.7],
-			renderAs: 'plane',
+			renderAs: 'billboard',
 			texture: 'statue_centaur.png',
 		},
 		'f': {
 			name: 'dry_fountain',
 			blocked: 1,
 			color: [0.8, 0.8, 0.7],
-			renderAs: 'plane',
+			renderAs: 'billboard',
 			texture: 'dry_fountain.png',
 		},
 
@@ -53321,102 +53410,80 @@
 		// Forest Monsters
 		// ----------------------------------------------
 		'W': {
-			name: 'wandering_mushroom',
+			name: 'wandering mushroom',
 			blocked: 1,
-			renderAs: 'plane',
+			renderAs: 'billboard',
 			texture: '/monsters/forest/wandering_mushroom.png',
 			npc: 'monster',
 		},
 		'H': {
 			name: 'deathcap',
 			blocked: 1,
-			renderAs: 'plane',
+			renderAs: 'billboard',
 			texture: '/monsters/forest/death_cap.png',
 			npc: 'monster',
 		},
 		'F': {
-			name: 'blink_frog',
+			name: 'blink frog',
 			blocked: 1,
-			renderAs: 'plane',
+			renderAs: 'billboard',
 			texture: '/monsters/forest/wandering_mushroom.png',
 			npc: 'monster',
 		},
 		'B': {
-			name: 'butterfly_green',
+			name: 'Butterfly',
 			blocked: 1,
-			renderAs: 'plane',
+			renderAs: 'billboard',
 			texture: '/monsters/forest/butterfly_green.png',
+			hp: 5,
 			npc: 'monster',
 		},
 		'V': {
-			name: 'butterfly_violet',
+			name: 'Butterfly',
 			blocked: 1,
-			renderAs: 'plane',
+			renderAs: 'billboard',
 			texture: '/monsters/forest/butterfly_violet.png',
+			hp: 5,
 			npc: 'monster',
 		},
 		'J': {
-			name: 'jumping_spider',
+			name: 'jumping spider',
 			blocked: 1,
-			renderAs: 'plane',
+			renderAs: 'billboard',
 			texture: '/monsters/forest/jumping_spider.png',
 			npc: 'monster',
 		},
 		'S': {
 			name: 'spider',
 			blocked: 1,
-			renderAs: 'plane',
+			renderAs: 'billboard',
 			texture: '/monsters/forest/spider.png',
 			npc: 'monster',
+			aggro: 1,
 		},
 		'T': {
-			name: 'trapdoor_spider',
+			name: 'trapdoor spider',
 			blocked: 1,
-			renderAs: 'plane',
+			renderAs: 'billboard',
 			texture: '/monsters/forest/trapdoor_spider.png',
 			npc: 'monster',
 		},
 		'Y': {
-			name: 'yellow_wasp',
+			name: 'yellow wasp',
 			blocked: 1,
-			renderAs: 'plane',
-			texture: '/monsters/forest/yellow_wasp.png',
+			renderAs: 'billboard',
+			texture: 'yellow_wasp.png',
 			npc: 'monster',
+			aggro: 1,
 		},
 		'P': {
-			name: 'vampire_mosquito',
+			name: 'vampire mosquito',
 			blocked: 1,
-			renderAs: 'plane',
+			renderAs: 'billboard',
 			texture: '/monsters/forest/vampire_mosquito.png',
+			damageScale: 2,
 			npc: 'monster',
-		},
-		'[': {
-			name: 'crumbled_column_2',
-			blocked: 1,
-			color: [0.8, 0.8, 0.7],
-			renderAs: 'billboard',
-			texture: 'crumbled_column_2.png',
-		},
-		']': {
-			name: 'crumbled_column_3',
-			blocked: 1,
-			color: [0.8, 0.8, 0.7],
-			renderAs: 'billboard',
-			texture: 'crumbled_column_3.png',
-		},
-		'}': {
-			name: 'crumbled_column_4',
-			blocked: 1,
-			color: [0.8, 0.8, 0.7],
-			renderAs: 'billboard',
-			texture: 'crumbled_column_4.png',
-		},
-		'{': {
-			name: 'crumbled_column_6',
-			blocked: 1,
-			color: [0.8, 0.8, 0.7],
-			renderAs: 'billboard',
-			texture: 'crumbled_column_6.png',
+			aggro: 1,
 		},
 	};
 
@@ -53428,11 +53495,19 @@
 		texture: 'runed_door.png',
 		soundOn: 'door',
 	};
+	const forestDoor = {
+		name: 'forest path (door)',
+		blocked: 0,
+		renderAs: 'box',
+		texture: 'stone_arch.png',
+		soundOn: 'steps',
+	};
 	const ghost = {
 		name: 'ghost',
 		blocked: 0,
 		renderAs: 'billboard',
 		texture: 'shadow_new.png',
+		aggro: 0,
 		npc: 'wanderer',
 		opacity: 0.7,
 		hp: 1,
@@ -53480,7 +53555,7 @@
 		renderAs: 'billboard',
 		// texture: 'cyclops_new.png',
 		npc: 'monster',
-		faction: 'neutral',
+		faction: 'wretch',
 		battleYell: 'goblinBattleYell',
 		hurtSound: 'goblinDamaged',
 		deathSound: 'goblinDeath',
@@ -53771,7 +53846,7 @@
 		},
 		'4': {
 			...teleportDoor,
-			teleport: ['forest', 5, 7, 1, 0],
+			teleport: ['forest', 5, 13, 1, 0],
 		},
 		'5': {
 			...teleportDoor,
@@ -53796,6 +53871,22 @@
 		'0': {
 			...teleportDoor,
 			teleport: ['tower1', 13, 1, 1, 2],
+		},
+		'[': {
+			...forestDoor,
+			teleport: ['forestOutside', 30, 2, 1, 3],
+		},
+		']': {
+			...forestDoor,
+			teleport: ['forest', 1, 4, 1, 1],
+		},
+		'{': {
+			...forestDoor,
+			teleport: ['forestOutside', 30, 31, 1, 3],
+		},
+		'}': {
+			...forestDoor,
+			teleport: ['forest', 1, 11, 1, 1],
 		},
 	};
 
@@ -53864,8 +53955,15 @@
 					'GGGGG&GGGGG',
 					'GGGGG&GGGGG',
 					'GGGGG&GGGGG',
-					'GGGGG&GGGGG',
-					'GGGGG&GGGGG',
+					'GGGG&&GGGGG',
+					'&&&&&GGGGGG',
+					'GGGGGGGGGGG',
+					'GGGGGGGGGGG',
+					'GGGGGGGGGGG',
+					'GGGGGGGGGGG',
+					'GGGGGGGGGGG',
+					'GGGGGGGGGGG',
+					'&&&&&&GGGGG',
 					'GGGGG&GGGGG',
 					'GGGGG&GGGGG',
 					'GGGGG&GGGGG',
@@ -53873,16 +53971,29 @@
 				],
 				[
 					'GTTT#2#TTTG',
-					'GTTT^  TTTG',
-					'GTTT   TTTG',
-					'GTTT    TTG',
-					'GTTT   TTTG',
-					'GTT    TTTG',
-					'&TTT    TTG',
-					'&TTT h TTTG',
+					'GTTT^     G',
+					'GTTT   TT G',
+					'GTTT   TT G',
+					'[     TT  G',
+					'GTTTTTTT TG',
+					'GT       TG',
+					'GT TTTTTTTG',
+					'GT T   TTTG',
+					'GT   T   TG',
+					'GTTTTTTT TG',
+					'{     TT  G',
+					'&TTT    T G',
+					'&TTT hT   G',
 					'&&&&&3&&&&&',
+					'&         &',
 				],
 				[
+					'           ',
+					'           ',
+					'           ',
+					'           ',
+					'           ',
+					'           ',
 					'           ',
 					'           ',
 					'           ',
@@ -53895,6 +54006,12 @@
 					'&&&&&&&&&&&',
 				],
 				[
+					'           ',
+					'           ',
+					'           ',
+					'           ',
+					'           ',
+					'           ',
 					'           ',
 					'           ',
 					'           ',
@@ -54020,13 +54137,13 @@
 				],
 				[
 					'mmmmmmmm###################mmmmm',
-					'm       ##        O##+##  #YyyYm',
-					'm  H     ^ ^##  ####^ ^# i#    m',
+					'm       ##        O##+##  # yy m',
+					'm  H     ^ ^##  ####^ ^# i#    ]',
 					'm m m m m    #              r  m',
 					'm      m      ##   #   # j#  r m',
-					'm   H  mYmmmm   ####k k#  #    m',
+					'm   H    mmmm   ####k k#  #    m',
 					'm      m m   m     ## ####  t ym',
-					'm          Y m m               m',
+					'm            m m               m',
 					'm t  m  mmmmmm m  mm^ ^mV mm  mm',
 					'm   m              m   m  m   Jm',
 					'm       r  y     m m   m  m mmmm',
@@ -54037,7 +54154,7 @@
 					'mn  nt r      m     m       m  m',
 					'm  n P  ttt  m   m     mmm     m',
 					'm y      m       m  yy  m rrr rm',
-					'm    y    mm m    m    m  r  Yrm',
+					'm    y    mm m    m    m  r   rm',
 					'm  r    mmm m m    mJTm   r y rm',
 					'm             m    mmmm   r r rm',
 					'm t  t  m m       mmyrym       m',
@@ -54049,15 +54166,15 @@
 					'm        t  m  m m m   Tmm     m',
 					'm         t        m   m  t r  m',
 					'm m  m m    m mttt m   m tw   tm',
-					'm m  m    tm    t  m{ }m  t y  m',
-					'm  m m m   m m ttt m   m       m',
+					'm m  m    tm    t  m| |m  t y  m',
+					'm  m m m   m m ttt m   m       }',
 					'm m        m    t         t  mmm',
-					'm     t t  m ttt mmm[ ]mmm  m  m',
+					'm     t t  m ttt mmm| |mmm  m  m',
 					'm mmmm m           m| |mmm m   m',
 					'm          m  yyyy m| |  mwm   m',
-					'mm m t t   m   YY  ma cm mmm   m',
+					'mm m t t   m       ma cm mmm   m',
 					'm  t mrmym m m    mm   mm      m',
-					'mT m       m   Y  m     m      m',
+					'mT m       m      m     m      m',
 					'mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm',
 				],
 				[
@@ -57746,6 +57863,7 @@
 				and nobody can do it better than him.
 				<hr style="margin: 1em 0" />`
 				),
+				abilities: ['hack', 'slash', 'bash', 'rally', 'berserk'],
 			},
 		);
 		window.pc = game.makeNewPlayer(
@@ -57777,6 +57895,7 @@
 				moment seems worthy, chooses to play a part in their stories.
 				<hr style="margin: 1em 0" />`
 				),
+				abilities: ['hack', 'swift', 'reprise', 'heal', 'heal2'],
 			},
 		);
 		game.start(0);

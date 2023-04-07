@@ -17,7 +17,7 @@ class Actor {
 		// this.stamina = new Pool(10, 10);
 		// this.balance = new Pool(10, 10);
 		this.xp = 0;
-		this.knownAbilities = ['hack', 'slash', 'dodge'];
+		this.knownAbilities = ['hack'];
 	}
 
 	clearLastRound() {
@@ -30,8 +30,8 @@ class Actor {
 		return this.hp.subtract(dmg);
 	}
 
-	heal(healing = 0) {
-		return this.hp.add(healing);
+	heal(healing = 0, poolType = 'hp') {
+		return this[poolType].add(healing);
 	}
 
 	waitHeal(rounds = 1) {

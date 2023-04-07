@@ -129,6 +129,66 @@ class ActorBlob extends BlockEntity {
 		return Array.from(allBlobAbilitiesSet);
 	}
 
+	static getPoolAmount(numOrArray) {
+		if (typeof numOrArray === 'number') return numOrArray;
+		if (numOrArray instanceof Array) {
+			const [min, max] = numOrArray;
+			const spread = max - min;
+			return Math.floor(Math.random() * spread) + Math.round(min);
+		}
+		throw new Error('bad numOrarray');
+	}
+
+	static getDamageAmount(numOrArray, effectiveness = 1, scale = 1) {
+		if (typeof numOrArray === 'number') {
+			return Math.floor(numOrArray * scale * effectiveness);
+		}
+		if (numOrArray instanceof Array) {
+			let [min, max] = numOrArray;
+			min *= scale;
+			max *= scale;
+			const spread = max - min;
+			return Math.floor(((Math.random() * spread) + min) * effectiveness);
+		}
+		throw new Error('bad numOrarray');
+	}
+
+	payAbilityCost(cost = {}) {
+		let effectiveness = 1;
+		Object.keys(cost).forEach((poolKey) => {
+			const costAmount = ActorBlob.getPoolAmount(cost[poolKey]);
+			const actualCostSpent = this.getLeader().damage(costAmount, poolKey);
+			const diff = costAmount - actualCostSpent;
+			if (diff > 0) effectiveness = 1 - (diff / costAmount);
+		});
+		return effectiveness;
+	}
+
+	replenish(replenish = {}) {
+		Object.keys(replenish).forEach((poolKey) => {
+			const healAmount = ActorBlob.getPoolAmount(replenish[poolKey]);
+			this.getLeader().heal(healAmount, poolKey);
+		});
+	}
+
+	/** Uses an ability for the blob, paying the cost, and returning the effectiveness 0-1 */
+	useAbility(ability = {}) {
+		const { cost, replenish } = ability;
+		const effectiveness = (cost) ? this.payAbilityCost(cost) : 1;
+		if (replenish) this.replenish(replenish);
+		return effectiveness;
+	}
+
+	applyAbility(ability = {}, effectiveness = 1, damageScale = 1) {
+		const { damage } = ability;
+		if (!damage) return 0;
+		Object.keys(damage).forEach((poolKey) => {
+			const dmgAmount = ActorBlob.getDamageAmount(damage[poolKey], effectiveness, damageScale);
+			this.getLeader().damage(dmgAmount, poolKey);
+		});
+		return 1;
+	}
+
 	getDialogOptions(actor) {
 		if (!actor || !actor.dialog) return [];
 		const dialogKeys = Object.keys(actor.dialog);
