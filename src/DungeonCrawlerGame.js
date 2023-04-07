@@ -556,6 +556,11 @@ class DungeonCrawlerGame {
 				} else {
 					this.sounds.play('hit');
 				}
+				if (isMain(blob) && blob.battleYell) {
+					if (Math.random() < 0.2) {
+						this.sounds.play(blob.battleYell);
+					}
+				}
 				const dmg = blob.getDamage();
 				target.damage(dmg, 'hp');
 				// TODO

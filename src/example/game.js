@@ -27,6 +27,7 @@ window.document.addEventListener('DOMContentLoaded', () => {
 		{
 			name: 'Barrett Boulderfist',
 			texture: 'rupert_new.png',
+			battleYell: 'warriorBattleYell',
 			hp: 20,
 			stamina: 20,
 			facing: 2,

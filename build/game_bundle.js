@@ -53030,6 +53030,11 @@
 					} else {
 						this.sounds.play('hit');
 					}
+					if (isMain(blob) && blob.battleYell) {
+						if (Math.random() < 0.2) {
+							this.sounds.play(blob.battleYell);
+						}
+					}
 					const dmg = blob.getDamage();
 					target.damage(dmg, 'hp');
 					// TODO
@@ -57248,8 +57253,15 @@
 	SoundController.Howler = howler.Howler;
 
 	const SOUNDS_ROOT = './audio/sounds';
+	const DIALOGUE_ROOT = './audio/dialogue';
 	const MUSIC_ROOT = './audio/music';
 	const AMB_ROOT = './audio/ambience';
+
+	let i;
+	const warriorBattleYell = [];
+	for (i = 1; i <= 44; i += 1) {
+		warriorBattleYell.push(`${DIALOGUE_ROOT}/Warrior Dialogue-0${i < 10 ? '0' : ''}${i}.wav`);
+	}
 
 	const soundsListing = {
 		hit: [
@@ -57302,6 +57314,7 @@
 			`${SOUNDS_ROOT}/Potion Drinking 2.wav`,
 			`${SOUNDS_ROOT}/Potion Drinking 5.wav`,
 		],
+		warriorBattleYell,
 	};
 
 	const musicListing = {
@@ -57341,6 +57354,7 @@
 			{
 				name: 'Barrett Boulderfist',
 				texture: 'rupert_new.png',
+				battleYell: 'warriorBattleYell',
 				hp: 20,
 				stamina: 20,
 				facing: 2,
