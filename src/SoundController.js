@@ -37,12 +37,12 @@ class SoundController {
 		});
 	}
 
-	makeHowlSound(src, options = {}) {
-		return new this.Howl({ src: [src], ...options });
+	makeHowlSound(src, howlOptions = {}) {
+		return new this.Howl({ src: [src], ...howlOptions });
 	}
 
-	playHowl(src) {
-		const sound = this.makeHowlSound(src);
+	playHowl(src, howlOptions = {}) {
+		const sound = this.makeHowlSound(src, howlOptions);
 		sound.play();
 		return () => sound.stop();
 	}
@@ -96,8 +96,8 @@ class SoundController {
 			return NOOP;
 		}
 		if (typeof this.stopMusic === 'function') this.stopMusic();
-		const { loop = true } = options;
-		this.stopMusic = this.playThing(soundThing, soundName, { loop });
+		const { loop = true, volume = 0.75 } = options;
+		this.stopMusic = this.playThing(soundThing, soundName, { ...options, loop, volume });
 		return this.stopMusic;
 	}
 

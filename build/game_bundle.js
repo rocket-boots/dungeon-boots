@@ -51271,7 +51271,11 @@
 			this.blocked = blockLegend.blocked || 0;
 
 			// Procedural (seed-based) randomness
-			this.seed = parseInt(this.name, 32) + this.coords[0] + this.coords[1] + this.coords[2];
+			this.seed = parseInt(this.name || 'dude', 32) + this.coords[0] + this.coords[1] + this.coords[2];
+			if (Number.isNaN(this.seed)) {
+				console.warn('seed is NaN', this); // TODO: There is a bug that's setting this wrong for the hero
+				this.seed = Math.round(Math.random() * 99999);
+			}
 			// Modify color
 			if (this.color) {
 				const i = Math.floor(this.getBlockRand() * 3);
@@ -51286,7 +51290,7 @@
 				this.texture = this.texture.replace('.', `${textureNum}.`);
 				// this.color = '#ffffff';
 			}
-			this.dna = [this.getBlockRand(), this.getBlockRand(), this.getBlockRand()];
+			this.dna = Object.freeze([this.getBlockRand(), this.getBlockRand(), this.getBlockRand()]);
 			// We want a small offset amount to stop overlaps when two blocks are on the same location
 			this.wiggle = [this.getBlockRand(), this.getBlockRand(), 0];
 			this.redraw = false; // Do we need to redraw the thing (likely due to a texture change)
@@ -51462,12 +51466,16 @@
 
 		getFacingActor(worldMap) {
 			const blocksAhead = this.getFacingBlocks(worldMap);
-			const actorsAhead = blocksAhead.filter((block) => (
-				block.isActorBlob && block.getVisibilityTo(this)
-			));
-			if (actorsAhead.length > 1) console.warn('More than 1 actor ahead of', this.name, '. that probably should not happen', actorsAhead);
-			// TODO:
-			// put living actors at the front of the list
+			const actorsAhead = blocksAhead
+				.filter((block) => (
+					block.isActorBlob && block.getVisibilityTo(this)
+				))
+				// put living actors at the front of the list
+				// otherwise we can end up attacking corpses
+				.sort((a, b) => ((a.dead && !b.dead) ? 1 : -1));
+			// if (actorsAhead.length > 1)
+			// console.warn('More than 1 actor ahead of', this.name,
+			// '. that probably should not happen', actorsAhead);
 			if (actorsAhead.length) return actorsAhead[0];
 			return null;
 		}
@@ -51482,12 +51490,13 @@
 			return Array.from(allBlobAbilitiesSet);
 		}
 
-		static getPoolAmount(numOrArray) {
+		static getPoolAmount(numOrArray, special) {
 			if (typeof numOrArray === 'number') return numOrArray;
 			if (numOrArray instanceof Array) {
 				const [min, max] = numOrArray;
 				const spread = max - min;
-				return Math.floor(Math.random() * spread) + Math.round(min);
+				const rand = (special === 'max') ? 1 : Math.random();
+				return Math.floor(rand * spread) + Math.round(min);
 			}
 			throw new Error('bad numOrarray');
 		}
@@ -51508,18 +51517,31 @@
 
 		payAbilityCost(cost = {}) {
 			let effectiveness = 1;
+			const who = this.getLeader();
 			Object.keys(cost).forEach((poolKey) => {
 				const costAmount = ActorBlob.getPoolAmount(cost[poolKey]);
-				const actualCostSpent = this.getLeader().damage(costAmount, poolKey);
+				const actualCostSpent = who.damage(costAmount, poolKey);
 				const diff = costAmount - actualCostSpent;
 				if (diff > 0) effectiveness = 1 - (diff / costAmount);
 			});
 			return effectiveness;
 		}
 
-		replenish(replenish = {}) {
+		canAffordAbility(ability) {
+			const { cost } = ability;
+			if (!cost) return true;
+			const who = this.getLeader();
+			let canAfford = true;
+			Object.keys(cost).forEach((poolKey) => {
+				const costAmount = ActorBlob.getPoolAmount(cost[poolKey], 'max');
+				if (costAmount > who[poolKey].get()) canAfford = false;
+			});
+			return canAfford;
+		}
+
+		replenish(replenish = {}, effectiveness = 1) {
 			Object.keys(replenish).forEach((poolKey) => {
-				const healAmount = ActorBlob.getPoolAmount(replenish[poolKey]);
+				const healAmount = Math.floor(ActorBlob.getPoolAmount(replenish[poolKey]) * effectiveness);
 				this.getLeader().heal(healAmount, poolKey);
 			});
 		}
@@ -51528,16 +51550,18 @@
 		useAbility(ability = {}) {
 			const { cost, replenish } = ability;
 			const effectiveness = (cost) ? this.payAbilityCost(cost) : 1;
-			if (replenish) this.replenish(replenish);
+			if (replenish) this.replenish(replenish, effectiveness);
 			return effectiveness;
 		}
 
 		applyAbility(ability = {}, effectiveness = 1, damageScale = 1) {
 			const { damage } = ability;
 			if (!damage) return 0;
+			const whoIsHit = this.getRandomMember();
 			Object.keys(damage).forEach((poolKey) => {
 				const dmgAmount = ActorBlob.getDamageAmount(damage[poolKey], effectiveness, damageScale);
-				this.getLeader().damage(dmgAmount, poolKey);
+				const finalDamage = whoIsHit.damage(dmgAmount, poolKey);
+				if (finalDamage > 0) this.aggro = 1;
 			});
 			return 1;
 		}
@@ -51615,12 +51639,6 @@
 			return dmg;
 		}
 
-		damage(dmg = 0, poolType = 'hp') {
-			const whoIsHit = this.getRandomMember();
-			if (dmg) this.aggro = 1;
-			return whoIsHit.damage(dmg, poolType);
-		}
-
 		kill() {
 			this.blob.forEach((character) => {
 				character.damage(Infinity, 'hp');
@@ -51631,6 +51649,9 @@
 			if (this.death) {
 				if (this.death.spawn) {
 					this.queueCommand(`spawn ${JSON.stringify(this.death.spawn)}`);
+				}
+				if (this.death.dialog) {
+					this.dialog = this.death.dialog;
 				}
 			}
 			this.changeRendering({
@@ -52119,8 +52140,8 @@
 		bash: {
 			name: 'Bash',
 			combat: true,
-			cost: { stamina: 1, hp: 1 },
-			damage: { hp: [4, 10] },
+			cost: { stamina: 2, hp: 2 },
+			damage: { hp: [4, 14] },
 		},
 		rally: {
 			name: 'Rally',
@@ -52204,7 +52225,7 @@
 			name: 'Berserk',
 			cost: { willpower: 10, stamina: 8 },
 			damage: { hp: [4, 12], stamina: [1, 4] },
-			replenish: { hp: [1, 4] },
+			replenish: { hp: [2, 6] },
 		},
 		rage: {
 			name: 'Rage',
@@ -52344,12 +52365,12 @@
 			}).join(', ');
 		}
 
-		static getAbilityStatsHtml(abil) {
+		static getAbilityStatsHtml(abil, canAfford = true) {
 			return (
-				`<div class="ability-details">
-				<div>Use: ${Interface.getPoolObjHtml(abil.cost)}</div>
-				<div>Gain: ${Interface.getPoolObjHtml(abil.replenish)}</div>
-				<div>Damage: ${Interface.getPoolObjHtml(abil.damage)}</div>
+				`<div class="ability-details ${(canAfford) ? '' : 'ability-cannot-afford'}">
+				<div class="ability-cost">Use: ${Interface.getPoolObjHtml(abil.cost)}</div>
+				<div class="ability-replenish">Gain: ${Interface.getPoolObjHtml(abil.replenish)}</div>
+				<div class="ability-damage">Damage: ${Interface.getPoolObjHtml(abil.damage)}</div>
 			</div>`
 			);
 		}
@@ -52365,7 +52386,7 @@
 					`<li>
 					<button type="button" data-command="attack ${i + 1}">
 						${ability.name}
-						${Interface.getAbilityStatsHtml(ability)}
+						${Interface.getAbilityStatsHtml(ability, blob.canAffordAbility(ability))}
 						<i class="key">${i + 1}</i>
 					</button>
 				</li>`
@@ -53124,7 +53145,7 @@
 					} else {
 						this.sounds.play('hit');
 					}
-					this.sounds.play(blob.battleYell, { delay: 500, random: 0.2 });
+					this.sounds.play(blob.battleYell, { delay: 500, random: 0.4 });
 					// const dmg = blob.getDamage();
 					// target.damage(dmg, 'hp');
 
@@ -53547,7 +53568,7 @@
 		renderAs: 'billboard',
 		faction: 'townfolk',
 		npc: 'villager',
-		damageScale: 0.6,
+		damageScale: 0.5,
 	};
 	const monster = {
 		name: 'monster',
@@ -53562,13 +53583,7 @@
 		aggro: 1,
 		damageScale: 1,
 		death: {
-			spawn: {
-				...ghost,
-				name: 'ghost',
-				dialog: {
-					'hello?': 'I did not deserve to die.',
-				},
-			},
+			spawn: { ...ghost },
 		},
 	};
 	const goblin = {
@@ -53793,7 +53808,7 @@
 			name: 'Midboss Yugerdenyuu',
 			texture: 'two_headed_ogre_new.png',
 			npc: 'still',
-			damageScale: 2,
+			damageScale: 1.5,
 			hp: 30,
 			aggro: 0,
 			dialog: {
@@ -53814,7 +53829,7 @@
 			...monster,
 			name: 'Boss Tanxfergetended',
 			texture: 'juggernaut.png',
-			damageScale: 8,
+			damageScale: 3,
 			hp: 50,
 			npc: 'still',
 			aggro: 0,
@@ -57642,12 +57657,12 @@
 			});
 		}
 
-		makeHowlSound(src, options = {}) {
-			return new this.Howl({ src: [src], ...options });
+		makeHowlSound(src, howlOptions = {}) {
+			return new this.Howl({ src: [src], ...howlOptions });
 		}
 
-		playHowl(src) {
-			const sound = this.makeHowlSound(src);
+		playHowl(src, howlOptions = {}) {
+			const sound = this.makeHowlSound(src, howlOptions);
 			sound.play();
 			return () => sound.stop();
 		}
@@ -57701,8 +57716,8 @@
 				return NOOP;
 			}
 			if (typeof this.stopMusic === 'function') this.stopMusic();
-			const { loop = true } = options;
-			this.stopMusic = this.playThing(soundThing, soundName, { loop });
+			const { loop = true, volume = 0.75 } = options;
+			this.stopMusic = this.playThing(soundThing, soundName, { ...options, loop, volume });
 			return this.stopMusic;
 		}
 
@@ -57842,7 +57857,7 @@
 				texture: 'rupert_new.png',
 				battleYell: 'warriorBattleYell',
 				hurtSound: 'hurt',
-				hp: 20,
+				hp: 30,
 				stamina: 20,
 				facing: 2,
 				faction: 'slayers',
@@ -57863,6 +57878,14 @@
 				and nobody can do it better than him.
 				<hr style="margin: 1em 0" />`
 				),
+				death: { // TODO: This is not making it onto the character's blob
+					dialog: {
+						hi: {
+							q: 'You still survive?',
+							a: 'Save me! Heal me... I need to kill more...',
+						},
+					},
+				},
 				abilities: ['hack', 'slash', 'bash', 'rally', 'berserk'],
 			},
 		);

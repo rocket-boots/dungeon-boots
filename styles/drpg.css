@@ -189,6 +189,9 @@ button:active {
 	text-align: left;
 	font-size: 80%;
 }
+.ability-cannot-afford {
+	opacity: 0.25;
+}
 
 #ui-dungeoneer-row {
 	align-self: flex-start;
@@ -323,6 +326,7 @@ button:active {
 }
 .character-sheet-portrait {
 	width: 25vw;
+	max-width: 20em;
 	float: right;
 	margin: 0 0 1em 1em;
 }

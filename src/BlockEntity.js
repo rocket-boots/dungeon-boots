@@ -33,7 +33,11 @@ class BlockEntity {
 		this.blocked = blockLegend.blocked || 0;
 
 		// Procedural (seed-based) randomness
-		this.seed = parseInt(this.name, 32) + this.coords[0] + this.coords[1] + this.coords[2];
+		this.seed = parseInt(this.name || 'dude', 32) + this.coords[0] + this.coords[1] + this.coords[2];
+		if (Number.isNaN(this.seed)) {
+			console.warn('seed is NaN', this); // TODO: There is a bug that's setting this wrong for the hero
+			this.seed = Math.round(Math.random() * 99999);
+		}
 		// Modify color
 		if (this.color) {
 			const i = Math.floor(this.getBlockRand() * 3);
@@ -48,7 +52,7 @@ class BlockEntity {
 			this.texture = this.texture.replace('.', `${textureNum}.`);
 			// this.color = '#ffffff';
 		}
-		this.dna = [this.getBlockRand(), this.getBlockRand(), this.getBlockRand()];
+		this.dna = Object.freeze([this.getBlockRand(), this.getBlockRand(), this.getBlockRand()]);
 		// We want a small offset amount to stop overlaps when two blocks are on the same location
 		this.wiggle = [this.getBlockRand(), this.getBlockRand(), 0];
 		this.redraw = false; // Do we need to redraw the thing (likely due to a texture change)

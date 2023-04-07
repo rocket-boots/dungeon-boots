@@ -58,7 +58,7 @@ const townFolk = {
 	renderAs: 'billboard',
 	faction: 'townfolk',
 	npc: 'villager',
-	damageScale: 0.6,
+	damageScale: 0.5,
 };
 const monster = {
 	name: 'monster',
@@ -73,13 +73,7 @@ const monster = {
 	aggro: 1,
 	damageScale: 1,
 	death: {
-		spawn: {
-			...ghost,
-			name: 'ghost',
-			dialog: {
-				'hello?': 'I did not deserve to die.',
-			},
-		},
+		spawn: { ...ghost },
 	},
 };
 const goblin = {
@@ -304,7 +298,7 @@ const legend = {
 		name: 'Midboss Yugerdenyuu',
 		texture: 'two_headed_ogre_new.png',
 		npc: 'still',
-		damageScale: 2,
+		damageScale: 1.5,
 		hp: 30,
 		aggro: 0,
 		dialog: {
@@ -325,7 +319,7 @@ const legend = {
 		...monster,
 		name: 'Boss Tanxfergetended',
 		texture: 'juggernaut.png',
-		damageScale: 8,
+		damageScale: 3,
 		hp: 50,
 		npc: 'still',
 		aggro: 0,

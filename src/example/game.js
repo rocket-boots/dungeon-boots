@@ -30,7 +30,7 @@ window.document.addEventListener('DOMContentLoaded', () => {
 			texture: 'rupert_new.png',
 			battleYell: 'warriorBattleYell',
 			hurtSound: 'hurt',
-			hp: 20,
+			hp: 30,
 			stamina: 20,
 			facing: 2,
 			faction: 'slayers',
@@ -51,6 +51,14 @@ window.document.addEventListener('DOMContentLoaded', () => {
 				and nobody can do it better than him.
 				<hr style="margin: 1em 0" />`
 			),
+			death: { // TODO: This is not making it onto the character's blob
+				dialog: {
+					hi: {
+						q: 'You still survive?',
+						a: 'Save me! Heal me... I need to kill more...',
+					},
+				},
+			},
 			abilities: ['hack', 'slash', 'bash', 'rally', 'berserk'],
 		},
 	);

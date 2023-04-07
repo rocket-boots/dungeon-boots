@@ -94,12 +94,12 @@ class Interface {
 		}).join(', ');
 	}
 
-	static getAbilityStatsHtml(abil) {
+	static getAbilityStatsHtml(abil, canAfford = true) {
 		return (
-			`<div class="ability-details">
-				<div>Use: ${Interface.getPoolObjHtml(abil.cost)}</div>
-				<div>Gain: ${Interface.getPoolObjHtml(abil.replenish)}</div>
-				<div>Damage: ${Interface.getPoolObjHtml(abil.damage)}</div>
+			`<div class="ability-details ${(canAfford) ? '' : 'ability-cannot-afford'}">
+				<div class="ability-cost">Use: ${Interface.getPoolObjHtml(abil.cost)}</div>
+				<div class="ability-replenish">Gain: ${Interface.getPoolObjHtml(abil.replenish)}</div>
+				<div class="ability-damage">Damage: ${Interface.getPoolObjHtml(abil.damage)}</div>
 			</div>`
 		);
 	}
@@ -115,7 +115,7 @@ class Interface {
 				`<li>
 					<button type="button" data-command="attack ${i + 1}">
 						${ability.name}
-						${Interface.getAbilityStatsHtml(ability)}
+						${Interface.getAbilityStatsHtml(ability, blob.canAffordAbility(ability))}
 						<i class="key">${i + 1}</i>
 					</button>
 				</li>`

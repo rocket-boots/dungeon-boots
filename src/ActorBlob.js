@@ -109,12 +109,16 @@ class ActorBlob extends BlockEntity {
 
 	getFacingActor(worldMap) {
 		const blocksAhead = this.getFacingBlocks(worldMap);
-		const actorsAhead = blocksAhead.filter((block) => (
-			block.isActorBlob && block.getVisibilityTo(this)
-		));
-		if (actorsAhead.length > 1) console.warn('More than 1 actor ahead of', this.name, '. that probably should not happen', actorsAhead);
-		// TODO:
-		// put living actors at the front of the list
+		const actorsAhead = blocksAhead
+			.filter((block) => (
+				block.isActorBlob && block.getVisibilityTo(this)
+			))
+			// put living actors at the front of the list
+			// otherwise we can end up attacking corpses
+			.sort((a, b) => ((a.dead && !b.dead) ? 1 : -1));
+		// if (actorsAhead.length > 1)
+		// console.warn('More than 1 actor ahead of', this.name,
+		// '. that probably should not happen', actorsAhead);
 		if (actorsAhead.length) return actorsAhead[0];
 		return null;
 	}
@@ -129,12 +133,13 @@ class ActorBlob extends BlockEntity {
 		return Array.from(allBlobAbilitiesSet);
 	}
 
-	static getPoolAmount(numOrArray) {
+	static getPoolAmount(numOrArray, special) {
 		if (typeof numOrArray === 'number') return numOrArray;
 		if (numOrArray instanceof Array) {
 			const [min, max] = numOrArray;
 			const spread = max - min;
-			return Math.floor(Math.random() * spread) + Math.round(min);
+			const rand = (special === 'max') ? 1 : Math.random();
+			return Math.floor(rand * spread) + Math.round(min);
 		}
 		throw new Error('bad numOrarray');
 	}
@@ -155,18 +160,31 @@ class ActorBlob extends BlockEntity {
 
 	payAbilityCost(cost = {}) {
 		let effectiveness = 1;
+		const who = this.getLeader();
 		Object.keys(cost).forEach((poolKey) => {
 			const costAmount = ActorBlob.getPoolAmount(cost[poolKey]);
-			const actualCostSpent = this.getLeader().damage(costAmount, poolKey);
+			const actualCostSpent = who.damage(costAmount, poolKey);
 			const diff = costAmount - actualCostSpent;
 			if (diff > 0) effectiveness = 1 - (diff / costAmount);
 		});
 		return effectiveness;
 	}
 
-	replenish(replenish = {}) {
+	canAffordAbility(ability) {
+		const { cost } = ability;
+		if (!cost) return true;
+		const who = this.getLeader();
+		let canAfford = true;
+		Object.keys(cost).forEach((poolKey) => {
+			const costAmount = ActorBlob.getPoolAmount(cost[poolKey], 'max');
+			if (costAmount > who[poolKey].get()) canAfford = false;
+		});
+		return canAfford;
+	}
+
+	replenish(replenish = {}, effectiveness = 1) {
 		Object.keys(replenish).forEach((poolKey) => {
-			const healAmount = ActorBlob.getPoolAmount(replenish[poolKey]);
+			const healAmount = Math.floor(ActorBlob.getPoolAmount(replenish[poolKey]) * effectiveness);
 			this.getLeader().heal(healAmount, poolKey);
 		});
 	}
@@ -175,16 +193,18 @@ class ActorBlob extends BlockEntity {
 	useAbility(ability = {}) {
 		const { cost, replenish } = ability;
 		const effectiveness = (cost) ? this.payAbilityCost(cost) : 1;
-		if (replenish) this.replenish(replenish);
+		if (replenish) this.replenish(replenish, effectiveness);
 		return effectiveness;
 	}
 
 	applyAbility(ability = {}, effectiveness = 1, damageScale = 1) {
 		const { damage } = ability;
 		if (!damage) return 0;
+		const whoIsHit = this.getRandomMember();
 		Object.keys(damage).forEach((poolKey) => {
 			const dmgAmount = ActorBlob.getDamageAmount(damage[poolKey], effectiveness, damageScale);
-			this.getLeader().damage(dmgAmount, poolKey);
+			const finalDamage = whoIsHit.damage(dmgAmount, poolKey);
+			if (finalDamage > 0) this.aggro = 1;
 		});
 		return 1;
 	}
@@ -262,12 +282,6 @@ class ActorBlob extends BlockEntity {
 		return dmg;
 	}
 
-	damage(dmg = 0, poolType = 'hp') {
-		const whoIsHit = this.getRandomMember();
-		if (dmg) this.aggro = 1;
-		return whoIsHit.damage(dmg, poolType);
-	}
-
 	kill() {
 		this.blob.forEach((character) => {
 			character.damage(Infinity, 'hp');
@@ -278,6 +292,9 @@ class ActorBlob extends BlockEntity {
 		if (this.death) {
 			if (this.death.spawn) {
 				this.queueCommand(`spawn ${JSON.stringify(this.death.spawn)}`);
+			}
+			if (this.death.dialog) {
+				this.dialog = this.death.dialog;
 			}
 		}
 		this.changeRendering({

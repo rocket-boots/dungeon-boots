@@ -15,8 +15,8 @@ const abilities = {
 	bash: {
 		name: 'Bash',
 		combat: true,
-		cost: { stamina: 1, hp: 1 },
-		damage: { hp: [4, 10] },
+		cost: { stamina: 2, hp: 2 },
+		damage: { hp: [4, 14] },
 	},
 	rally: {
 		name: 'Rally',
@@ -100,7 +100,7 @@ const abilities = {
 		name: 'Berserk',
 		cost: { willpower: 10, stamina: 8 },
 		damage: { hp: [4, 12], stamina: [1, 4] },
-		replenish: { hp: [1, 4] },
+		replenish: { hp: [2, 6] },
 	},
 	rage: {
 		name: 'Rage',
