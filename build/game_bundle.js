@@ -53024,21 +53024,25 @@
 			// ----- Below here are all things that can only be done by living blobs
 			if (firstCommandWord === 'attack') {
 				if (target) {
-					if (target.isPlayerBlob && isMain(target)) {
+					const isMainPlayerGettingHit = target.isPlayerBlob && isMain(target);
+					if (isMainPlayerGettingHit) {
 						this.interface.flashBorder('#f00');
-						this.sounds.play('hurt');
 					} else {
 						this.sounds.play('hit');
 					}
-					if (isMain(blob) && blob.battleYell) {
-						if (Math.random() < 0.2) {
-							this.sounds.play(blob.battleYell);
-						}
-					}
+					this.sounds.play(blob.battleYell, { delay: 500, random: 0.2 });
 					const dmg = blob.getDamage();
 					target.damage(dmg, 'hp');
-					// TODO
-					target.checkDeath();
+					// TODO ^ improve this
+					const died = target.checkDeath();
+					const hurtSoundChance = (isMainPlayerGettingHit) ? 1 : 0.2;
+					if (died) this.sounds.play(target.deathSound, { delay: 100 });
+					else {
+						this.sounds.play(
+							target.hurtSound,
+							{ delay: Math.random() * 100, random: hurtSoundChance },
+						);
+					}
 				} else {
 					this.sounds.play('dud');
 					this.interface.flashBorder('#111');
@@ -53277,6 +53281,9 @@
 		// texture: 'cyclops_new.png',
 		npc: 'monster',
 		faction: 'neutral',
+		battleYell: 'goblinBattleYell',
+		hurtSound: 'goblinDamaged',
+		deathSound: 'goblinDeath',
 		aggro: 1,
 		damageScale: 1,
 		death: {
@@ -53339,6 +53346,7 @@
 			blocked: 1,
 			renderAs: 'box',
 			texture: 'runed_door.png',
+			sound: 'door',
 		},
 		'+': {
 			name: 'unlocked door',
@@ -57215,11 +57223,24 @@
 			return NOOP;
 		}
 
-		play(soundName) {
+		static wait(delayMs) {
+			return new Promise((resolve) => {
+				window.setTimeout(resolve, delayMs);
+			});
+		}
+
+		async play(soundName, options = {}) {
 			const soundThing = this.sounds[soundName];
 			if (!soundThing) {
-				console.warn('No sound found for', soundName);
+				if (options.warnMissing) console.warn('No sound found for', soundName);
 				return;
+			}
+			if (options.delay) {
+				await SoundController.wait(options.delay);
+			}
+			if (options.random) { // Random change that the sound doesn't play
+				// 1 = always play, 0 = never play, 0.5 = half chance of playing
+				if (Math.random() > options.random) return;
 			}
 			this.playThing(soundThing, soundName);
 		}
@@ -57315,6 +57336,21 @@
 			`${SOUNDS_ROOT}/Potion Drinking 5.wav`,
 		],
 		warriorBattleYell,
+		goblinBattleYell: [
+			`${SOUNDS_ROOT}/Goblin Attack_01.mp3`,
+			`${SOUNDS_ROOT}/Goblin Attack_2.mp3`,
+			`${SOUNDS_ROOT}/Goblin Attack_03.mp3`,
+		],
+		goblinDamaged: [
+			`${SOUNDS_ROOT}/Goblin Damaged_01.mp3`,
+			`${SOUNDS_ROOT}/Goblin Damaged_02.mp3`,
+			`${SOUNDS_ROOT}/Goblin Damaged_03.mp3`,
+		],
+		goblinDeath: [
+			`${SOUNDS_ROOT}/Goblin Death_01.mp3`,
+			`${SOUNDS_ROOT}/Goblin Death_02.mp3`,
+			`${SOUNDS_ROOT}/Goblin Death_03.mp3`,
+		],
 	};
 
 	const musicListing = {
@@ -57355,6 +57391,7 @@
 				name: 'Barrett Boulderfist',
 				texture: 'rupert_new.png',
 				battleYell: 'warriorBattleYell',
+				hurtSound: 'hurt',
 				hp: 20,
 				stamina: 20,
 				facing: 2,
@@ -57383,6 +57420,7 @@
 			{
 				name: 'Warmthistle',
 				texture: 'human_new.png',
+				hurtSound: 'hurt',
 				willpower: 20,
 				facing: 3,
 				faction: 'neutral',

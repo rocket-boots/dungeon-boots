@@ -63,6 +63,21 @@ const soundsListing = {
 		`${SOUNDS_ROOT}/Potion Drinking 5.wav`,
 	],
 	warriorBattleYell,
+	goblinBattleYell: [
+		`${SOUNDS_ROOT}/Goblin Attack_01.mp3`,
+		`${SOUNDS_ROOT}/Goblin Attack_2.mp3`,
+		`${SOUNDS_ROOT}/Goblin Attack_03.mp3`,
+	],
+	goblinDamaged: [
+		`${SOUNDS_ROOT}/Goblin Damaged_01.mp3`,
+		`${SOUNDS_ROOT}/Goblin Damaged_02.mp3`,
+		`${SOUNDS_ROOT}/Goblin Damaged_03.mp3`,
+	],
+	goblinDeath: [
+		`${SOUNDS_ROOT}/Goblin Death_01.mp3`,
+		`${SOUNDS_ROOT}/Goblin Death_02.mp3`,
+		`${SOUNDS_ROOT}/Goblin Death_03.mp3`,
+	],
 };
 
 const musicListing = {

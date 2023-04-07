@@ -59,6 +59,9 @@ const monster = {
 	// texture: 'cyclops_new.png',
 	npc: 'monster',
 	faction: 'neutral',
+	battleYell: 'goblinBattleYell',
+	hurtSound: 'goblinDamaged',
+	deathSound: 'goblinDeath',
 	aggro: 1,
 	damageScale: 1,
 	death: {
@@ -121,6 +124,7 @@ const legend = {
 		blocked: 1,
 		renderAs: 'box',
 		texture: 'runed_door.png',
+		sound: 'door',
 	},
 	'+': {
 		name: 'unlocked door',

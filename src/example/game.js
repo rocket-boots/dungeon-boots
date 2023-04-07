@@ -28,6 +28,7 @@ window.document.addEventListener('DOMContentLoaded', () => {
 			name: 'Barrett Boulderfist',
 			texture: 'rupert_new.png',
 			battleYell: 'warriorBattleYell',
+			hurtSound: 'hurt',
 			hp: 20,
 			stamina: 20,
 			facing: 2,
@@ -56,6 +57,7 @@ window.document.addEventListener('DOMContentLoaded', () => {
 		{
 			name: 'Warmthistle',
 			texture: 'human_new.png',
+			hurtSound: 'hurt',
 			willpower: 20,
 			facing: 3,
 			faction: 'neutral',
