@@ -18,6 +18,7 @@ window.THREE = THREE;
 const { Vector3, Object3D } = THREE;
 const { Z } = ArrayCoords;
 const { PI } = Math;
+
 const TAU = PI * 2;
 const NOOP = () => {};
 

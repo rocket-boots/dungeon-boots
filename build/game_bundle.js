@@ -51735,7 +51735,9 @@
 					row.split('').forEach((char, x) => {
 						const startAt = [mapKey, x, y, z];
 						const blockLegend = legend[char];
+
 						if (!blockLegend) console.error(char, 'not found in legend', legend);
+
 						// If it is called "clear", or it is not blocking and not being rendered,
 						// then it's not really a block.
 						if (blockLegend.name === 'clear' || (!blockLegend.renderAs && !blockLegend.blocked)) {
@@ -52450,6 +52452,7 @@
 	const { Vector3, Object3D } = THREE;
 	const { Z } = ArrayCoords;
 	const { PI } = Math;
+
 	const TAU = PI * 2;
 
 	const WORLD_VOXEL_LIMITS = [64, 64, 12];
@@ -53234,7 +53237,7 @@
 			textureRange: [0, 8],
 		},
 		'|': {
-			name: 'crumbled_column',
+			name: 'crumbled_column_1',
 			blocked: 1,
 			color: [0.8, 0.8, 0.7],
 			renderAs: 'billboard',
@@ -53250,9 +53253,6 @@
 			texture: 'torch_.png',
 			textureRange: [1, 4],
 		},
-		// 'X': {
-		// name: 'cyclops', blocked: 1, renderAs: 'sprite', texture: 'cyclops_new.png',
-		// },
 		'a': {
 			...townFolk,
 			name: 'Townfolk',
@@ -53315,9 +53315,39 @@
 		'g': {
 			...ghost,
 		},
+		'[': {
+			name: 'crumbled_column_2',
+			blocked: 1,
+			color: [0.8, 0.8, 0.7],
+			renderAs: 'plane',
+			texture: 'crumbled_column_2.png',
+		},
+		']': {
+			name: 'crumbled_column_3',
+			blocked: 1,
+			color: [0.8, 0.8, 0.7],
+			renderAs: 'plane',
+			texture: 'crumbled_column_3.png',
+		},
+		'}': {
+			name: 'crumbled_column_4',
+			blocked: 1,
+			color: [0.8, 0.8, 0.7],
+			renderAs: 'plane',
+			texture: 'crumbled_column_4.png',
+		},
+		'{': {
+			name: 'crumbled_column_6',
+			blocked: 1,
+			color: [0.8, 0.8, 0.7],
+			renderAs: 'plane',
+			texture: 'crumbled_column_6.png',
+		},
 		'C': {
 			...monster,
 			name: 'cyclops',
+			blocked: 1,
+			renderAs: 'plane',
 			texture: 'cyclops_new.png',
 		},
 		'O': {
@@ -53390,6 +53420,167 @@
 			...teleportDoor,
 			teleport: ['tower1', 13, 1, 1, 2],
 		},
+		
+		// Forest Floor Tiles
+		// ----------------------------------------------
+		'd': {
+			name: 'dirt',
+			blocked: 1,
+			renderAs: 'box',
+			color: [0.8, 0.8, 0.7],
+			texture: '/level_objects/floor/dirt0.png',
+		},
+
+		'O': {
+			name: 'deep_water',
+			blocked: 1,
+			renderAs: 'box',
+			color: [0.8, 0.8, 0.7],
+			texture: '/level_objects/water/deep_water.png',
+		},
+		'o': {
+			name: 'shallow_water',
+			blocked: 1,
+			renderAs: 'box',
+			color: [0.8, 0.8, 0.7],
+			texture: '/level_objects/water/shallow_water.png',
+		},
+
+		// Forest Architecture
+		// ----------------------------------------------
+		'a': {
+			name: 'statue_archer',
+			blocked: 1,
+			color: [0.8, 0.8, 0.7],
+			renderAs: 'plane',
+			texture: 'statue_archer.png',
+		},
+		'c': {
+			name: 'statue_centaur',
+			blocked: 1,
+			color: [0.8, 0.8, 0.7],
+			renderAs: 'plane',
+			texture: 'statue_centaur.png',
+		},
+		'f': {
+			name: 'dry_fountain',
+			blocked: 1,
+			color: [0.8, 0.8, 0.7],
+			renderAs: 'plane',
+			texture: 'dry_fountain.png',
+		},
+
+		// Forest Trees
+		// ----------------------------------------------
+		'm': {
+			name: 'mangrove_1',
+			blocked: 1,
+			renderAs: 'box',
+			color: [0.8, 0.8, 0.7],
+			texture: '/level_objects/trees/mangrove1.png',
+		},
+		't': {
+			name: 'mangrove_2',
+			blocked: 1,
+			renderAs: 'sprite',
+			color: [0.8, 0.8, 0.7],
+			texture: '/level_objects/trees/mangrove2.png',
+		},
+		'n': {
+			name: 'mangrove_3',
+			blocked: 1,
+			renderAs: 'sprite',
+			color: [0.8, 0.8, 0.7],
+			texture: '/level_objects/trees/mangrove3.png',
+		},
+		'y': {
+			name: 'tree_yellow',
+			blocked: 1,
+			renderAs: 'sprite',
+			color: [0.8, 0.8, 0.7],
+			texture: '/level_objects/trees/tree1_yellow.png',
+		},
+		'r': {
+			name: 'tree_red',
+			blocked: 1,
+			renderAs: 'sprite',
+			color: [0.8, 0.8, 0.7],
+			texture: '/level_objects/trees/tree1_red.png',
+		},
+
+		// Forest Monsters
+		// ----------------------------------------------
+		'W': {
+			name: 'wandering_mushroom',
+			blocked: 1,
+			renderAs: 'plane',
+			texture: '/monsters/forest/wandering_mushroom.png',
+			npc: 'monster',
+		},
+		'D': {
+			name: 'deathcap',
+			blocked: 1,
+			renderAs: 'plane',
+			texture: '/monsters/forest/death_cap.png',
+			npc: 'monster',
+		},
+		'F': {
+			name: 'blink_frog',
+			blocked: 1,
+			renderAs: 'plane',
+			texture: '/monsters/forest/wandering_mushroom.png',
+			npc: 'monster',
+		},
+		'B': {
+			name: 'butterfly_green',
+			blocked: 1,
+			renderAs: 'plane',
+			texture: '/monsters/forest/butterfly_green.png',
+			npc: 'monster',
+		},
+		'V': {
+			name: 'butterfly_violet',
+			blocked: 1,
+			renderAs: 'plane',
+			texture: '/monsters/forest/butterfly_violet.png',
+			npc: 'monster',
+		},
+		'J': {
+			name: 'jumping_spider',
+			blocked: 1,
+			renderAs: 'plane',
+			texture: '/monsters/forest/jumping_spider.png',
+			npc: 'monster',
+		},
+		'S': {
+			name: 'spider',
+			blocked: 1,
+			renderAs: 'plane',
+			texture: '/monsters/forest/spider.png',
+			npc: 'monster',
+		},
+		'T': {
+			name: 'trapdoor_spider',
+			blocked: 1,
+			renderAs: 'plane',
+			texture: '/monsters/forest/trapdoor_spider.png',
+			npc: 'monster',
+		},
+		'Y': {
+			name: 'yellow_wasp',
+			blocked: 1,
+			renderAs: 'plane',
+			texture: '/monsters/forest/yellow_wasp.png',
+			npc: 'monster',
+		},
+		'V': {
+			name: 'vampire_mosquito',
+			blocked: 1,
+			renderAs: 'plane',
+			texture: '/monsters/forest/vampire_mosquito.png',
+			npc: 'monster',
+		},
+
 	};
 
 	var worldMaps = {
@@ -53547,20 +53738,166 @@
 					'#########     #####',
 					'###   ###         #',
 					'#########& ########',
+		temple: {
+				legend,
+				map: [
+					[
+						'###################',
+						'###################',
+						'###### #&&#########',
+						'###################',
+						'###################',
+						'###################',
+						'########## ########',
+					],
+					[
+						'##########1########',
+						'###    &&| | #    #',
+						'#   #         && # ',
+						'# # #       && &#C#',
+						'### ###C    && &  #',
+						'###   ###         #',
+						'#########&3&&######',
+					],
+					[
+						'##########2       #',
+						'################# #',
+						'######&&&& ########',
+						'########## ########',
+						'###        ## #### ',
+						'###   ####     ####',
+						'#########& ########',
+					],
+				],
+			},
+		forest: {
+			legend,
+			map: [
+				[
+					'dddddddddddddddddddddddddddddddd',
+					'dddddddddddddddddddddddddddddddd',
+					'dddddddddddddddddddddddddddddddd',
+					'dddddddddddddddddddddddddddddddd',
+					'dddddddddddddddddddddddddddddddd',
+					'dddddddddddddddddddddddddddddddd',
+					'dddddddddddddddddddddddddddddddd',
+					'dddddddddddddddddddddddddddddddd',
+					'dddddddddddddddddddddddddddddddd',
+					'dddddddddddddddddddddddddddddddd',
+					'dddddddddddddddddddddddddddddddd',
+					'dddddddddddddddddddddddddddddddd',
+					'dddddddddddddddddddddddddddddddd',
+					'dddddddddddddddddddddddddddddddd',
+					'dddddddddddddddddddddddddddddddd',
+					'dddddddddddddddddddddddddddddddd',
+					'dddddddddddddddddddddddddddddddd',
+					'dddddddddddddddddddddddddddddddd',
+					'dddddddddddddddddddddddddddddddd',
+					'dddddddddddddddddddddddddddddddd',
+					'dddddddddddddddddddddddddddddddd',
+					'dddddddddddddddddddddddddddddddd',
+					'dddddddddddddddddddddddddddddddd',
+					'dddddddddddddddddddddddddddddddd',
+					'ddddddddddddddddddddoddddddddddd',
+					'dddddddddddddddddddoOodddddddddd',
+					'dddddddddddddddddddoOodddddddddd',
+					'ddddddddddddddddddddoddddddddddd',
+					'ddddddddddddddddddddoddddddddddd',
+					'dddddddddddddddddddddddddddddddd',
+					'dddddddddddddddddddddddddddddddd',
+					'dddddddddddddddddddddddddddddddd',
+					'dddddddddddddddddddddddddddddddd',
+					'dddddddddddddddddddddddddddddddd',
+					'dddddddddddddddddddddddddddddddd',
+					'dddddddddddddddddddddddddddddddd',
+					'dddddddddddddddddddddddddddddddd',
+					'dddddddddddddddddddddddddddddddd',
+					'dddddddddddddddddddddddddddddddd',
+					'dddddddddddddddddddddddddddddddd',
 				],
 				[
-					'##############&&&&&',
-					'#      &&    #&    ',
-					'#   #         &&   ',
-					'#   #       && &&&&',
-					'# &###  &&&&&& &&&&',
-					'# #  ###       &  &',
-					'& #          # &  &',
-					'& # #####      #  &',
-					'& #    #########   &',
-					'& # # ####    ## ##',
-					'#      #          #',
-					'#&&&&&###&&&&###&&&',
+					'mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm',
+					'm                              m',
+					'm                              m',
+					'm                              m',
+					'm                              m',
+					'm                              m',
+					'm                              m',
+					'm                              m',
+					'm                              m',
+					'm                              m',
+					'm                              m',
+					'm                              m',
+					'm                              m',
+					'm                              m',
+					'm                              m',
+					'm                              m',
+					'm                              m',
+					'm                              m',
+					'm                              m',
+					'm                              m',
+					'm                              m',
+					'm                              m',
+					'm                              m',
+					'm                              m',
+					'm                              m',
+					'm                  BfB         m',
+					'm                              m',
+					'm                              m',
+					'm                              m',
+					'm                              m',
+					'm                              m',
+					'm                 t   t        m',
+					'm                 t  }t        m',
+					'm                 t[ ]t        m',
+					'm                 t| ]t        m',
+					'm                 t| ]t        m',
+					'm                 ta ct        m',
+					'm                tt    tt      m',
+					'm                t      t      m',
+					'mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm',
+				],
+				[
+					'                                ',
+					'                                ',
+					'                                ',
+					'                                ',
+					'                                ',
+					'                                ',
+					'                                ',
+					'                                ',
+					'                                ',
+					'                                ',
+					'                                ',
+					'                                ',
+					'                                ',
+					'                                ',
+					'                                ',
+					'                                ',
+					'                                ',
+					'                                ',
+					'                                ',
+					'                                ',
+					'                                ',
+					'                                ',
+					'                                ',
+					'                                ',
+					'                                ',
+					'                                ',
+					'                                ',
+					'                                ',
+					'                                ',
+					'                                ',
+					'                                ',
+					'                                ',
+					'                                ',
+					'                                ',
+					'                                ',
+					'                                ',
+					'                                ',
+					'                                ',
+					'                                ',
+					'                                ',
 				],
 			],
 		},
@@ -57120,14 +57457,22 @@
 
 	const game = new DungeonCrawlerGame({
 		worldMaps,
+		startAt: ['forest', 20, 38, 1],
+		clearColor: '#467ee0',
 		customEvents,
 		sounds,
-		startAt: ['town', 1, 1, 1],
-		clearColor: '#161013',
+
+		// startAt: ['town', 1, 1, 1],
+		// clearColor: '#161013',
 	});
+	// window.document.addEventListener('DOMContentLoaded', () => {
+	// 	window.pc = game.makeNewPlayer(
+	// 		['town', 3, 2, 1],
+
+	// });
 	window.document.addEventListener('DOMContentLoaded', () => {
 		window.pc = game.makeNewPlayer(
-			['town', 3, 2, 1],
+			['forest', 20, 38, 1],
 			{
 				name: 'Barrett Boulderfist',
 				texture: 'rupert_new.png',
