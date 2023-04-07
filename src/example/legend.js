@@ -37,6 +37,13 @@ const legend = {
 	' ': {
 		name: 'clear', blocked: 0, renderAs: false,
 	},
+	'=': {
+		name: 'clear_block', 
+		blocked: 1, 
+		renderAs: 'box',
+		color: [0, 0, 0],
+		texture: false,
+	},
 	'#': {
 		name: 'cobble',
 		blocked: 1,
@@ -215,7 +222,7 @@ const legend = {
 		aggro: 0,
 		dialog: {
 			hello: 'I have not seen you in Wretchold before.',
-			name: 'I am Zogrod.',
+			name: 'I am Zogrod, though people say I look more like a Zagtor.',
 			job: { a: 'I keep an eye out for intruders.', unlocks: 'intruders' },
 			intruders: { a: 'Intruders like you!', locked: true },
 		},
@@ -418,7 +425,7 @@ const legend = {
 		texture: '/monsters/forest/yellow_wasp.png',
 		npc: 'monster',
 	},
-	'V': {
+	'P': {
 		name: 'vampire_mosquito',
 		blocked: 1,
 		renderAs: 'plane',
