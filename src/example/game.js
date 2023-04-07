@@ -24,7 +24,7 @@ const game = new DungeonCrawlerGame({
 // });
 window.document.addEventListener('DOMContentLoaded', () => {
 	window.pc = game.makeNewPlayer(
-		['forest', 20, 38, 1],
+		['forest_outside', 21, 38, 1],
 		{
 			name: 'Barrett Boulderfist',
 			texture: 'rupert_new.png',

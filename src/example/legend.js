@@ -60,6 +60,14 @@ const legend = {
 		texture: 'lair_new_.png',
 		textureRange: [0, 3],
 	},
+	'K': {
+		name: 'goblin',
+		blocked: 1,
+		renderAs: 'plane',
+		color: [0.9, 0.9, 0.9],
+		texture: 'goblin.png',
+		npc: 'monster',
+	},
 	'G': {
 		name: 'grass',
 		blocked: 1,
@@ -202,7 +210,7 @@ const legend = {
 		renderAs: 'plane',
 		texture: 'cyclops_new.png',
 	},
-	'O': {
+	'E': {
 		...monster,
 		name: 'ogre',
 		texture: 'ogre_new.png',
@@ -281,6 +289,13 @@ const legend = {
 		renderAs: 'box',
 		color: [0.8, 0.8, 0.7],
 		texture: '/level_objects/floor/dirt0.png',
+	},
+	'+': {
+		name: 'stairs_up',
+		blocked: 1,
+		renderAs: 'box',
+		color: [0.8, 0.8, 0.7],
+		texture: 'stairs_up.png',
 	},
 
 	'O': {
@@ -369,7 +384,7 @@ const legend = {
 		texture: '/monsters/forest/wandering_mushroom.png',
 		npc: 'monster',
 	},
-	'D': {
+	'H': {
 		name: 'deathcap',
 		blocked: 1,
 		renderAs: 'plane',
