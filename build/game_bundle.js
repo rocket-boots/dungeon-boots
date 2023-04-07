@@ -51772,7 +51772,9 @@
 					row.split('').forEach((char, x) => {
 						const startAt = [mapKey, x, y, z];
 						const blockLegend = legend[char];
+
 						if (!blockLegend) console.error(char, 'not found in legend', legend);
+						
 						// If it is called "clear", or it is not blocking and not being rendered,
 						// then it's not really a block.
 						if (blockLegend.name === 'clear' || (!blockLegend.renderAs && !blockLegend.blocked)) {
@@ -52493,6 +52495,7 @@
 	const { Vector3, Object3D } = THREE;
 	const { X, Y, Z } = ArrayCoords;
 	const { PI } = Math;
+
 	const TAU = PI * 2;
 
 	const WORLD_VOXEL_LIMITS = [64, 64, 12];
@@ -53317,6 +53320,13 @@
 		' ': {
 			name: 'clear', blocked: 0, renderAs: false,
 		},
+		'=': {
+			name: 'clear_block', 
+			blocked: 1, 
+			renderAs: 'box',
+			color: [0, 0, 0],
+			texture: false,
+		},
 		'#': {
 			name: 'cobble',
 			blocked: 1,
@@ -53332,6 +53342,14 @@
 			color: [0.9, 0.9, 0.9],
 			texture: 'lair_new_.png',
 			textureRange: [0, 3],
+		},
+		'K': {
+			name: 'goblin',
+			blocked: 1,
+			renderAs: 'plane',
+			color: [0.9, 0.9, 0.9],
+			texture: 'goblin.png',
+			npc: 'monster',
 		},
 		'G': {
 			name: 'grass',
@@ -53363,7 +53381,7 @@
 			textureRange: [0, 8],
 		},
 		'|': {
-			name: 'crumbled_column',
+			name: 'crumbled_column_1',
 			blocked: 1,
 			color: [0.8, 0.8, 0.7],
 			renderAs: 'billboard',
@@ -53379,9 +53397,6 @@
 			texture: 'torch_.png',
 			textureRange: [1, 4],
 		},
-		// 'X': {
-		// name: 'cyclops', blocked: 1, renderAs: 'sprite', texture: 'cyclops_new.png',
-		// },
 		'a': {
 			...townFolk,
 			name: 'Townfolk',
@@ -53450,6 +53465,34 @@
 		'g': {
 			...ghost,
 		},
+		'[': {
+			name: 'crumbled_column_2',
+			blocked: 1,
+			color: [0.8, 0.8, 0.7],
+			renderAs: 'plane',
+			texture: 'crumbled_column_2.png',
+		},
+		']': {
+			name: 'crumbled_column_3',
+			blocked: 1,
+			color: [0.8, 0.8, 0.7],
+			renderAs: 'plane',
+			texture: 'crumbled_column_3.png',
+		},
+		'}': {
+			name: 'crumbled_column_4',
+			blocked: 1,
+			color: [0.8, 0.8, 0.7],
+			renderAs: 'plane',
+			texture: 'crumbled_column_4.png',
+		},
+		'{': {
+			name: 'crumbled_column_6',
+			blocked: 1,
+			color: [0.8, 0.8, 0.7],
+			renderAs: 'plane',
+			texture: 'crumbled_column_6.png',
+		},	
 		'h': {
 			...monster,
 			name: 'Goblin Guard',
@@ -53486,10 +53529,12 @@
 		'C': {
 			...monster,
 			name: 'cyclops',
+			blocked: 1,
+			renderAs: 'plane',
 			texture: 'cyclops_new.png',
 			hp: 20,
 		},
-		'O': {
+		'E': {
 			...monster,
 			name: 'ogre',
 			texture: 'ogre_new.png',
@@ -53503,8 +53548,9 @@
 			npc: 'still',
 			aggro: 0,
 			dialog: {
-				hello: 'I have not seen you in Wretchhold before.',
-				name: 'I am Zogrod. Though people say I look more like a Zagtor.',
+
+				hello: 'I have not seen you in Wretchold before.',
+				name: 'I am Zogrod, though people say I look more like a Zagtor.',
 				job: { a: 'I keep an eye out for intruders.', unlocks: 'intruders' },
 				intruders: { a: 'Intruders like you!', locked: true },
 			},
@@ -53598,6 +53644,174 @@
 			...teleportDoor,
 			teleport: ['tower1', 13, 1, 1, 2],
 		},
+		
+		// Forest Floor Tiles
+		// ----------------------------------------------
+		'd': {
+			name: 'dirt',
+			blocked: 1,
+			renderAs: 'box',
+			color: [0.8, 0.8, 0.7],
+			texture: '/level_objects/floor/dirt0.png',
+		},
+		'+': {
+			name: 'stairs_up',
+			blocked: 1,
+			renderAs: 'box',
+			color: [0.8, 0.8, 0.7],
+			texture: 'stairs_up.png',
+		},
+
+		'O': {
+			name: 'deep_water',
+			blocked: 1,
+			renderAs: 'box',
+			color: [0.8, 0.8, 0.7],
+			texture: '/level_objects/water/deep_water.png',
+		},
+		'o': {
+			name: 'shallow_water',
+			blocked: 1,
+			renderAs: 'box',
+			color: [0.8, 0.8, 0.7],
+			texture: '/level_objects/water/shallow_water.png',
+		},
+
+		// Forest Architecture
+		// ----------------------------------------------
+		'a': {
+			name: 'statue_archer',
+			blocked: 1,
+			color: [0.8, 0.8, 0.7],
+			renderAs: 'plane',
+			texture: 'statue_archer.png',
+		},
+		'c': {
+			name: 'statue_centaur',
+			blocked: 1,
+			color: [0.8, 0.8, 0.7],
+			renderAs: 'plane',
+			texture: 'statue_centaur.png',
+		},
+		'f': {
+			name: 'dry_fountain',
+			blocked: 1,
+			color: [0.8, 0.8, 0.7],
+			renderAs: 'plane',
+			texture: 'dry_fountain.png',
+		},
+
+		// Forest Trees
+		// ----------------------------------------------
+		'm': {
+			name: 'mangrove_1',
+			blocked: 1,
+			renderAs: 'box',
+			color: [0.8, 0.8, 0.7],
+			texture: '/level_objects/trees/mangrove1.png',
+		},
+		't': {
+			name: 'mangrove_2',
+			blocked: 1,
+			renderAs: 'sprite',
+			color: [0.8, 0.8, 0.7],
+			texture: '/level_objects/trees/mangrove2.png',
+		},
+		'n': {
+			name: 'mangrove_3',
+			blocked: 1,
+			renderAs: 'sprite',
+			color: [0.8, 0.8, 0.7],
+			texture: '/level_objects/trees/mangrove3.png',
+		},
+		'y': {
+			name: 'tree_yellow',
+			blocked: 1,
+			renderAs: 'sprite',
+			color: [0.8, 0.8, 0.7],
+			texture: '/level_objects/trees/tree1_yellow.png',
+		},
+		'r': {
+			name: 'tree_red',
+			blocked: 1,
+			renderAs: 'sprite',
+			color: [0.8, 0.8, 0.7],
+			texture: '/level_objects/trees/tree1_red.png',
+		},
+
+		// Forest Monsters
+		// ----------------------------------------------
+		'W': {
+			name: 'wandering_mushroom',
+			blocked: 1,
+			renderAs: 'plane',
+			texture: '/monsters/forest/wandering_mushroom.png',
+			npc: 'monster',
+		},
+		'H': {
+			name: 'deathcap',
+			blocked: 1,
+			renderAs: 'plane',
+			texture: '/monsters/forest/death_cap.png',
+			npc: 'monster',
+		},
+		'F': {
+			name: 'blink_frog',
+			blocked: 1,
+			renderAs: 'plane',
+			texture: '/monsters/forest/wandering_mushroom.png',
+			npc: 'monster',
+		},
+		'B': {
+			name: 'butterfly_green',
+			blocked: 1,
+			renderAs: 'plane',
+			texture: '/monsters/forest/butterfly_green.png',
+			npc: 'monster',
+		},
+		'V': {
+			name: 'butterfly_violet',
+			blocked: 1,
+			renderAs: 'plane',
+			texture: '/monsters/forest/butterfly_violet.png',
+			npc: 'monster',
+		},
+		'J': {
+			name: 'jumping_spider',
+			blocked: 1,
+			renderAs: 'plane',
+			texture: '/monsters/forest/jumping_spider.png',
+			npc: 'monster',
+		},
+		'S': {
+			name: 'spider',
+			blocked: 1,
+			renderAs: 'plane',
+			texture: '/monsters/forest/spider.png',
+			npc: 'monster',
+		},
+		'T': {
+			name: 'trapdoor_spider',
+			blocked: 1,
+			renderAs: 'plane',
+			texture: '/monsters/forest/trapdoor_spider.png',
+			npc: 'monster',
+		},
+		'Y': {
+			name: 'yellow_wasp',
+			blocked: 1,
+			renderAs: 'plane',
+			texture: '/monsters/forest/yellow_wasp.png',
+			npc: 'monster',
+		},
+		'P': {
+			name: 'vampire_mosquito',
+			blocked: 1,
+			renderAs: 'plane',
+			texture: '/monsters/forest/vampire_mosquito.png',
+			npc: 'monster',
+		},
+
 	};
 
 	var worldMaps = {
@@ -53769,6 +53983,171 @@
 					'& # # ####    ## ##',
 					'#      #          #',
 					'#&&&&&###&&&&###&&&',
+				],
+			],
+		},
+		temple: {
+				legend,
+				map: [
+					[
+						'###################',
+						'###################',
+						'###### #&&#########',
+						'###################',
+						'###################',
+						'###################',
+						'########## ########',
+					],
+					[
+						'##########1########',
+						'###    &&| | #    #',
+						'#   #         && # ',
+						'# # #       && &#C#',
+						'### ###C    && &  #',
+						'###   ###         #',
+						'#########&3&&######',
+					],
+					[
+						'##########2       #',
+						'################# #',
+						'######&&&& ########',
+						'########## ########',
+						'###        ## #### ',
+						'###   ####     ####',
+						'#########& ########',
+					],
+				],
+			},
+		forest_outside: {
+			music: 'forest',
+			ambience: 'darkForest',
+			legend,
+			map: [
+				[
+					'Oddddddd###################ddddd',
+					'OOOOOOOO###################Odddd',
+					'OOOOddddO##################Odddd',
+					'OOodddddddddO##############ddddd',
+					'OOodddddddddOOO############Odddd',
+					'OOddddddddddOOOO###########Odddd',
+					'OooddddddddddddOOOOO######OOdddd',
+					'OooOdddddddddddddOdOOOOOOOOddddd',
+					'OOOOoOdddddddddddddddddddddddddd',
+					'OOOooOdddddddddddddddddddddddddd',
+					'OOoooOdddddddddddddddddddddddddd',
+					'OOoooOdddddddddddddddddddddddddd',
+					'OOoooOdddddddddddddddddddddddddd',
+					'OOoOoooddddddddddddddddddddddddd',
+					'OOOOOodddddddddddddddddddddddddd',
+					'OOOOOOdddddddddddddddddddddddddd',
+					'Oooooooddddddddddddddddddddddddd',
+					'OOOOOooddddddddddddddddddddddddd',
+					'OOOOOOdddddddddddddddddddddddddd',
+					'Oooooodddddddddddddddddddddddddd',
+					'OOOoOodddddddddddddddddddddddddd',
+					'Oodooddddddddddddddddddddddddddd',
+					'dddddddddddddddddddddddddddddddd',
+					'dddddddddddddddddddddddddddddddd',
+					'ddddddddddddddddddddoOoddddddddd',
+					'ddddddddddddddddddddoOoddddddddd',
+					'dddddddddddddddddddddodddddddddd',
+					'dddddddddddddddddddddodddddddddd',
+					'dddddddddddddddddddddddddddddddd',
+					'dddddddddddddddddddddddddddddddd',
+					'dddddddddddddddddddddddddddddddd',
+					'dddddddddddddddddddddddddddddddd',
+					'dddddddddddddddddddddddddddddddd',
+					'dddddddddddddddddddddddddddddddd',
+					'dddddddddddddddddddddddddddddddd',
+					'dddddddddddddddddddddddddddddddd',
+					'dddddddddddddddddddddddddddddddd',
+					'dddddddddddddddddddddddddddddddd',
+					'dddddddddddddddddddddddddddddddd',
+					'dddddddddddddddddddddddddddddddd',
+				],
+				[
+					'mmmmmmmm###################mmmmm',
+					'm       ##        E##+##  #YyyYm',
+					'm  H     ^ ^##  ####^ ^# K#    m',
+					'm m m m m    #              r  m',
+					'm      m      ##   #   # K#  r m',
+					'm   H  mYmmmm   ####K K#  #    m',
+					'm      m m   m     ## ####  t ym',
+					'm          Y m m               m',
+					'm t  m  mmmmmm m  mm^ ^mV mm  mm',
+					'm   m              m   m  m   Jm',
+					'm       r  y     m m   m  m mmmm',
+					'm  t t y y ttt  m  m   m  m    m',
+					'mP           mmmmJ  m m   mmmm m',
+					'm nn n  P   r   m         m    m',
+					'm         tt     mmmmmmmmmm mm m',
+					'mn  nt r      m     m       m  m',
+					'm  n P  ttt  m   m     mmm     m',
+					'm y      m       m  yy  m rrr rm',
+					'm    y    mm m    m    m  r  Yrm',
+					'm  r    mmm m m    mJTm   r y rm',
+					'm             m    mmmm   r r rm',
+					'm t  t  m m       mmyrym       m',
+					'm       m mm m m  mt   tm  rmr m',
+					'm       m   m     t     t      m',
+					'm     t       mm m  BfB        m',
+					'm     m mmmm              mmmm m',
+					'm mmmmm     mmmmmmm       m    m',
+					'm        t  m  m m m   Tmm     m',
+					'm         t        m   m  t r  m',
+					'm m  m m    m mttt m   m tw   tm',
+					'm m  m    tm    t  m{ }m  t y  m',
+					'm  m m m   m m ttt m   m       m',
+					'm m        m    t         t  mmm',
+					'm     t t  m ttt mmm[ ]mmm  m  m',
+					'm mmmm m           m| |mmm m   m',
+					'm          m  yyyy m| |  mwm   m',
+					'mm m t t   m   YY  ma cm mmm   m',
+					'm  t mrmym m m    mm   mm      m',
+					'mT m       m   Y  m     m      m',
+					'mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm',
+				],
+				[
+					'        ###################     ',
+					'        ###################     ',
+					'            ###############     ',
+					'            ###############     ',
+					'             ##############     ',
+					'                          #     ',
+					'                                ',
+					'                                ',
+					'                                ',
+					'                                ',
+					'                                ',
+					'                                ',
+					'                                ',
+					'                                ',
+					'                                ',
+					'                                ',
+					'                                ',
+					'                                ',
+					'                                ',
+					'                                ',
+					'                                ',
+					'                                ',
+					'                                ',
+					'                                ',
+					'                                ',
+					'                                ',
+					'                                ',
+					'                                ',
+					'                                ',
+					'                                ',
+					'                                ',
+					'                                ',
+					'                                ',
+					'                                ',
+					'                                ',
+					'                                ',
+					'                                ',
+					'                                ',
+					'                                ',
+					'                                ',
 				],
 			],
 		},
@@ -57379,14 +57758,21 @@
 
 	const game = new DungeonCrawlerGame({
 		worldMaps,
+		startAt: ['forest', 20, 38, 1],
+		clearColor: '#467ee0',
 		customEvents,
 		sounds,
-		startAt: ['town', 1, 1, 1],
-		clearColor: '#161013',
+
+		// startAt: ['town', 1, 1, 1],
+		// clearColor: '#161013',
 	});
+	// window.document.addEventListener('DOMContentLoaded', () => {
+	// 	window.pc = game.makeNewPlayer(
+	// 		['town', 3, 2, 1],
+	// });
 	window.document.addEventListener('DOMContentLoaded', () => {
 		window.pc = game.makeNewPlayer(
-			['town', 3, 2, 1],
+			['forest_outside', 21, 38, 1],
 			{
 				name: 'Barrett Boulderfist',
 				texture: 'rupert_new.png',
