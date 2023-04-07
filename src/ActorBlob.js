@@ -157,7 +157,7 @@ class ActorBlob extends BlockEntity {
 			if (typeof unlocks === 'string') unlocks = [unlocks];
 			let { locks = [] } = dialogOptObj;
 			if (typeof locks === 'string') locks = [locks];
-			const answer = pickAnswer(dialogOptObj);
+			const answer = pickAnswer(dialogOption);
 			const { questionAudio, answerAudio, cost, requires, aggro } = dialogOptObj;
 			return {
 				// ...dialogOptObj,
