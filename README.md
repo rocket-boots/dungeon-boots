@@ -1,5 +1,5 @@
 # Dungeon Boots
-***A framework for making grid-based Dungeon Crawler web games using Three js***
+***A framework for making grid-based Dungeon Crawler web games using [Three.js](https://threejs.org/).***
 
 ## Design Goals
 
