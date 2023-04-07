@@ -16,21 +16,15 @@ const potionBelt = {
 
 const game = new DungeonCrawlerGame({
 	worldMaps,
-	startAt: ['forest', 20, 38, 1],
-	clearColor: '#467ee0',
 	customEvents,
 	sounds,
-
-	// startAt: ['town', 1, 1, 1],
-	// clearColor: '#161013',
+	startAt: ['town', 1, 1, 1],
+	clearColor: '#161013',
 });
-// window.document.addEventListener('DOMContentLoaded', () => {
-// 	window.pc = game.makeNewPlayer(
-// 		['town', 3, 2, 1],
-// });
+
 window.document.addEventListener('DOMContentLoaded', () => {
 	window.pc = game.makeNewPlayer(
-		['forest_outside', 21, 38, 1],
+		['town', 3, 2, 1],
 		{
 			name: 'Barrett Boulderfist',
 			texture: 'rupert_new.png',

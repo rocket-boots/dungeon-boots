@@ -1,3 +1,4 @@
+import forestLegend from './forestLegend.js';
 import legend from './legend.js';
 
 export default {
@@ -172,42 +173,10 @@ export default {
 			],
 		],
 	},
-	temple: {
-			legend,
-			map: [
-				[
-					'###################',
-					'###################',
-					'###### #&&#########',
-					'###################',
-					'###################',
-					'###################',
-					'########## ########',
-				],
-				[
-					'##########1########',
-					'###    &&| | #    #',
-					'#   #         && # ',
-					'# # #       && &#C#',
-					'### ###C    && &  #',
-					'###   ###         #',
-					'#########&3&&######',
-				],
-				[
-					'##########2       #',
-					'################# #',
-					'######&&&& ########',
-					'########## ########',
-					'###        ## #### ',
-					'###   ####     ####',
-					'#########& ########',
-				],
-			],
-		},
-	forest_outside: {
+	forestOutside: {
 		music: 'forest',
 		ambience: 'darkForest',
-		legend,
+		legend: { ...legend, ...forestLegend },
 		map: [
 			[
 				'Oddddddd###################ddddd',
@@ -253,11 +222,11 @@ export default {
 			],
 			[
 				'mmmmmmmm###################mmmmm',
-				'm       ##        E##+##  #YyyYm',
-				'm  H     ^ ^##  ####^ ^# K#    m',
+				'm       ##        O##+##  #YyyYm',
+				'm  H     ^ ^##  ####^ ^# i#    m',
 				'm m m m m    #              r  m',
-				'm      m      ##   #   # K#  r m',
-				'm   H  mYmmmm   ####K K#  #    m',
+				'm      m      ##   #   # j#  r m',
+				'm   H  mYmmmm   ####k k#  #    m',
 				'm      m m   m     ## ####  t ym',
 				'm          Y m m               m',
 				'm t  m  mmmmmm m  mm^ ^mV mm  mm',
