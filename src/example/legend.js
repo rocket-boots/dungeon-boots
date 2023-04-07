@@ -11,7 +11,7 @@ const ghost = {
 	blocked: 0,
 	renderAs: 'billboard',
 	texture: 'shadow_new.png',
-	npc: 'still',
+	npc: 'wanderer',
 	opacity: 0.7,
 	invisible: ['item:ghostMask'],
 	dialog: {
@@ -24,6 +24,7 @@ const townFolk = {
 	renderAs: 'billboard',
 	faction: 'townfolk',
 	npc: 'villager',
+	damageScale: 0.6,
 };
 const monster = {
 	name: 'monster',
@@ -31,8 +32,27 @@ const monster = {
 	renderAs: 'billboard',
 	// texture: 'cyclops_new.png',
 	npc: 'monster',
+	faction: 'neutral',
 	aggro: 1,
+	damageScale: 1,
 };
+const goblin = {
+	...monster,
+	name: 'Goblin',
+	texture: 'goblin_new.png',
+	npc: 'wanderer',
+	damageScale: 0.8,
+	aggro: 0,
+	hp: 8,
+	dialog: {
+		die: {
+			q: 'Time to die!',
+			a: 'AAHhh! mutilator!',
+			aggro: 1,
+		},
+	},
+};
+
 const legend = {
 	' ': {
 		name: 'clear', blocked: 0, renderAs: false,
@@ -158,10 +178,43 @@ const legend = {
 		dialog: {
 			fear: 'I\'m living in fear!',
 			goblins: 'Goblins are so ugly. And short. And they smell bad. Right?',
-		}
+		},
 	},
 	'g': {
 		...ghost,
+	},
+	'h': {
+		...monster,
+		name: 'Goblin Guard',
+		texture: 'hobgoblin_new.png',
+		npc: 'still',
+		aggro: 0,
+		dialog: {
+			hello: {
+				a: 'Who goes there?',
+				unlocks: 'me',
+			},
+			me: {
+				locked: true,
+				q: 'I do!',
+				a: 'A human! Sound the alarm!',
+				unlocks: 'alarm',
+			},
+		},
+	},
+	'i': {
+		...goblin,
+	},
+	'j': {
+		...goblin,
+		texture: 'orc_wizard_new.png',
+	},
+	'k': {
+		...monster,
+		name: 'Kobold',
+		texture: 'kobold_new.png',
+		damageScale: 0.5,
+		hp: 6,
 	},
 	'C': {
 		...monster,
@@ -187,8 +240,8 @@ const legend = {
 		npc: 'still',
 		aggro: 0,
 		dialog: {
-			hello: 'I have not seen you in Wretchold before.',
-			name: 'I am Zogrod.',
+			hello: 'I have not seen you in Wretchhold before.',
+			name: 'I am Zogrod. Though people say I look more like a Zagtor.',
 			job: { a: 'I keep an eye out for intruders.', unlocks: 'intruders' },
 			intruders: { a: 'Intruders like you!', locked: true },
 		},
@@ -197,6 +250,50 @@ const legend = {
 		...monster,
 		name: 'orc warrior',
 		texture: 'orc_warrior_new.png',
+	},
+	'Y': {
+		...monster,
+		name: 'Midboss Yugerdenyuu',
+		texture: 'two_headed_ogre_new.png',
+		npc: 'still',
+		damageScale: 7,
+		hp: 30,
+		aggro: 0,
+		dialog: {
+			hi: {
+				q: 'Hello there',
+				a: 'You dinnit suprise me. Im da biggest \'ere.',
+				unlocks: 'big',
+			},
+			big: {
+				locked: true,
+				a: 'I\'ve killed bigger, but never uglier. Ready to join your friends?',
+				q: 'AAAAH! I brew yer bits an\' blood intah mead!',
+				aggro: 1,
+			},
+		},
+	},
+	'Z': {
+		...monster,
+		name: 'Boss Tanxfergetended',
+		texture: 'juggernaut.png',
+		damageScale: 10,
+		hp: 40,
+		npc: 'still',
+		aggro: 0,
+		dialog: {
+			hi: {
+				q: 'The last one!',
+				a: 'All... dead?',
+				unlocks: 'dead',
+			},
+			dead: {
+				locked: true,
+				q: 'Dead? Not quite all. But soon.',
+				a: 'No need... fer ... talk den. Killin\' time.',
+				aggro: 1,
+			},
+		},
 	},
 	'1': {
 		...teleportDoor,

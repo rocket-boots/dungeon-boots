@@ -9,7 +9,7 @@ import Renderer from 'rocket-boots-three-toolbox/src/Renderer.js';
 import ArrayCoords from './ArrayCoords.js';
 import PlayerBlob from './PlayerBlob.js';
 import VoxelWorld from './VoxelWorld.js';
-// import NpcBlob from './NpcBlob.js';
+import NpcBlob from './NpcBlob.js';
 // import abilities from './abilities.js';
 import Interface from './Interface.js';
 // import Renderer from './Renderer.js';
@@ -437,17 +437,17 @@ class DungeonCrawlerGame {
 		// coords[Z] = 1;
 		// p.moveTo(coords);
 		this.players.push(p);
-		const mapKey = p.getMapKey();
-		const map = this.world.getMap(mapKey);
+		const map = this.getMainPlayerMap();
 		map.addBlock(p);
 		return p;
 	}
 
-	// makeNewNpc(startAt = this.startAt) {
-	// 	const n = new NpcBlob(startAt);
-	// 	this.npcs.push(n);
-	// 	return n;
-	// }
+	makeNewNpc(startAt = this.startAt, blockLegend = {}) {
+		const n = new NpcBlob(startAt, blockLegend);
+		const map = this.getMainPlayerMap();
+		map.addBlock(n);
+		return n;
+	}
 
 	calculateTalkOptions(blob) {
 		const mapKey = blob.getMapKey();
@@ -475,6 +475,11 @@ class DungeonCrawlerGame {
 		// this.sounds.play('button');
 		const p = this.getMainPlayer();
 		const commandWords = command.split(' ');
+		const firstCommandWord = commandWords[0];
+		if (command === 'reload page') {
+			window.location.reload();
+			return;
+		}
 		if (command === 'menu back') {
 			this.interface.goBack();
 			this.render();
@@ -484,7 +489,7 @@ class DungeonCrawlerGame {
 			this.switchMainPlayer(this.mainPlayerIndex + 1, true);
 			return;
 		}
-		if (commandWords[0] === 'view') {
+		if (firstCommandWord === 'view') {
 			const [, page] = commandWords;
 			this.interface.view(page);
 			this.render();
@@ -505,7 +510,7 @@ class DungeonCrawlerGame {
 			this.render();
 			return;
 		}
-		if (commandWords[0] === 'option') {
+		if (firstCommandWord === 'option') {
 			if (this.interface.optionsView === 'combat') command = `attack ${commandWords[1]}`;
 			if (this.interface.optionsView === 'talk') command = `dialog ${commandWords[1]}`;
 			if (this.interface.optionsView === 'inventory') command = `inventory ${commandWords[1]}`;
@@ -529,8 +534,19 @@ class DungeonCrawlerGame {
 		const mapKey = blob.getMapKey();
 		const worldMap = this.world.getMap(mapKey);
 		const commandWords = command.split(' ');
+		const remainderCommandWords = [...commandWords];
+		const firstCommandWord = remainderCommandWords.shift(); // remove the first word
 		const target = blob.getFacingActor(worldMap);
-		if (commandWords[0] === 'attack') {
+		if (firstCommandWord === 'spawn') {
+			const blockLegendStr = remainderCommandWords.join(' ');
+			const blockLegend = JSON.parse(blockLegendStr);
+			const [x, y, z] = blob.coords;
+			const npc = this.makeNewNpc([mapKey, x, y, z], blockLegend);
+			console.log(command, blockLegend, npc);
+		}
+		if (blob.dead) return;
+		// ----- Below here are all things that can only be done by living blobs
+		if (firstCommandWord === 'attack') {
 			if (target) {
 				if (target.isPlayerBlob && isMain(target)) {
 					this.interface.flashBorder('#f00');
@@ -538,7 +554,7 @@ class DungeonCrawlerGame {
 				} else {
 					this.sounds.play('hit');
 				}
-				const dmg = Math.floor(Math.random() * ((blob.isPlayerBlob) ? 8 : 2)) + 1;
+				const dmg = blob.getDamage();
 				target.damage(dmg, 'hp');
 				// TODO
 				target.checkDeath();
@@ -549,12 +565,12 @@ class DungeonCrawlerGame {
 			}
 			return;
 		}
-		if (commandWords[0] === 'inventory') {
+		if (firstCommandWord === 'inventory') {
 			const index = (Number(commandWords[1]) || 0) - 1;
 			const invItem = mainBlob.getInventoryItem(index);
 			alert(`This is a ${invItem.name}. You have ${invItem.quantity} of these. ${invItem.description}`);
 		}
-		if (commandWords[0] === 'dialog') {
+		if (firstCommandWord === 'dialog') {
 			const dialogOptions = this.calculateTalkOptions(blob);
 			if (!dialogOptions.length) {
 				this.sounds.play('dud');
@@ -562,7 +578,7 @@ class DungeonCrawlerGame {
 			}
 			const index = (Number(commandWords[1]) || 0) - 1;
 			const { answer = '...' } = dialogOptions[index];
-			target.speakDialog(answer);
+			target.speakDialog(dialogOptions[index]);
 			blob.listenToDialog(dialogOptions[index], target);
 			this.interface.talkOptions = this.calculateTalkOptions(blob);
 			return;
@@ -653,7 +669,7 @@ class DungeonCrawlerGame {
 	doActorsCommands(actors = []) {
 		actors.forEach((a) => {
 			const command = a.dequeueCommand();
-			if (!command || a.dead) return;
+			if (!command) return;
 			this.doActorCommand(a, command);
 		});
 	}

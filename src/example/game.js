@@ -24,6 +24,7 @@ window.document.addEventListener('DOMContentLoaded', () => {
 			hp: 20,
 			stamina: 20,
 			facing: 2,
+			faction: 'slayers',
 			dialog: {
 				hi: 'Stay out of my way while I crush all these vile vermin!',
 			},
@@ -49,6 +50,7 @@ window.document.addEventListener('DOMContentLoaded', () => {
 			texture: 'human_new.png',
 			willpower: 20,
 			facing: 3,
+			faction: 'neutral',
 			dialog: {
 				hi: { a: 'I came to Wretchhold because I sensed violence.', unlocks: 'wretchhold' },
 				wretchhold: { a: 'Do the people of Wretchhold deserve to die?', locked: true },

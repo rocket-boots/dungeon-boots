@@ -12,8 +12,13 @@ const BRAINS = {
 		wander: 0,
 		//
 	},
+	wanderer: {
+		wander: 0.5,
+		//
+	},
 	villager: {
 		wander: 0.1,
+		//
 	},
 };
 
@@ -35,15 +40,18 @@ class NpcBlob extends ActorBlob {
 			console.log(this.name, 'facing wall so turning');
 			this.turn((roll < 0.2) ? 1 : -1); // turning is free for NPCs
 		}
-		// Hunters
-		if (this.brain.huntPlayers && roll < this.brain.huntPlayers && this.aggro && !this.dead) {
-			const isHunting = this.planHunt(players, worldMap);
-			if (isHunting) return;
-		}
-		// Wanderers
-		if (this.brain.wander && roll < this.brain.wander) {
-			this.planWander();
-			return;
+		if (this.brain && !this.dead) {
+			// Hunters
+			const huntingValue = this.brain.huntPlayers || this.aggro;
+			if (this.aggro && roll < huntingValue) {
+				const isHunting = this.planHunt(players, worldMap);
+				if (isHunting) return;
+			}
+			// Wanderers
+			if (this.brain.wander && roll < this.brain.wander) {
+				this.planWander();
+				return;
+			}
 		}
 		this.queueCommand('wait');
 	}
@@ -52,8 +60,8 @@ class NpcBlob extends ActorBlob {
 		let nearestPrey;
 		let nearestDist = Infinity;
 		const nearPrey = prey.filter((a) => {
-			// TODO: figure out prey based on faction rather than player
-			if (!a.isPlayerBlob) return false;
+			// If they both have factions and they're the same then don't hunt
+			if (this.faction && a.faction && a.faction === this.faction) return false;
 			if (a.dead) return false;
 			const dist = ArrayCoords.getDistance(a.coords, this.coords);
 			if (dist > this.sight) return false;

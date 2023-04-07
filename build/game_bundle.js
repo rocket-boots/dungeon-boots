@@ -51365,6 +51365,7 @@
 		constructor(ActorClass, startAt = [], blockLegend = {}) {
 			super(startAt, blockLegend);
 			this.isActorBlob = true;
+			this.damageScale = (typeof this.damageScale !== 'number') ? 1 : this.damageScale;
 			this.facing = blockLegend.facing || 0;
 			this.active = true; // Inactive characters don't need to be ready
 			this.ready = false; // Ready for next turn?
@@ -51462,6 +51463,8 @@
 				block.isActorBlob && block.getVisibilityTo(this)
 			));
 			if (actorsAhead.length > 1) console.warn('More than 1 actor ahead of', this.name, '. that probably should not happen', actorsAhead);
+			// TODO:
+			// put living actors at the front of the list
 			if (actorsAhead.length) return actorsAhead[0];
 			return null;
 		}
@@ -51495,7 +51498,7 @@
 					|| dialogOptObj.a
 					|| ((typeof dialogOption === 'string') ? dialogOption : '???')
 				);
-				const { questionAudio, answerAudio, cost, requires } = dialogOptObj;
+				const { questionAudio, answerAudio, cost, requires, aggro } = dialogOptObj;
 				return {
 					// ...dialogOptObj,
 					key,
@@ -51507,6 +51510,7 @@
 					answerAudio,
 					cost,
 					requires,
+					aggro,
 				};
 			});
 			return talkableDialogOptions;
@@ -51518,17 +51522,24 @@
 			const actorInteractions = this.interactions[actor.blobId];
 			actorInteractions.unlockedDialogKeys = (actorInteractions.unlockedDialogKeys || [])
 				.concat(dialogOption.unlocks || []);
-			console.log(actorInteractions.unlockedDialogKeys);
+			// console.log(actorInteractions.unlockedDialogKeys);
 		}
 
-		speakDialog(text) {
-			this.lastSpoken = text;
+		speakDialog(dialogOption) {
+			this.lastSpoken = dialogOption.answer;
+			if (typeof dialogOption.aggro === 'number') this.aggro = dialogOption.aggro;
 		}
 
 		waitHeal(rounds = 1) {
 			this.blob.forEach((character) => {
 				character.waitHeal(rounds);
 			});
+		}
+
+		getDamage() {
+			const baseDmg = (this.isPlayerBlob) ? 8 : 2;
+			const dmg = Math.floor(Math.random() * baseDmg * this.damageScale) + 1;
+			return dmg;
 		}
 
 		damage(dmg = 0, poolType = 'hp') {
@@ -51544,6 +51555,11 @@
 			if (this.dead) return;
 			this.dead = true;
 			this.blocked = 0;
+			if (this.death) {
+				if (this.death.spawn) {
+					this.queueCommand(`spawn ${JSON.stringify(this.death.spawn)}`);
+				}
+			}
 			this.changeRendering({
 				texture: this.deadTexture || this.texture,
 				onGround: true,
@@ -51635,8 +51651,13 @@
 			wander: 0,
 			//
 		},
+		wanderer: {
+			wander: 0.5,
+			//
+		},
 		villager: {
 			wander: 0.1,
+			//
 		},
 	};
 
@@ -51658,15 +51679,18 @@
 				console.log(this.name, 'facing wall so turning');
 				this.turn((roll < 0.2) ? 1 : -1); // turning is free for NPCs
 			}
-			// Hunters
-			if (this.brain.huntPlayers && roll < this.brain.huntPlayers && this.aggro && !this.dead) {
-				const isHunting = this.planHunt(players, worldMap);
-				if (isHunting) return;
-			}
-			// Wanderers
-			if (this.brain.wander && roll < this.brain.wander) {
-				this.planWander();
-				return;
+			if (this.brain && !this.dead) {
+				// Hunters
+				const huntingValue = this.brain.huntPlayers || this.aggro;
+				if (this.aggro && roll < huntingValue) {
+					const isHunting = this.planHunt(players, worldMap);
+					if (isHunting) return;
+				}
+				// Wanderers
+				if (this.brain.wander && roll < this.brain.wander) {
+					this.planWander();
+					return;
+				}
 			}
 			this.queueCommand('wait');
 		}
@@ -51675,8 +51699,8 @@
 			let nearestPrey;
 			let nearestDist = Infinity;
 			const nearPrey = prey.filter((a) => {
-				// TODO: figure out prey based on faction rather than player
-				if (!a.isPlayerBlob) return false;
+				// If they both have factions and they're the same then don't hunt
+				if (this.faction && a.faction && a.faction === this.faction) return false;
 				if (a.dead) return false;
 				const dist = ArrayCoords.getDistance(a.coords, this.coords);
 				if (dist > this.sight) return false;
@@ -52336,7 +52360,13 @@
 			} else if (this.fullView === 'menu') {
 				html = 'Menu - Not implemented yet';
 			} else if (this.fullView === 'dead') {
-				html = '<div class="you-died">YOU DIED</div><p>💀</p>Refresh the page to play again.';
+				html = `<div class="you-died">YOU DIED</div><p>💀</p>
+				Switch characters to continue ... or refresh the page to start over.
+				<div class="dead-options">
+					<button type="button" data-command="switch next-player">Switch</button>
+					<button type="button" data-command="reload page">Restart</button>
+				</div>
+			`;
 			}
 			view.innerHTML = html;
 		}
@@ -52868,17 +52898,17 @@
 			// coords[Z] = 1;
 			// p.moveTo(coords);
 			this.players.push(p);
-			const mapKey = p.getMapKey();
-			const map = this.world.getMap(mapKey);
+			const map = this.getMainPlayerMap();
 			map.addBlock(p);
 			return p;
 		}
 
-		// makeNewNpc(startAt = this.startAt) {
-		// 	const n = new NpcBlob(startAt);
-		// 	this.npcs.push(n);
-		// 	return n;
-		// }
+		makeNewNpc(startAt = this.startAt, blockLegend = {}) {
+			const n = new NpcBlob(startAt, blockLegend);
+			const map = this.getMainPlayerMap();
+			map.addBlock(n);
+			return n;
+		}
 
 		calculateTalkOptions(blob) {
 			const mapKey = blob.getMapKey();
@@ -52906,6 +52936,11 @@
 			// this.sounds.play('button');
 			const p = this.getMainPlayer();
 			const commandWords = command.split(' ');
+			const firstCommandWord = commandWords[0];
+			if (command === 'reload page') {
+				window.location.reload();
+				return;
+			}
 			if (command === 'menu back') {
 				this.interface.goBack();
 				this.render();
@@ -52915,7 +52950,7 @@
 				this.switchMainPlayer(this.mainPlayerIndex + 1, true);
 				return;
 			}
-			if (commandWords[0] === 'view') {
+			if (firstCommandWord === 'view') {
 				const [, page] = commandWords;
 				this.interface.view(page);
 				this.render();
@@ -52936,7 +52971,7 @@
 				this.render();
 				return;
 			}
-			if (commandWords[0] === 'option') {
+			if (firstCommandWord === 'option') {
 				if (this.interface.optionsView === 'combat') command = `attack ${commandWords[1]}`;
 				if (this.interface.optionsView === 'talk') command = `dialog ${commandWords[1]}`;
 				if (this.interface.optionsView === 'inventory') command = `inventory ${commandWords[1]}`;
@@ -52960,8 +52995,19 @@
 			const mapKey = blob.getMapKey();
 			const worldMap = this.world.getMap(mapKey);
 			const commandWords = command.split(' ');
+			const remainderCommandWords = [...commandWords];
+			const firstCommandWord = remainderCommandWords.shift(); // remove the first word
 			const target = blob.getFacingActor(worldMap);
-			if (commandWords[0] === 'attack') {
+			if (firstCommandWord === 'spawn') {
+				const blockLegendStr = remainderCommandWords.join(' ');
+				const blockLegend = JSON.parse(blockLegendStr);
+				const [x, y, z] = blob.coords;
+				const npc = this.makeNewNpc([mapKey, x, y, z], blockLegend);
+				console.log(command, blockLegend, npc);
+			}
+			if (blob.dead) return;
+			// ----- Below here are all things that can only be done by living blobs
+			if (firstCommandWord === 'attack') {
 				if (target) {
 					if (target.isPlayerBlob && isMain(target)) {
 						this.interface.flashBorder('#f00');
@@ -52969,7 +53015,7 @@
 					} else {
 						this.sounds.play('hit');
 					}
-					const dmg = Math.floor(Math.random() * ((blob.isPlayerBlob) ? 8 : 2)) + 1;
+					const dmg = blob.getDamage();
 					target.damage(dmg, 'hp');
 					// TODO
 					target.checkDeath();
@@ -52980,20 +53026,20 @@
 				}
 				return;
 			}
-			if (commandWords[0] === 'inventory') {
+			if (firstCommandWord === 'inventory') {
 				const index = (Number(commandWords[1]) || 0) - 1;
 				const invItem = mainBlob.getInventoryItem(index);
 				alert(`This is a ${invItem.name}. You have ${invItem.quantity} of these. ${invItem.description}`);
 			}
-			if (commandWords[0] === 'dialog') {
+			if (firstCommandWord === 'dialog') {
 				const dialogOptions = this.calculateTalkOptions(blob);
 				if (!dialogOptions.length) {
 					this.sounds.play('dud');
 					return;
 				}
 				const index = (Number(commandWords[1]) || 0) - 1;
-				const { answer = '...' } = dialogOptions[index];
-				target.speakDialog(answer);
+				dialogOptions[index];
+				target.speakDialog(dialogOptions[index]);
 				blob.listenToDialog(dialogOptions[index], target);
 				this.interface.talkOptions = this.calculateTalkOptions(blob);
 				return;
@@ -53084,7 +53130,7 @@
 		doActorsCommands(actors = []) {
 			actors.forEach((a) => {
 				const command = a.dequeueCommand();
-				if (!command || a.dead) return;
+				if (!command) return;
 				this.doActorCommand(a, command);
 			});
 		}
@@ -53163,7 +53209,7 @@
 		blocked: 0,
 		renderAs: 'billboard',
 		texture: 'shadow_new.png',
-		npc: 'still',
+		npc: 'wanderer',
 		opacity: 0.7,
 		invisible: ['item:ghostMask'],
 		dialog: {
@@ -53176,6 +53222,7 @@
 		renderAs: 'billboard',
 		faction: 'townfolk',
 		npc: 'villager',
+		damageScale: 0.6,
 	};
 	const monster = {
 		name: 'monster',
@@ -53183,8 +53230,27 @@
 		renderAs: 'billboard',
 		// texture: 'cyclops_new.png',
 		npc: 'monster',
+		faction: 'neutral',
 		aggro: 1,
+		damageScale: 1,
 	};
+	const goblin = {
+		...monster,
+		name: 'Goblin',
+		texture: 'goblin_new.png',
+		npc: 'wanderer',
+		damageScale: 0.8,
+		aggro: 0,
+		hp: 8,
+		dialog: {
+			die: {
+				q: 'Time to die!',
+				a: 'AAHhh! mutilator!',
+				aggro: 1,
+			},
+		},
+	};
+
 	const legend = {
 		' ': {
 			name: 'clear', blocked: 0, renderAs: false,
@@ -53310,10 +53376,43 @@
 			dialog: {
 				fear: 'I\'m living in fear!',
 				goblins: 'Goblins are so ugly. And short. And they smell bad. Right?',
-			}
+			},
 		},
 		'g': {
 			...ghost,
+		},
+		'h': {
+			...monster,
+			name: 'Goblin Guard',
+			texture: 'hobgoblin_new.png',
+			npc: 'still',
+			aggro: 0,
+			dialog: {
+				hello: {
+					a: 'Who goes there?',
+					unlocks: 'me',
+				},
+				me: {
+					locked: true,
+					q: 'I do!',
+					a: 'A human! Sound the alarm!',
+					unlocks: 'alarm',
+				},
+			},
+		},
+		'i': {
+			...goblin,
+		},
+		'j': {
+			...goblin,
+			texture: 'orc_wizard_new.png',
+		},
+		'k': {
+			...monster,
+			name: 'Kobold',
+			texture: 'kobold_new.png',
+			damageScale: 0.5,
+			hp: 6,
 		},
 		'C': {
 			...monster,
@@ -53339,8 +53438,8 @@
 			npc: 'still',
 			aggro: 0,
 			dialog: {
-				hello: 'I have not seen you in Wretchold before.',
-				name: 'I am Zogrod.',
+				hello: 'I have not seen you in Wretchhold before.',
+				name: 'I am Zogrod. Though people say I look more like a Zagtor.',
 				job: { a: 'I keep an eye out for intruders.', unlocks: 'intruders' },
 				intruders: { a: 'Intruders like you!', locked: true },
 			},
@@ -53349,6 +53448,50 @@
 			...monster,
 			name: 'orc warrior',
 			texture: 'orc_warrior_new.png',
+		},
+		'Y': {
+			...monster,
+			name: 'Midboss Yugerdenyuu',
+			texture: 'two_headed_ogre_new.png',
+			npc: 'still',
+			damageScale: 7,
+			hp: 30,
+			aggro: 0,
+			dialog: {
+				hi: {
+					q: 'Hello there',
+					a: 'You dinnit suprise me. Im da biggest \'ere.',
+					unlocks: 'big',
+				},
+				big: {
+					locked: true,
+					a: 'I\'ve killed bigger, but never uglier. Ready to join your friends?',
+					q: 'AAAAH! I brew yer bits an\' blood intah mead!',
+					aggro: 1,
+				},
+			},
+		},
+		'Z': {
+			...monster,
+			name: 'Boss Tanxfergetended',
+			texture: 'juggernaut.png',
+			damageScale: 10,
+			hp: 40,
+			npc: 'still',
+			aggro: 0,
+			dialog: {
+				hi: {
+					q: 'The last one!',
+					a: 'All... dead?',
+					unlocks: 'dead',
+				},
+				dead: {
+					locked: true,
+					q: 'Dead? Not quite all. But soon.',
+					a: 'No need... fer ... talk den. Killin\' time.',
+					aggro: 1,
+				},
+			},
 		},
 		'1': {
 			...teleportDoor,
@@ -53472,7 +53615,7 @@
 					'GTTT   TTTG',
 					'GTT    TTTG',
 					'&TTT    TTG',
-					'&TTT   TTTG',
+					'&TTT h TTTG',
 					'&&&&&3&&&&&',
 				],
 				[
@@ -53523,15 +53666,15 @@
 				[
 					'##########5###&&4&&',
 					'# #    &&| |^#&   &',
-					'#   #         &&  &',
-					'# & #^     g&& & O&',
+					'#   #       i &&  &',
+					'# &k#^     g&& & i&',
 					'# &###p &&&&&& &  &',
 					'# #  ###   ^   &  &',
 					'& #          # &  &',
-					'& # #####      #  &',
-					'& #    #      #   &',
+					'& # #####     O#  &',
+					'& #   i#      #   &',
 					'& # # ####    ## ##',
-					'#  C   #          #',
+					'#  C   #      k   #',
 					'#&&&&&###&&&&###&&&',
 				],
 				[
@@ -53580,11 +53723,11 @@
 				],
 				[
 					' &&&&&############ ',
-					'####      ^      |#',
+					'####   Y  ^ O  ij|#',
 					'####C #^          #',
 					'####  #        ## #',
 					'##7#  #^          #',
-					'&     #| O^  |   |#',
+					'&h    #| O^  |   |#',
 					' &&&&& ########6## ',
 				],
 				[
@@ -53668,7 +53811,7 @@
 					' #############0### ',
 					'#            # #  #',
 					'##   |||   |||    #',
-					'#                ^#',
+					'#Z               ^#',
 					'##   |||   |||    #',
 					'#                 #',
 					' ################# ',
@@ -57134,6 +57277,7 @@
 				hp: 20,
 				stamina: 20,
 				facing: 2,
+				faction: 'slayers',
 				dialog: {
 					hi: 'Stay out of my way while I crush all these vile vermin!',
 				},
@@ -57159,6 +57303,7 @@
 				texture: 'human_new.png',
 				willpower: 20,
 				facing: 3,
+				faction: 'neutral',
 				dialog: {
 					hi: { a: 'I came to Wretchhold because I sensed violence.', unlocks: 'wretchhold' },
 					wretchhold: { a: 'Do the people of Wretchhold deserve to die?', locked: true },
