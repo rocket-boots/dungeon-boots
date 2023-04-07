@@ -15,6 +15,7 @@ class ActorBlob extends BlockEntity {
 	constructor(ActorClass, startAt = [], blockLegend = {}) {
 		super(startAt, blockLegend);
 		this.isActorBlob = true;
+		this.damageScale = (typeof this.damageScale !== 'number') ? 1 : this.damageScale;
 		this.facing = blockLegend.facing || 0;
 		this.active = true; // Inactive characters don't need to be ready
 		this.ready = false; // Ready for next turn?
@@ -112,6 +113,8 @@ class ActorBlob extends BlockEntity {
 			block.isActorBlob && block.getVisibilityTo(this)
 		));
 		if (actorsAhead.length > 1) console.warn('More than 1 actor ahead of', this.name, '. that probably should not happen', actorsAhead);
+		// TODO:
+		// put living actors at the front of the list
 		if (actorsAhead.length) return actorsAhead[0];
 		return null;
 	}
@@ -131,6 +134,20 @@ class ActorBlob extends BlockEntity {
 		const dialogKeys = Object.keys(actor.dialog);
 		const actorInteractions = this.interactions[actor.blobId] || {};
 		const { unlockedDialogKeys = [] } = actorInteractions;
+		const pickAnswer = (dialogOption) => {
+			const dialogOptObj = (typeof dialogOption === 'object') ? dialogOption : {};
+			const answer = (
+				dialogOptObj.answer
+				|| dialogOptObj.a
+				|| ((typeof dialogOption === 'string') ? dialogOption : '???')
+			);
+			if (answer instanceof Array) {
+				const i = Math.floor(answer.length * actor.dna[0]);
+				return answer[i];
+			}
+			return answer;
+		};
+		// Filter the dialog keys then standardize the dialog format
 		const talkableDialogOptions = dialogKeys.filter(
 			(key) => !actor.dialog[key].locked || unlockedDialogKeys.includes(key),
 		).map((key) => {
@@ -140,12 +157,8 @@ class ActorBlob extends BlockEntity {
 			if (typeof unlocks === 'string') unlocks = [unlocks];
 			let { locks = [] } = dialogOptObj;
 			if (typeof locks === 'string') locks = [locks];
-			const answer = (
-				dialogOptObj.answer
-				|| dialogOptObj.a
-				|| ((typeof dialogOption === 'string') ? dialogOption : '???')
-			);
-			const { questionAudio, answerAudio, cost, requires } = dialogOptObj;
+			const answer = pickAnswer(dialogOptObj);
+			const { questionAudio, answerAudio, cost, requires, aggro } = dialogOptObj;
 			return {
 				// ...dialogOptObj,
 				key,
@@ -157,6 +170,7 @@ class ActorBlob extends BlockEntity {
 				answerAudio,
 				cost,
 				requires,
+				aggro,
 			};
 		});
 		return talkableDialogOptions;
@@ -168,17 +182,24 @@ class ActorBlob extends BlockEntity {
 		const actorInteractions = this.interactions[actor.blobId];
 		actorInteractions.unlockedDialogKeys = (actorInteractions.unlockedDialogKeys || [])
 			.concat(dialogOption.unlocks || []);
-		console.log(actorInteractions.unlockedDialogKeys);
+		// console.log(actorInteractions.unlockedDialogKeys);
 	}
 
-	speakDialog(text) {
-		this.lastSpoken = text;
+	speakDialog(dialogOption) {
+		this.lastSpoken = dialogOption.answer;
+		if (typeof dialogOption.aggro === 'number') this.aggro = dialogOption.aggro;
 	}
 
 	waitHeal(rounds = 1) {
 		this.blob.forEach((character) => {
 			character.waitHeal(rounds);
 		});
+	}
+
+	getDamage() {
+		const baseDmg = (this.isPlayerBlob) ? 8 : 2;
+		const dmg = Math.floor(Math.random() * baseDmg * this.damageScale) + 1;
+		return dmg;
 	}
 
 	damage(dmg = 0, poolType = 'hp') {
@@ -194,6 +215,11 @@ class ActorBlob extends BlockEntity {
 		if (this.dead) return;
 		this.dead = true;
 		this.blocked = 0;
+		if (this.death) {
+			if (this.death.spawn) {
+				this.queueCommand(`spawn ${JSON.stringify(this.death.spawn)}`);
+			}
+		}
 		this.changeRendering({
 			texture: this.deadTexture || this.texture,
 			onGround: true,

@@ -11,11 +11,37 @@ const ghost = {
 	blocked: 0,
 	renderAs: 'billboard',
 	texture: 'shadow_new.png',
-	npc: 'still',
+	npc: 'wanderer',
 	opacity: 0.7,
+	hp: 1,
 	invisible: ['item:ghostMask'],
 	dialog: {
-		hi: { q: 'Hello?', a: 'I did not deserve to die.' },
+		hi: {
+			q: 'Hello?',
+			answer: [
+				'I did not deserve to die.',
+				'Humans are cruel',
+				'Who WAS that?',
+				'I\'m going to haunt the village.',
+				'I feel cold... so cold...',
+				'I was too young for this.',
+				'Will you avenge me?',
+				'Is this the spirit world?',
+				'How do I move on?',
+				'I miss my body, the pleasant stink.',
+			],
+			unlocks: 'die',
+		},
+		die: {
+			q: 'Why did you fight to the death?',
+			answer: [
+				'To save my only home, Wretchhold.',
+				'The people of Wretchhold were my only friends.',
+				'Wretchhold was the only place I felt safe.',
+				'All my belongings are buried in a hole here in Wretchhold',
+				'Wretchhold tavern fed me.',
+			],
+		},
 	},
 };
 const townFolk = {
@@ -24,6 +50,7 @@ const townFolk = {
 	renderAs: 'billboard',
 	faction: 'townfolk',
 	npc: 'villager',
+	damageScale: 0.6,
 };
 const monster = {
 	name: 'monster',
@@ -31,8 +58,36 @@ const monster = {
 	renderAs: 'billboard',
 	// texture: 'cyclops_new.png',
 	npc: 'monster',
+	faction: 'neutral',
 	aggro: 1,
+	damageScale: 1,
+	death: {
+		spawn: {
+			...ghost,
+			name: 'ghost',
+			dialog: {
+				'hello?': 'I did not deserve to die.',
+			},
+		},
+	},
 };
+const goblin = {
+	...monster,
+	name: 'Goblin',
+	texture: 'goblin_new.png',
+	npc: 'wanderer',
+	damageScale: 0.8,
+	aggro: 0,
+	hp: 8,
+	dialog: {
+		die: {
+			q: 'Time to die!',
+			a: 'AAHhh! mutilator!',
+			aggro: 1,
+		},
+	},
+};
+
 const legend = {
 	' ': {
 		name: 'clear', blocked: 0, renderAs: false,
@@ -130,7 +185,9 @@ const legend = {
 		dialog: {
 			goblins: 'Goblins are ruining this neighbourhood!',
 			taxes: 'The Mayor said the goblins are why taxes are so high.',
-			hero: 'Your jawline is incredible!',
+			hero: {
+				answer: ['Your jawline is incredible!'],
+			},
 		},
 	},
 	'c': {
@@ -170,7 +227,11 @@ const legend = {
 		dialog: {
 			fear: 'I\'m living in fear!',
 			goblins: 'Goblins are so ugly. And short. And they smell bad. Right?',
-		}
+			doors: {
+				q: 'Why are the doors rotated?',
+				a: 'I have reason to believe some dark magic from Wretchhold has warped all our doors.',
+			},
+		},
 	},
 	'g': {
 		...ghost,
@@ -203,23 +264,52 @@ const legend = {
 		renderAs: 'plane',
 		texture: 'crumbled_column_6.png',
 	},	
+	'h': {
+		...monster,
+		name: 'Goblin Guard',
+		texture: 'hobgoblin_new.png',
+		npc: 'still',
+		aggro: 0,
+		dialog: {
+			hello: {
+				a: 'Who goes there?',
+				unlocks: 'me',
+			},
+			me: {
+				locked: true,
+				q: 'I do!',
+				a: 'A human! Sound the alarm!',
+				unlocks: 'alarm',
+			},
+		},
+	},
+	'i': {
+		...goblin,
+	},
+	'j': {
+		...goblin,
+		texture: 'orc_wizard_new.png',
+	},
+	'k': {
+		...monster,
+		name: 'Kobold',
+		texture: 'kobold_new.png',
+		damageScale: 0.5,
+		hp: 6,
+	},
 	'C': {
 		...monster,
 		name: 'cyclops',
 		blocked: 1,
 		renderAs: 'plane',
 		texture: 'cyclops_new.png',
+		hp: 20,
 	},
 	'E': {
 		...monster,
 		name: 'ogre',
 		texture: 'ogre_new.png',
-		death: {
-			spawn: {
-				...ghost,
-				name: 'ogre ghost',
-			},
-		},
+		hp: 15,
 	},
 	'p': {
 		name: 'orc priest',
@@ -229,16 +319,60 @@ const legend = {
 		npc: 'still',
 		aggro: 0,
 		dialog: {
-			hello: 'I have not seen you in Wretchold before.',
-			name: 'I am Zogrod, though people say I look more like a Zagtor.',
-			job: { a: 'I keep an eye out for intruders.', unlocks: 'intruders' },
-			intruders: { a: 'Intruders like you!', locked: true },
+		hello: 'I have not seen you in Wretchhold before.',
+		name: 'I am Zogrod. Though people say I look more like a Zagtor.',
+		job: { a: 'I keep an eye out for intruders.', unlocks: 'intruders' },
+		intruders: { a: 'Intruders like you!', locked: true },
 		},
 	},
 	'w': {
 		...monster,
 		name: 'orc warrior',
 		texture: 'orc_warrior_new.png',
+	},
+	'Y': {
+		...monster,
+		name: 'Midboss Yugerdenyuu',
+		texture: 'two_headed_ogre_new.png',
+		npc: 'still',
+		damageScale: 2,
+		hp: 30,
+		aggro: 0,
+		dialog: {
+			hi: {
+				q: 'Hello there',
+				a: 'You dinnit suprise me. Im da biggest \'ere.',
+				unlocks: 'big',
+			},
+			big: {
+				locked: true,
+				q: 'I\'ve killed bigger, but never uglier. Ready to join your friends?',
+				a: 'AAAAH! I brew yer bits an\' blood intah mead!',
+				aggro: 1,
+			},
+		},
+	},
+	'Z': {
+		...monster,
+		name: 'Boss Tanxfergetended',
+		texture: 'juggernaut.png',
+		damageScale: 3,
+		hp: 40,
+		npc: 'still',
+		aggro: 0,
+		dialog: {
+			hi: {
+				q: 'The last one!',
+				a: 'All... dead?',
+				unlocks: 'dead',
+			},
+			dead: {
+				locked: true,
+				q: 'Dead? Not quite all. But soon.',
+				a: 'No need... fer ... talk den. Killin\' time.',
+				aggro: 1,
+			},
+		},
 	},
 	'1': {
 		...teleportDoor,

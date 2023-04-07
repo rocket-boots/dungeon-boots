@@ -48,6 +48,9 @@ class BlockEntity {
 			this.texture = this.texture.replace('.', `${textureNum}.`);
 			// this.color = '#ffffff';
 		}
+		this.dna = [this.getBlockRand(), this.getBlockRand(), this.getBlockRand()];
+		// We want a small offset amount to stop overlaps when two blocks are on the same location
+		this.wiggle = [this.getBlockRand(), this.getBlockRand(), 0];
 		this.redraw = false; // Do we need to redraw the thing (likely due to a texture change)
 	}
 

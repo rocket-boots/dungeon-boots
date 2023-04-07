@@ -189,7 +189,13 @@ class Interface {
 		} else if (this.fullView === 'menu') {
 			html = 'Menu - Not implemented yet';
 		} else if (this.fullView === 'dead') {
-			html = '<div class="you-died">YOU DIED</div><p>💀</p>Refresh the page to play again.';
+			html = `<div class="you-died">YOU DIED</div><p>💀</p>
+				Switch characters to continue ... or refresh the page to start over.
+				<div class="dead-options">
+					<button type="button" data-command="switch next-player">Switch</button>
+					<button type="button" data-command="reload page">Restart</button>
+				</div>
+			`;
 		}
 		view.innerHTML = html;
 	}

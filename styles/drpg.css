@@ -160,6 +160,16 @@ button:active {
 	font-weight: bold;
 	color: red;
 }
+.dead-options {
+	margin: 2vmin 0;
+	flex: row;
+	justify-content: center;
+	gap: 2vmin;
+
+}
+.dead-options button {
+	max-width: 20em;
+}
 
 .ability-item {
 	display: block;
