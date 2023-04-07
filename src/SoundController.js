@@ -67,11 +67,24 @@ class SoundController {
 		return NOOP;
 	}
 
-	play(soundName) {
+	static wait(delayMs) {
+		return new Promise((resolve) => {
+			window.setTimeout(resolve, delayMs);
+		});
+	}
+
+	async play(soundName, options = {}) {
 		const soundThing = this.sounds[soundName];
 		if (!soundThing) {
-			console.warn('No sound found for', soundName);
+			if (options.warnMissing) console.warn('No sound found for', soundName);
 			return;
+		}
+		if (options.delay) {
+			await SoundController.wait(options.delay);
+		}
+		if (options.random) { // Random change that the sound doesn't play
+			// 1 = always play, 0 = never play, 0.5 = half chance of playing
+			if (Math.random() > options.random) return;
 		}
 		this.playThing(soundThing, soundName);
 	}

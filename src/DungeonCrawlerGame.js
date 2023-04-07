@@ -551,21 +551,25 @@ class DungeonCrawlerGame {
 		// ----- Below here are all things that can only be done by living blobs
 		if (firstCommandWord === 'attack') {
 			if (target) {
-				if (target.isPlayerBlob && isMain(target)) {
+				const isMainPlayerGettingHit = target.isPlayerBlob && isMain(target);
+				if (isMainPlayerGettingHit) {
 					this.interface.flashBorder('#f00');
-					this.sounds.play('hurt');
 				} else {
 					this.sounds.play('hit');
 				}
-				if (isMain(blob) && blob.battleYell) {
-					if (Math.random() < 0.2) {
-						this.sounds.play(blob.battleYell);
-					}
-				}
+				this.sounds.play(blob.battleYell, { delay: 500, random: 0.2 });
 				const dmg = blob.getDamage();
 				target.damage(dmg, 'hp');
-				// TODO
-				target.checkDeath();
+				// TODO ^ improve this
+				const died = target.checkDeath();
+				const hurtSoundChance = (isMainPlayerGettingHit) ? 1 : 0.2;
+				if (died) this.sounds.play(target.deathSound, { delay: 100 });
+				else {
+					this.sounds.play(
+						target.hurtSound,
+						{ delay: Math.random() * 100, random: hurtSoundChance },
+					);
+				}
 			} else {
 				this.sounds.play('dud');
 				this.interface.flashBorder('#111');
