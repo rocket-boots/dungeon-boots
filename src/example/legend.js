@@ -13,9 +13,35 @@ const ghost = {
 	texture: 'shadow_new.png',
 	npc: 'wanderer',
 	opacity: 0.7,
+	hp: 1,
 	invisible: ['item:ghostMask'],
 	dialog: {
-		hi: { q: 'Hello?', a: 'I did not deserve to die.' },
+		hi: {
+			q: 'Hello?',
+			answer: [
+				'I did not deserve to die.',
+				'Humans are cruel',
+				'Who WAS that?',
+				'I\'m going to haunt the village.',
+				'I feel cold... so cold...',
+				'I was too young for this.',
+				'Will you avenge me?',
+				'Is this the spirit world?',
+				'How do I move on?',
+				'I miss my body, the pleasant stink.',
+			],
+			unlocks: 'die',
+		},
+		die: {
+			q: 'Why did you fight to the death?',
+			answer: [
+				'To save my only home, Wretchhold.',
+				'The people of Wretchhold were my only friends.',
+				'Wretchhold was the only place I felt safe.',
+				'All my belongings are buried in a hole here in Wretchhold',
+				'Wretchhold tavern fed me.',
+			],
+		},
 	},
 };
 const townFolk = {
@@ -35,6 +61,15 @@ const monster = {
 	faction: 'neutral',
 	aggro: 1,
 	damageScale: 1,
+	death: {
+		spawn: {
+			...ghost,
+			name: 'ghost',
+			dialog: {
+				'hello?': 'I did not deserve to die.',
+			},
+		},
+	},
 };
 const goblin = {
 	...monster,
@@ -138,7 +173,9 @@ const legend = {
 		dialog: {
 			goblins: 'Goblins are ruining this neighbourhood!',
 			taxes: 'The Mayor said the goblins are why taxes are so high.',
-			hero: 'Your jawline is incredible!',
+			hero: {
+				answer: ['Your jawline is incredible!'],
+			},
 		},
 	},
 	'c': {
@@ -178,6 +215,10 @@ const legend = {
 		dialog: {
 			fear: 'I\'m living in fear!',
 			goblins: 'Goblins are so ugly. And short. And they smell bad. Right?',
+			doors: {
+				q: 'Why are the doors rotated?',
+				a: 'I have reason to believe some dark magic from Wretchhold has warped all our doors.',
+			},
 		},
 	},
 	'g': {
@@ -220,17 +261,13 @@ const legend = {
 		...monster,
 		name: 'cyclops',
 		texture: 'cyclops_new.png',
+		hp: 20,
 	},
 	'O': {
 		...monster,
 		name: 'ogre',
 		texture: 'ogre_new.png',
-		death: {
-			spawn: {
-				...ghost,
-				name: 'ogre ghost',
-			},
-		},
+		hp: 15,
 	},
 	'p': {
 		name: 'orc priest',
@@ -256,7 +293,7 @@ const legend = {
 		name: 'Midboss Yugerdenyuu',
 		texture: 'two_headed_ogre_new.png',
 		npc: 'still',
-		damageScale: 7,
+		damageScale: 2,
 		hp: 30,
 		aggro: 0,
 		dialog: {
@@ -267,8 +304,8 @@ const legend = {
 			},
 			big: {
 				locked: true,
-				a: 'I\'ve killed bigger, but never uglier. Ready to join your friends?',
-				q: 'AAAAH! I brew yer bits an\' blood intah mead!',
+				q: 'I\'ve killed bigger, but never uglier. Ready to join your friends?',
+				a: 'AAAAH! I brew yer bits an\' blood intah mead!',
 				aggro: 1,
 			},
 		},
@@ -277,7 +314,7 @@ const legend = {
 		...monster,
 		name: 'Boss Tanxfergetended',
 		texture: 'juggernaut.png',
-		damageScale: 10,
+		damageScale: 3,
 		hp: 40,
 		npc: 'still',
 		aggro: 0,

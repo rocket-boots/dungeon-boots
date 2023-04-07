@@ -51042,8 +51042,8 @@
 	const EAST = 1;
 	const SOUTH = 2;
 	const WEST = 3;
-	const X = 0;
-	const Y = 1;
+	const X$1 = 0;
+	const Y$1 = 1;
 	const Z$1 = 2;
 	const DIRECTION_NAMES = Object.freeze(['North', 'East', 'South', 'West']);
 	const DIRECTIONS = Object.freeze([NORTH, EAST, SOUTH, WEST]);
@@ -51059,8 +51059,8 @@
 		static getRelativeCoordsInDirection(coords, facing, forward = 0, strafe = 0, up = 0) {
 			const newCoords = [...coords];
 			const facingEastWest = (facing % 2);
-			const forwardAxis = facingEastWest ? X : Y;
-			const strafeAxis = facingEastWest ? Y : X;
+			const forwardAxis = facingEastWest ? X$1 : Y$1;
+			const strafeAxis = facingEastWest ? Y$1 : X$1;
 			const forwardDirection = (facing === NORTH || facing === WEST) ? -1 : 1;
 			const strafeDirection = (facing === NORTH || facing === EAST) ? 1 : -1;
 			newCoords[forwardAxis] += (forward * forwardDirection);
@@ -51086,28 +51086,28 @@
 
 		static getDistance(coords1, coords2) {
 			return Math.sqrt(
-				(coords2[X] - coords1[X]) ** 2
-				+ (coords2[Y] - coords1[Y]) ** 2
+				(coords2[X$1] - coords1[X$1]) ** 2
+				+ (coords2[Y$1] - coords1[Y$1]) ** 2
 				+ (coords2[Z$1] - coords1[Z$1]) ** 2,
 			);
 		}
 
 		static checkEqual(coords1, coords2) {
-			return (coords1[X] === coords2[X] && coords1[Y] === coords2[Y] && coords1[Z$1] === coords2[Z$1]);
+			return (coords1[X$1] === coords2[X$1] && coords1[Y$1] === coords2[Y$1] && coords1[Z$1] === coords2[Z$1]);
 		}
 
 		static subtract(coords1, coords2) {
-			return [coords1[X] - coords2[X], coords1[Y] - coords2[Y], coords1[Z$1] - coords2[Z$1]];
+			return [coords1[X$1] - coords2[X$1], coords1[Y$1] - coords2[Y$1], coords1[Z$1] - coords2[Z$1]];
 		}
 
 		static add(coords1, coords2) {
-			return [coords1[X] + coords2[X], coords1[Y] + coords2[Y], coords1[Z$1] + coords2[Z$1]];
+			return [coords1[X$1] + coords2[X$1], coords1[Y$1] + coords2[Y$1], coords1[Z$1] + coords2[Z$1]];
 		}
 	}
 
 	// Indices
-	ArrayCoords.X = X;
-	ArrayCoords.Y = Y;
+	ArrayCoords.X = X$1;
+	ArrayCoords.Y = Y$1;
 	ArrayCoords.Z = Z$1;
 	ArrayCoords.NORTH = NORTH;
 	ArrayCoords.EAST = EAST;
@@ -51286,6 +51286,9 @@
 				this.texture = this.texture.replace('.', `${textureNum}.`);
 				// this.color = '#ffffff';
 			}
+			this.dna = [this.getBlockRand(), this.getBlockRand(), this.getBlockRand()];
+			// We want a small offset amount to stop overlaps when two blocks are on the same location
+			this.wiggle = [this.getBlockRand(), this.getBlockRand(), 0];
 			this.redraw = false; // Do we need to redraw the thing (likely due to a texture change)
 		}
 
@@ -51484,6 +51487,20 @@
 			const dialogKeys = Object.keys(actor.dialog);
 			const actorInteractions = this.interactions[actor.blobId] || {};
 			const { unlockedDialogKeys = [] } = actorInteractions;
+			const pickAnswer = (dialogOption) => {
+				const dialogOptObj = (typeof dialogOption === 'object') ? dialogOption : {};
+				const answer = (
+					dialogOptObj.answer
+					|| dialogOptObj.a
+					|| ((typeof dialogOption === 'string') ? dialogOption : '???')
+				);
+				if (answer instanceof Array) {
+					const i = Math.floor(answer.length * actor.dna[0]);
+					return answer[i];
+				}
+				return answer;
+			};
+			// Filter the dialog keys then standardize the dialog format
 			const talkableDialogOptions = dialogKeys.filter(
 				(key) => !actor.dialog[key].locked || unlockedDialogKeys.includes(key),
 			).map((key) => {
@@ -51493,11 +51510,7 @@
 				if (typeof unlocks === 'string') unlocks = [unlocks];
 				let { locks = [] } = dialogOptObj;
 				if (typeof locks === 'string') locks = [locks];
-				const answer = (
-					dialogOptObj.answer
-					|| dialogOptObj.a
-					|| ((typeof dialogOption === 'string') ? dialogOption : '???')
-				);
+				const answer = pickAnswer(dialogOptObj);
 				const { questionAudio, answerAudio, cost, requires, aggro } = dialogOptObj;
 				return {
 					// ...dialogOptObj,
@@ -52478,7 +52491,7 @@
 
 	window.THREE = THREE;
 	const { Vector3, Object3D } = THREE;
-	const { Z } = ArrayCoords;
+	const { X, Y, Z } = ArrayCoords;
 	const { PI } = Math;
 	const TAU = PI * 2;
 
@@ -52647,9 +52660,11 @@
 
 		getBlockGoalPosition(block) { // eslint-disable-line class-methods-use-this
 			const [x, y, z] = block.coords;
+			const wiggleOffsetX = (block.isActorBlob) ? block.wiggle[X] * 2 : 0;
+			const wiggleOffsetY = (block.isActorBlob) ? block.wiggle[Y] * 2 : 0;
 			return new Vector3(
-				x * VISUAL_BLOCK_SIZE,
-				y * VISUAL_BLOCK_SIZE,
+				(x * VISUAL_BLOCK_SIZE) + wiggleOffsetX,
+				(y * VISUAL_BLOCK_SIZE) + wiggleOffsetY,
 				-z * VISUAL_BLOCK_SIZE + ((block.onGround) ? VISUAL_BLOCK_SIZE * 0.4 : 0),
 				// ^ 0.4 instead of 0.5 so that it is slightly above the ground
 			);
@@ -53211,9 +53226,35 @@
 		texture: 'shadow_new.png',
 		npc: 'wanderer',
 		opacity: 0.7,
+		hp: 1,
 		invisible: ['item:ghostMask'],
 		dialog: {
-			hi: { q: 'Hello?', a: 'I did not deserve to die.' },
+			hi: {
+				q: 'Hello?',
+				answer: [
+					'I did not deserve to die.',
+					'Humans are cruel',
+					'Who WAS that?',
+					'I\'m going to haunt the village.',
+					'I feel cold... so cold...',
+					'I was too young for this.',
+					'Will you avenge me?',
+					'Is this the spirit world?',
+					'How do I move on?',
+					'I miss my body, the pleasant stink.',
+				],
+				unlocks: 'die',
+			},
+			die: {
+				q: 'Why did you fight to the death?',
+				answer: [
+					'To save my only home, Wretchhold.',
+					'The people of Wretchhold were my only friends.',
+					'Wretchhold was the only place I felt safe.',
+					'All my belongings are buried in a hole here in Wretchhold',
+					'Wretchhold tavern fed me.',
+				],
+			},
 		},
 	};
 	const townFolk = {
@@ -53233,6 +53274,15 @@
 		faction: 'neutral',
 		aggro: 1,
 		damageScale: 1,
+		death: {
+			spawn: {
+				...ghost,
+				name: 'ghost',
+				dialog: {
+					'hello?': 'I did not deserve to die.',
+				},
+			},
+		},
 	};
 	const goblin = {
 		...monster,
@@ -53336,7 +53386,9 @@
 			dialog: {
 				goblins: 'Goblins are ruining this neighbourhood!',
 				taxes: 'The Mayor said the goblins are why taxes are so high.',
-				hero: 'Your jawline is incredible!',
+				hero: {
+					answer: ['Your jawline is incredible!'],
+				},
 			},
 		},
 		'c': {
@@ -53376,6 +53428,10 @@
 			dialog: {
 				fear: 'I\'m living in fear!',
 				goblins: 'Goblins are so ugly. And short. And they smell bad. Right?',
+				doors: {
+					q: 'Why are the doors rotated?',
+					a: 'I have reason to believe some dark magic from Wretchhold has warped all our doors.',
+				},
 			},
 		},
 		'g': {
@@ -53418,17 +53474,13 @@
 			...monster,
 			name: 'cyclops',
 			texture: 'cyclops_new.png',
+			hp: 20,
 		},
 		'O': {
 			...monster,
 			name: 'ogre',
 			texture: 'ogre_new.png',
-			death: {
-				spawn: {
-					...ghost,
-					name: 'ogre ghost',
-				},
-			},
+			hp: 15,
 		},
 		'p': {
 			name: 'orc priest',
@@ -53454,7 +53506,7 @@
 			name: 'Midboss Yugerdenyuu',
 			texture: 'two_headed_ogre_new.png',
 			npc: 'still',
-			damageScale: 7,
+			damageScale: 2,
 			hp: 30,
 			aggro: 0,
 			dialog: {
@@ -53465,8 +53517,8 @@
 				},
 				big: {
 					locked: true,
-					a: 'I\'ve killed bigger, but never uglier. Ready to join your friends?',
-					q: 'AAAAH! I brew yer bits an\' blood intah mead!',
+					q: 'I\'ve killed bigger, but never uglier. Ready to join your friends?',
+					a: 'AAAAH! I brew yer bits an\' blood intah mead!',
 					aggro: 1,
 				},
 			},
@@ -53475,7 +53527,7 @@
 			...monster,
 			name: 'Boss Tanxfergetended',
 			texture: 'juggernaut.png',
-			damageScale: 10,
+			damageScale: 3,
 			hp: 40,
 			npc: 'still',
 			aggro: 0,
@@ -53670,7 +53722,7 @@
 					'# &k#^     g&& & i&',
 					'# &###p &&&&&& &  &',
 					'# #  ###   ^   &  &',
-					'& #          # &  &',
+					'& #      k   # &  &',
 					'& # #####     O#  &',
 					'& #   i#      #   &',
 					'& # # ####    ## ##',
@@ -53776,20 +53828,29 @@
 				[
 					' ###8########9#### ',
 					'#### ######## #####',
-					'#                 #',
-					'#                 #',
-					'#                 #',
-					'#                 #',
+					'#|   #  i   #h   |#',
+					'#  k              #',
+					'#    #   C  #     #',
+					'#  k #  j   #k    #',
 					' #################',
 				],
 				[
+					' ################# ',
 					'###################',
-					'###################',
-					'###################',
-					'###################',
-					'###################',
-					'###################',
-					'###################',
+					'######      #######',
+					'######            #',
+					'######      #     #',
+					'######      #     #',
+					' #######  ########',
+				],
+				[
+					'                   ',
+					'    ###############',
+					'    ###############',
+					'    ###############',
+					'    ###############',
+					'    ###############',
+					'    ###############',
 				],
 			],
 		},
@@ -57261,6 +57322,12 @@
 		},
 	};
 
+	const potionBelt = {
+		key: 'potionBelt',
+		name: 'Belt of Potions',
+		description: 'These small vials are filled with a tasty beverage that heals a small amount.',
+	};
+
 	const game = new DungeonCrawlerGame({
 		worldMaps,
 		customEvents,
@@ -57285,42 +57352,44 @@
 					key: 'giantAxe',
 					name: 'Giant Battleaxe',
 					description: 'It is well-balanced, sharp, and good for beheading.',
-				}],
+				}, potionBelt],
 				characterSheetIntroHtml: (
-					`<img src="./images/Slayer_portrait.jpeg" class="character-sheet-portrait" />
-				Barret Boulderfist is a hyper-competent one man army in his prime. He has cleared
-				a hundred dungeons full of violent creatures, and is unperturbed by facing another one.
-				He is known to be brutal but intelligent, a combat obsessive who takes pride in his
-				work and enjoys it too. After all, the dungeons need to be cleared, and nobody can do it
-				better.<hr style="margin: 1em 0" />`
+					`<img src="./images/Slayer_Portrait.jpeg" class="character-sheet-portrait" />
+				Barret Boulderfist is the bane of all monsters, an axe-wielding one man army who
+				fights without mercy. He's purged a hundred dungeons full of vile horrors, and has no fear that
+				any enemy can match his brutal prowess in combat. A consummate professional, he takes great
+				pride in his work, and he enjoys it too - after all, these dungeons need to be cleared,
+				and nobody can do it better than him.
+				<hr style="margin: 1em 0" />`
 				),
 			},
 		);
 		window.pc = game.makeNewPlayer(
 			['town', 17, 9, 1],
 			{
-				name: 'Druid McDruidface',
+				name: 'Warmthistle',
 				texture: 'human_new.png',
 				willpower: 20,
 				facing: 3,
 				faction: 'neutral',
 				dialog: {
-					hi: { a: 'I came to Wretchhold because I sensed violence.', unlocks: 'wretchhold' },
+					hi: { a: 'I came to Wretchhold because I sensed violence was near.', unlocks: 'wretchhold' },
+					name: 'I am known as Warmthistle.',
 					wretchhold: { a: 'Do the people of Wretchhold deserve to die?', locked: true },
 				},
 				inventory: [{
 					key: 'ghostMask',
 					name: 'Ghost Mask',
 					description: 'It allows you to see and speak with ghosts.',
-				}],
+				}, potionBelt],
 				characterSheetIntroHtml: (
-					`<img src="./images/Druid_portrait.jpeg" class="character-sheet-portrait" />
-				Druid McDruidface is a junior druid who's rapidly becoming disillusioned.
-				He entered the vocation as a naive idealist, thinking he would be able to do
-				some good for all the creatures who live in the land, but he's been disturbed
-				by what he's seen so far: unnecessary suffering is a moral wrong, and so many of
-				the battles seem unnecessary. He never meant to get involved here, but he
-				heard cries for help, and couldn't turn away from that.
+					`<img src="./images/Druid_Portrait.jpeg" class="character-sheet-portrait" />
+				Warmthistle, a young man in appearance, is a
+				fragment of the great and ancient pattern of the forest, a song whispered by the
+				wind in the leaves.
+				This druid watches, with benevolent but detched curiosity,
+				the comings and goings of the hot-blooded short-lived things - and sometimes, if the
+				moment seems worthy, chooses to play a part in their stories.
 				<hr style="margin: 1em 0" />`
 				),
 			},

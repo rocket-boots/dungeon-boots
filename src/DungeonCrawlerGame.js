@@ -16,7 +16,7 @@ import Interface from './Interface.js';
 
 window.THREE = THREE;
 const { Vector3, Object3D } = THREE;
-const { Z } = ArrayCoords;
+const { X, Y, Z } = ArrayCoords;
 const { PI } = Math;
 const TAU = PI * 2;
 const NOOP = () => {};
@@ -186,9 +186,11 @@ class DungeonCrawlerGame {
 
 	getBlockGoalPosition(block) { // eslint-disable-line class-methods-use-this
 		const [x, y, z] = block.coords;
+		const wiggleOffsetX = (block.isActorBlob) ? block.wiggle[X] * 2 : 0;
+		const wiggleOffsetY = (block.isActorBlob) ? block.wiggle[Y] * 2 : 0;
 		return new Vector3(
-			x * VISUAL_BLOCK_SIZE,
-			y * VISUAL_BLOCK_SIZE,
+			(x * VISUAL_BLOCK_SIZE) + wiggleOffsetX,
+			(y * VISUAL_BLOCK_SIZE) + wiggleOffsetY,
 			-z * VISUAL_BLOCK_SIZE + ((block.onGround) ? VISUAL_BLOCK_SIZE * 0.4 : 0),
 			// ^ 0.4 instead of 0.5 so that it is slightly above the ground
 		);

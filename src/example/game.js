@@ -8,6 +8,12 @@ const customEvents = {
 	},
 };
 
+const potionBelt = {
+	key: 'potionBelt',
+	name: 'Belt of Potions',
+	description: 'These small vials are filled with a tasty beverage that heals a small amount.',
+};
+
 const game = new DungeonCrawlerGame({
 	worldMaps,
 	customEvents,
@@ -32,42 +38,44 @@ window.document.addEventListener('DOMContentLoaded', () => {
 				key: 'giantAxe',
 				name: 'Giant Battleaxe',
 				description: 'It is well-balanced, sharp, and good for beheading.',
-			}],
+			}, potionBelt],
 			characterSheetIntroHtml: (
-				`<img src="./images/Slayer_portrait.jpeg" class="character-sheet-portrait" />
-				Barret Boulderfist is a hyper-competent one man army in his prime. He has cleared
-				a hundred dungeons full of violent creatures, and is unperturbed by facing another one.
-				He is known to be brutal but intelligent, a combat obsessive who takes pride in his
-				work and enjoys it too. After all, the dungeons need to be cleared, and nobody can do it
-				better.<hr style="margin: 1em 0" />`
+				`<img src="./images/Slayer_Portrait.jpeg" class="character-sheet-portrait" />
+				Barret Boulderfist is the bane of all monsters, an axe-wielding one man army who
+				fights without mercy. He's purged a hundred dungeons full of vile horrors, and has no fear that
+				any enemy can match his brutal prowess in combat. A consummate professional, he takes great
+				pride in his work, and he enjoys it too - after all, these dungeons need to be cleared,
+				and nobody can do it better than him.
+				<hr style="margin: 1em 0" />`
 			),
 		},
 	);
 	window.pc = game.makeNewPlayer(
 		['town', 17, 9, 1],
 		{
-			name: 'Druid McDruidface',
+			name: 'Warmthistle',
 			texture: 'human_new.png',
 			willpower: 20,
 			facing: 3,
 			faction: 'neutral',
 			dialog: {
-				hi: { a: 'I came to Wretchhold because I sensed violence.', unlocks: 'wretchhold' },
+				hi: { a: 'I came to Wretchhold because I sensed violence was near.', unlocks: 'wretchhold' },
+				name: 'I am known as Warmthistle.',
 				wretchhold: { a: 'Do the people of Wretchhold deserve to die?', locked: true },
 			},
 			inventory: [{
 				key: 'ghostMask',
 				name: 'Ghost Mask',
 				description: 'It allows you to see and speak with ghosts.',
-			}],
+			}, potionBelt],
 			characterSheetIntroHtml: (
-				`<img src="./images/Druid_portrait.jpeg" class="character-sheet-portrait" />
-				Druid McDruidface is a junior druid who's rapidly becoming disillusioned.
-				He entered the vocation as a naive idealist, thinking he would be able to do
-				some good for all the creatures who live in the land, but he's been disturbed
-				by what he's seen so far: unnecessary suffering is a moral wrong, and so many of
-				the battles seem unnecessary. He never meant to get involved here, but he
-				heard cries for help, and couldn't turn away from that.
+				`<img src="./images/Druid_Portrait.jpeg" class="character-sheet-portrait" />
+				Warmthistle, a young man in appearance, is a
+				fragment of the great and ancient pattern of the forest, a song whispered by the
+				wind in the leaves.
+				This druid watches, with benevolent but detched curiosity,
+				the comings and goings of the hot-blooded short-lived things - and sometimes, if the
+				moment seems worthy, chooses to play a part in their stories.
 				<hr style="margin: 1em 0" />`
 			),
 		},

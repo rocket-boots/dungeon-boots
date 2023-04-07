@@ -134,6 +134,20 @@ class ActorBlob extends BlockEntity {
 		const dialogKeys = Object.keys(actor.dialog);
 		const actorInteractions = this.interactions[actor.blobId] || {};
 		const { unlockedDialogKeys = [] } = actorInteractions;
+		const pickAnswer = (dialogOption) => {
+			const dialogOptObj = (typeof dialogOption === 'object') ? dialogOption : {};
+			const answer = (
+				dialogOptObj.answer
+				|| dialogOptObj.a
+				|| ((typeof dialogOption === 'string') ? dialogOption : '???')
+			);
+			if (answer instanceof Array) {
+				const i = Math.floor(answer.length * actor.dna[0]);
+				return answer[i];
+			}
+			return answer;
+		};
+		// Filter the dialog keys then standardize the dialog format
 		const talkableDialogOptions = dialogKeys.filter(
 			(key) => !actor.dialog[key].locked || unlockedDialogKeys.includes(key),
 		).map((key) => {
@@ -143,11 +157,7 @@ class ActorBlob extends BlockEntity {
 			if (typeof unlocks === 'string') unlocks = [unlocks];
 			let { locks = [] } = dialogOptObj;
 			if (typeof locks === 'string') locks = [locks];
-			const answer = (
-				dialogOptObj.answer
-				|| dialogOptObj.a
-				|| ((typeof dialogOption === 'string') ? dialogOption : '???')
-			);
+			const answer = pickAnswer(dialogOptObj);
 			const { questionAudio, answerAudio, cost, requires, aggro } = dialogOptObj;
 			return {
 				// ...dialogOptObj,
