@@ -10,14 +10,14 @@ const customEvents = {
 
 const game = new DungeonCrawlerGame({
 	worldMaps,
-	startAt: ['forest', 10, 10, 1],
+	startAt: ['forest', 20, 38, 1],
 	clearColor: '#467ee0',
 	customEvents,
 	sounds,
 });
 window.document.addEventListener('DOMContentLoaded', () => {
 	window.pc = game.makeNewPlayer(
-		['temple', 8, 4, 1],
+		['forest', 20, 38, 1],
 		{
 			name: 'Barrett Boulderfist',
 			characterSheetIntroHtml: (
