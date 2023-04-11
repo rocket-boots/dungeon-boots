@@ -1,6 +1,1697 @@
 (function () {
 	'use strict';
 
+	class Observer {
+		constructor() {
+			this.eventListeners = {};
+		}
+
+		/** Add event, analogous to `addEventListener` and jQuery's `on` */
+		on(eventTypeName, listener) {
+			let eventListenerSet = this.eventListeners[eventTypeName];
+			if (!eventListenerSet) {
+				this.eventListeners[eventTypeName] = new Set();
+				eventListenerSet = this.eventListeners[eventTypeName];
+			}
+			eventListenerSet.add(listener);
+		}
+
+		/** Remove event, analogous to `removeEventListener` and jQuery's `off` */
+		off(eventTypeName, listener) {
+			const eventListenerSet = this.eventListeners[eventTypeName];
+			if (!eventListenerSet) return;
+			eventListenerSet.delete(listener);
+		}
+
+		/** Trigger an event */
+		trigger(eventTypeName, data) {
+			const eventListenerSet = this.eventListeners[eventTypeName];
+			if (!eventListenerSet) return;
+			eventListenerSet.forEach((listener) => listener(data));
+		}
+	}
+
+	// Events
+	const COMMAND_EVENT = 'command';
+	const MISSING_COMMAND_EVENT = 'missingCommand';
+	const MOUNT_EVENT = 'mount';
+	const UNMOUNT_EVENT = 'unmount';
+	const MAPPING_EVENT = 'mapping';
+	const ALL_EVENTS = [
+		COMMAND_EVENT, MISSING_COMMAND_EVENT, MOUNT_EVENT, UNMOUNT_EVENT, MAPPING_EVENT,
+	];
+	// Other constants
+	const KEY_EVENT = 'keydown'; // Note that keyPress acts different and doesn't trigger for some keys
+
+	class KeyboardCommander extends Observer {
+		constructor(keyCommandMapping = {}, options = {}) {
+			super();
+			// this.state = options.state || 'default';
+			this.mapping = {};
+			this.setMapping(keyCommandMapping);
+			this.document = options.document || window?.document || null;
+			if (!this.document?.addEventListener) throw error('document with addEventListener is required');
+			this.keyPressListener = (event) => this.handleKeyPress(event);
+			// Set up event hooks, if provided
+			this.setupEventListeners(options);
+			// Advanced settings
+			this.nodeNamesDontTrigger = ['TEXTAREA', 'INPUT'];
+			this.nodeNamesAllowDefault = ['TEXTAREA', 'INPUT']; // redundant since they won't get triggered
+			// Start it up - default is to automatically mount
+			if (options.autoMount === undefined || options.autoMount) this.mount();
+		}
+
+		setMapping(mappingParam = {}) {
+			if (typeof mappingParam !== 'object') throw new Error('Invalid type for mapping param');
+			this.mapping = {...mappingParam};
+			this.trigger(MAPPING_EVENT);
+			return this.mapping;
+		}
+
+		mapKey(key, command) {
+			this.mapping[key] = command;
+			this.trigger(MAPPING_EVENT);
+			return true;
+		}
+
+		mapUnmappedKey(key, command) {
+			if (this.mapping[key]) return false; // Don't overwrite a mapping
+			return this.mapKey(key, command);
+		}
+
+		unmapKey(key) {
+			if (this.mapping[key]) return false;
+			delete this.mapping[key];
+			this.trigger(MAPPING_EVENT);
+			return true;
+		}
+
+		mount() {
+			this.document.addEventListener(KEY_EVENT, this.keyPressListener);
+			this.trigger(MOUNT_EVENT);
+		}
+
+		unmount() {
+			this.document.removeEventListener(KEY_EVENT, this.keyPressListener);
+			this.trigger(UNMOUNT_EVENT);
+		}
+
+		handleKeyPress(event) {
+			// https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent
+			const { key, code, keyCode, altKey, ctrlKey, shiftKey, metaKey, repeat } = event;
+			const details = { code, keyCode, altKey, ctrlKey, shiftKey, metaKey, repeat };
+			const { nodeName } = event.target;
+			if (this.nodeNamesDontTrigger.includes(nodeName)) return;
+			if (!this.nodeNamesAllowDefault.includes(nodeName)) {
+				event.preventDefault();
+			}
+			this.triggerKey(key, details);
+		}
+
+		setupEventListeners(listenersObj = {}) {
+			ALL_EVENTS.forEach((eventName) => {
+				// Assumes that the value will be a function
+				if (listenersObj[eventName]) this.on(eventName, listenersObj[eventName]);
+			});
+		}
+
+		triggerCommand(command) {
+			this.trigger(COMMAND_EVENT, command);
+		}
+
+		triggerMissingCommand(key) {
+			// console.warn('No command for', key);
+			this.trigger(MISSING_COMMAND_EVENT, key);
+		}
+
+		triggerKey(key, details = {}) {
+			const command = this.mapping[key];
+			// TODO: Look at details and handle them in the mapping
+			if (command) {
+				this.triggerCommand(command);
+			} else {
+				this.triggerMissingCommand(key);
+			}
+		}
+
+		getKeysMapped() {
+			return Object.keys(this.mapping);
+		}
+
+		getCommands() {
+			const uniqueCommands = new Set();
+			this.getKeysMapped().forEach((key) => uniqueCommands.add(this.mapping[key]));
+			return Array.from(uniqueCommands);
+		}
+	}
+
+	// Constants
+	const NORTH = 0;
+	const EAST = 1;
+	const SOUTH = 2;
+	const WEST = 3;
+	const X$1 = 0;
+	const Y$1 = 1;
+	const Z$1 = 2;
+	const DIRECTION_NAMES = Object.freeze(['North', 'East', 'South', 'West']);
+	const DIRECTIONS = Object.freeze([NORTH, EAST, SOUTH, WEST]);
+	const RADIANS = Object.freeze([0, Math.PI * 0.5, Math.PI, Math.PI * 1.5]);
+
+	//       /^\ -y North
+	// West   |
+	// -x <---o---> +x East
+	//        |
+	//       \./ +y South
+
+	class ArrayCoords {
+		static getRelativeCoordsInDirection(coords, facing, forward = 0, strafe = 0, up = 0) {
+			const newCoords = [...coords];
+			const facingEastWest = (facing % 2);
+			const forwardAxis = facingEastWest ? X$1 : Y$1;
+			const strafeAxis = facingEastWest ? Y$1 : X$1;
+			const forwardDirection = (facing === NORTH || facing === WEST) ? -1 : 1;
+			const strafeDirection = (facing === NORTH || facing === EAST) ? 1 : -1;
+			newCoords[forwardAxis] += (forward * forwardDirection);
+			newCoords[strafeAxis] += (strafe * strafeDirection);
+			newCoords[Z$1] += up;
+			return newCoords;
+		}
+
+		static normalizeDirection(facing) {
+			const fixedFacing = facing % DIRECTIONS.length;
+			return (fixedFacing < 0) ? (DIRECTIONS.length + fixedFacing) : fixedFacing;
+		}
+
+		static getDirectionName(facingParam) {
+			const facing = ArrayCoords.normalizeDirection(facingParam);
+			return DIRECTION_NAMES[facing];
+		}
+
+		static getDirectionRadians(facingParam) {
+			const facing = ArrayCoords.normalizeDirection(facingParam);
+			return RADIANS[facing];
+		}
+
+		static getDistance(coords1, coords2) {
+			return Math.sqrt(
+				(coords2[X$1] - coords1[X$1]) ** 2
+				+ (coords2[Y$1] - coords1[Y$1]) ** 2
+				+ (coords2[Z$1] - coords1[Z$1]) ** 2,
+			);
+		}
+
+		static checkEqual(coords1, coords2) {
+			return (coords1[X$1] === coords2[X$1] && coords1[Y$1] === coords2[Y$1] && coords1[Z$1] === coords2[Z$1]);
+		}
+
+		static subtract(coords1, coords2) {
+			return [coords1[X$1] - coords2[X$1], coords1[Y$1] - coords2[Y$1], coords1[Z$1] - coords2[Z$1]];
+		}
+
+		static add(coords1, coords2) {
+			return [coords1[X$1] + coords2[X$1], coords1[Y$1] + coords2[Y$1], coords1[Z$1] + coords2[Z$1]];
+		}
+	}
+
+	// Indices
+	ArrayCoords.X = X$1;
+	ArrayCoords.Y = Y$1;
+	ArrayCoords.Z = Z$1;
+	ArrayCoords.NORTH = NORTH;
+	ArrayCoords.EAST = EAST;
+	ArrayCoords.SOUTH = SOUTH;
+	ArrayCoords.WEST = WEST;
+	ArrayCoords.DIRECTIONS = DIRECTIONS;
+	window.ArrayCoords = ArrayCoords;
+
+	class Pool {
+		constructor(max = 0, value = undefined) {
+			this.max = max;
+			this.min = 0;
+			this.value = (typeof value === 'undefined') ? max : value;
+			if (typeof this.max !== 'number' || typeof this.value !== 'number') {
+				throw new Error('Need numbers for max and value');
+			}
+			this.lastDelta = 0; // track the last change for display purposes
+		}
+
+		get() {
+			return this.value;
+		}
+
+		set(v) {
+			if (typeof v !== 'number') throw new Error('Cannot set to a non-number');
+			const ogValue = this.value;
+			this.value = Math.max(Math.min(this.max, v), this.min);
+			this.lastDelta = this.value - ogValue;
+			return this.value;
+		}
+
+		getText() {
+			return `${this.value} / ${this.max}`;
+		}
+
+		add(n = 0) {
+			if (n < 0) return -1 * this.subtract(-n);
+			const maxToAdd = Math.min(this.max - this.value, n);
+			this.set(this.value + maxToAdd);
+			return maxToAdd;
+		}
+
+		subtract(n = 0) {
+			if (n < 0) return -1 * this.add(-n);
+			const maxToSubtract = Math.min(this.value, n);
+			this.set(this.value - maxToSubtract);
+			return maxToSubtract;
+		}
+
+		belowMax() { return this.value < this.max; }
+
+		atMax() { return this.value === this.max; }
+
+		atMin() { return this.value === this.min; }
+
+		aboveMin() { return this.value > this.min; }
+
+		clearLastDelta() {
+			this.lastDelta = 0;
+		}
+	}
+
+	const DEFAULT_POOL_MAX = 10;
+
+	class Actor {
+		constructor(blob) {
+			this.isActor = true;
+			this.statPools = ['hp', 'stamina', 'willpower', 'balance'];
+			const poolMaxes = this.statPools.map((poolName) => (
+				blob[poolName] || DEFAULT_POOL_MAX
+			));
+			this.statPools.forEach((poolName, i) => {
+				this[poolName] = new Pool(poolMaxes[i]);
+			});
+			// this.hp = new Pool(10, 10);
+			// this.willpower = new Pool(10, 10);
+			// this.stamina = new Pool(10, 10);
+			// this.balance = new Pool(10, 10);
+			this.xp = 0;
+			this.knownAbilities = ['hack', 'slash', 'bash'];
+		}
+
+		clearLastRound() {
+			this.statPools.forEach((statName) => {
+				this[statName].clearLastDelta();
+			});
+		}
+
+		hurt(dmg = 0) {
+			return this.hp.subtract(dmg);
+		}
+
+		heal(healing = 0, poolType = 'hp') {
+			return this[poolType].add(healing);
+		}
+
+		waitHeal(rounds = 1) {
+			this.hp.add(1 * rounds);
+			this.willpower.add(1 * rounds);
+			this.stamina.add(2 * rounds);
+			this.balance.add(3 * rounds);
+		}
+
+		damage(dmg = 0, poolType = 'hp') {
+			// if (dmg) this.blob.aggro = 1;
+			return this[poolType].subtract(dmg);
+		}
+	}
+
+	// import { clamp } from 'three/src/math/mathutils.js';
+	const clamp$1 = (v, min = 0, max = 1) => v < min ? min : v > max ? max : v;
+
+	const MAGIC_NUMBER = 10000;
+	const SEED_MAGIC_INT = 9999999;
+	const SEED_MAGIC_BOOL_TRUE = 93759;
+	const SEED_MAGIC_BOOL_FALSE = 1012638;
+	const RADIX$1 = 36;
+
+	class PseudoRandomizer {
+		constructor(seed) {
+			if (typeof seed === 'number') {
+				this.seed = seed;
+			} else if (seed instanceof Array) {
+				this.seed = PseudoRandomizer.makeSeed(seed);
+			} else {
+				this.seed = Math.round(Math.random() * SEED_MAGIC_INT);
+			}
+			if (Number.isNaN(this.seed)) {
+				this.seed = Math.round(Math.random() * SEED_MAGIC_INT);
+			}
+			this.initialSeed = this.seed;
+		}
+
+		static convertStringToRadixSafeString(str = '') {
+			return String(str).split('').map((char) => {
+				const int = parseInt(char, RADIX$1);
+				return (Number.isNaN(int)) ? char.charCodeAt(0).toString(RADIX$1) : char;
+			}).join('');
+		}
+
+		static convertStringToNumber(str = '') {
+			return parseInt(PseudoRandomizer.convertStringToRadixSafeString(str), RADIX$1);
+		}
+
+		static makeSeed(arr = []) {
+			const seed = arr.reduce((sum, value) => {
+				const typeOfValue = typeof value;
+				let num = 1;
+				if (typeOfValue === 'number') {
+					num = value;
+				} else if (typeOfValue === 'object') {
+					num = parseInt(JSON.stringify(value), RADIX$1);
+				} else if (typeOfValue === 'string') {
+					num = parseInt(value, RADIX$1);
+				} else if (typeOfValue === 'boolean') {
+					num = (value ? SEED_MAGIC_BOOL_TRUE : SEED_MAGIC_BOOL_FALSE);
+				}
+				return PseudoRandomizer.getPseudoRandInt(sum, SEED_MAGIC_INT) + num;
+			}, 0);
+			return seed;
+		}
+
+		static getPseudoRand(seed) {
+			// http://stackoverflow.com/a/19303725/1766230
+			const x = Math.sin(seed) * MAGIC_NUMBER;
+			return x - Math.floor(x);
+		}
+
+		static getPseudoRandInt(seed, n) {
+			const r = PseudoRandomizer.getPseudoRand(seed);
+			return Math.floor(r * n);
+		}
+
+		makeArray(length = 1) {
+			const arr = [];
+			for (let i = 0; i < length; i += 1) {
+				arr.push(this.random());
+			}
+			return arr;
+		}
+
+		random(n) {
+			this.seed += 1;
+			const r = PseudoRandomizer.getPseudoRand(this.seed);
+			if (typeof n === 'number') return Math.floor(r * n);
+			return r;
+		}
+
+		getSeedString() {
+			return this.seed.toString(RADIX$1);
+		}
+
+		reset() {
+			this.seed = this.initialSeed;
+		}
+	}
+
+	const MAGIC = 999999;
+	const RADIX = 36;
+
+	class Random {
+		constructor(n = 1) {
+			this.n = Math.random() * n;
+		}
+
+		get() {
+			return this.n;
+		}
+
+		static get() {
+			return Math.random();
+		}
+
+		static randomInt(n = 0) {
+			return Math.floor(Math.random() * n);
+		}
+
+		static pickRandom(arr = []) {
+			return arr[Random.randomInt(arr.length)];
+		}
+
+		static randomString(n = MAGIC) {
+			return Math.round(Math.random() * n).toString(RADIX);
+		}
+
+		static uniqueString() {
+			return Number(new Date()).toString(RADIX) + Random.randomString();
+		}
+
+		// alias
+		static pick(arr = []) {
+			return arr[Random.randomInt(arr.length)];
+		}
+
+		/**
+		 * Chance of random event based on 0-1 odds
+		 * @param {Number} odds - float 0-1 for chance of true
+		 * @returns Boolean
+		 */
+		static chance(odds = 0) {
+			return Math.random() > odds;
+		}
+	}
+
+	const clone = (value) => JSON.parse(JSON.stringify(value));
+	const objEqual = (o1, o2) => {
+		const value1 = (typeof o1 === 'object') ? JSON.stringify(o1) : o1;
+		const value2 = (typeof o2 === 'object') ? JSON.stringify(o2) : o2;
+		return value1 === value2;
+	};
+
+	/** A block entity is jjust something that exists at a space in the grid/voxel world */
+	class BlockEntity {
+		constructor(startAt = [], blockLegend = {}) {
+			const [mapKey, x, y, z] = startAt;
+			this.mapKey = mapKey;
+			this.coords = [x, y, z];
+			this.tags = [];
+			this.blockId = Random.uniqueString();
+			// Add all properties from legend
+			Object.keys(blockLegend).forEach((key) => {
+				if (typeof blockLegend[key] === 'object') {
+					this[key] = clone(blockLegend[key]);
+					return;
+				}
+				this[key] = blockLegend[key];
+			});
+			// this.name = blockLegend.name;
+			// this.renderAs = blockLegend.renderAs;
+			// this.texture = blockLegend.texture;
+			// this.textureRange = blockLegend.textureRange;
+			// this.npc = blockLegend.npc;
+			// Add properties from legend that have a default value
+			this.blocked = blockLegend.blocked || 0;
+
+			// Procedural (seed-based) randomness
+			this.pRand = new PseudoRandomizer([this.name || 'dude', ...this.coords]);
+			// Modify color
+			if (this.color) {
+				const i = this.pRand.random(3);
+				const alterColor = (this.pRand.random() / 15) - (this.pRand.random() / 15);
+				this.color[i] = clamp$1(this.color[i] + alterColor, 0, 1);
+				this.originalColor = [...this.color];
+			}
+			// Modify texture for texture range
+			if (this.texture && this.textureRange) {
+				const n = this.textureRange[1] - this.textureRange[0];
+				const textureNum = this.textureRange[0] + this.pRand.random(n);
+				this.texture = this.texture.replace('.', `${textureNum}.`);
+				// this.color = '#ffffff';
+			}
+			this.dna = Object.freeze([this.pRand.random(), this.pRand.random(), this.pRand.random()]);
+			// We want a small offset amount to stop overlaps when two blocks are on the same location
+			this.wiggle = [this.pRand.random(), this.pRand.random(), 0];
+			this.redraw = false; // Do we need to redraw the thing (likely due to a texture change)
+		}
+
+		switchMap(mapKey) {
+			this.mapKey = mapKey;
+		}
+
+		getMapKey() {
+			return this.mapKey;
+		}
+
+		getCoords() {
+			return [...this.coords];
+		}
+
+		moveTo(coords) {
+			const [x, y, z] = coords;
+			if (typeof x === 'number') this.coords[0] = x;
+			if (typeof y === 'number') this.coords[1] = y;
+			if (typeof z === 'number') this.coords[2] = z;
+		}
+
+		move(relativeCoords) {
+			const newCoords = [0, 1, 2].forEach((i) => this.coords[i] + relativeCoords[i]);
+			this.moveTo(newCoords);
+		}
+
+		changeRendering(changes = { /* texture, onGround, renderAs */ }) {
+			let changeCount = 0;
+			Object.keys(changes).forEach((changeKey) => {
+				if (objEqual(this[changeKey], changes[changeKey])) return;
+				this[changeKey] = changes[changeKey];
+				changeCount += 1;
+			});
+			if (changeCount > 0) this.redraw = true;
+		}
+
+		getTags() {
+			return this.tags;
+		}
+
+		hasTag(tag) {
+			const blobTags = this.getTags();
+			return blobTags.includes(tag);
+		}
+
+		hasOneOfTags(tags = []) {
+			const blobTags = this.getTags();
+			const matchingTags = blobTags.filter((tag) => tags.includes(tag));
+			return (matchingTags.length > 0);
+		}
+
+		getVisibilityTo(lookerBlob) {
+			if (!this.invisible) return true;
+			if (this.invisible instanceof Array) {
+				return lookerBlob.hasOneOfTags(this.invisible);
+			}
+			return false;
+		}
+	}
+
+	const MAX_COMMAND_QUEUE_SIZE = 3;
+	const BASE_INV_ITEM = {
+		key: '?unknown_item?',
+		name: '?unknown_item?',
+		quantity: 1,
+		description: '',
+	};
+
+	/** A blob of characters that can interact with the world */
+	class ActorBlob extends BlockEntity {
+		constructor(startAt = [], blockLegend = {}) {
+			super(startAt, blockLegend);
+			this.isActorBlob = true;
+			this.damageScale = (typeof this.damageScale !== 'number') ? 1 : this.damageScale;
+			this.facing = blockLegend.facing || 0;
+			this.active = true; // Inactive characters don't need to be ready
+			this.ready = false; // Ready for next turn?
+			this.commandQueue = [];
+			this.blobId = Random.uniqueString();
+			this.inventory = [null, null, null, null, null, null];
+			if (blockLegend.inventory) this.setInventory(blockLegend.inventory);
+			// Update defaults for some actor-specific legend properties
+			if (typeof this.aggro !== 'number') this.aggro = 0;
+			this.dead = false;
+			this.interactions = {};
+			this.lastSpoken = '';
+			this.blob = [
+				new Actor(this),
+			];
+		}
+
+		clearLastRound() {
+			this.blob.forEach((actor) => {
+				actor.clearLastRound();
+			});
+			this.lastSpoken = '';
+		}
+
+		getMoodEmoji() {
+			if (this.dead) return '💀';
+			if (this.aggro) return '😡';
+			return '☮';
+		}
+
+		turn(n = 0) {
+			this.facing = ArrayCoords.normalizeDirection(this.facing + n);
+		}
+
+		turnTo(f) {
+			if (typeof f === 'number') {
+				this.facing = ArrayCoords.normalizeDirection(f);
+			}
+		}
+
+		turnTowards(coords = []) {
+			const [deltaX, deltaY] = ArrayCoords.subtract(this.coords, coords);
+			let { facing } = this;
+			if (deltaX < 0) facing = 1;
+			else if (deltaX > 0) facing = 3;
+			if (deltaY < 0) facing = 2;
+			else if (deltaY > 0) facing = 0;
+			// TODO: This could be improved so that it doesn't favor Y direction if the target
+			// is at a diagnol angle
+			this.turnTo(facing);
+		}
+
+		queueCommand(command) {
+			if (this.commandQueue > MAX_COMMAND_QUEUE_SIZE) return false;
+			this.commandQueue.push(command);
+			return true;
+		}
+
+		dequeueCommand() {
+			// TODO: Remove command if it's not possible to do?
+			return this.commandQueue.shift();
+		}
+
+		getLeader() {
+			return this.blob[0];
+		}
+
+		getRandomMember() {
+			return Random.pick(this.blob);
+		}
+
+		checkReady() {
+			if (!this.active) return true;
+			return (this.commandQueue.length > 0);
+		}
+
+		getAheadCoords() {
+			return ArrayCoords.getRelativeCoordsInDirection(this.coords, this.facing, 1, 0, 0);
+		}
+
+		getFacingBlocks(worldMap) {
+			const aheadCoords = this.getAheadCoords();
+			return worldMap.getBlocksAtCoords(aheadCoords);
+		}
+
+		checkFacingWall(worldMap) {
+			const aheadCoords = this.getAheadCoords();
+			return worldMap.isBlockedAtCoords(aheadCoords);
+		}
+
+		getFacingActor(worldMap) {
+			const blocksAhead = this.getFacingBlocks(worldMap);
+			const actorsAhead = blocksAhead
+				.filter((block) => (
+					block.isActorBlob && block.getVisibilityTo(this)
+				))
+				// put living actors at the front of the list
+				// otherwise we can end up attacking corpses
+				.sort((a, b) => ((a.dead && !b.dead) ? 1 : -1));
+			// if (actorsAhead.length > 1)
+			// console.warn('More than 1 actor ahead of', this.name,
+			// '. that probably should not happen', actorsAhead);
+			if (actorsAhead.length) return actorsAhead[0];
+			return null;
+		}
+
+		getKnownAbilities() {
+			const allBlobAbilitiesSet = new Set();
+			this.blob.forEach((character) => {
+				character.knownAbilities.forEach((abilityName) => {
+					allBlobAbilitiesSet.add(abilityName);
+				});
+			});
+			return Array.from(allBlobAbilitiesSet);
+		}
+
+		static getPoolAmount(numOrArray, special) {
+			if (typeof numOrArray === 'number') return numOrArray;
+			if (numOrArray instanceof Array) {
+				const [min, max] = numOrArray;
+				const spread = max - min;
+				const rand = (special === 'max') ? 1 : Math.random();
+				return Math.floor(rand * spread) + Math.round(min);
+			}
+			throw new Error('bad numOrarray');
+		}
+
+		static getDamageAmount(numOrArray, effectiveness = 1, scale = 1) {
+			if (typeof numOrArray === 'number') {
+				return Math.floor(numOrArray * scale * effectiveness);
+			}
+			if (numOrArray instanceof Array) {
+				let [min, max] = numOrArray;
+				min *= scale;
+				max *= scale;
+				const spread = max - min;
+				return Math.floor(((Math.random() * spread) + min) * effectiveness);
+			}
+			throw new Error('bad numOrarray');
+		}
+
+		payAbilityCost(cost = {}) {
+			let effectiveness = 1;
+			const who = this.getLeader();
+			Object.keys(cost).forEach((poolKey) => {
+				const costAmount = ActorBlob.getPoolAmount(cost[poolKey]);
+				const actualCostSpent = who.damage(costAmount, poolKey);
+				const diff = costAmount - actualCostSpent;
+				if (diff > 0) effectiveness = 1 - (diff / costAmount);
+			});
+			return effectiveness;
+		}
+
+		canAffordAbility(ability) {
+			const { cost } = ability;
+			if (!cost) return true;
+			const who = this.getLeader();
+			let canAfford = true;
+			Object.keys(cost).forEach((poolKey) => {
+				const costAmount = ActorBlob.getPoolAmount(cost[poolKey], 'max');
+				if (costAmount > who[poolKey].get()) canAfford = false;
+			});
+			return canAfford;
+		}
+
+		replenish(replenish = {}, effectiveness = 1) {
+			Object.keys(replenish).forEach((poolKey) => {
+				const healAmount = Math.floor(ActorBlob.getPoolAmount(replenish[poolKey]) * effectiveness);
+				this.getLeader().heal(healAmount, poolKey);
+			});
+		}
+
+		/** Uses an ability for the blob, paying the cost, and returning the effectiveness 0-1 */
+		useAbility(ability = {}) {
+			const { cost, replenish } = ability;
+			const effectiveness = (cost) ? this.payAbilityCost(cost) : 1;
+			if (replenish) this.replenish(replenish, effectiveness);
+			return effectiveness;
+		}
+
+		applyAbility(ability = {}, effectiveness = 1, damageScale = 1) {
+			const { damage } = ability;
+			if (!damage) return 0;
+			const whoIsHit = this.getRandomMember();
+			Object.keys(damage).forEach((poolKey) => {
+				const dmgAmount = ActorBlob.getDamageAmount(damage[poolKey], effectiveness, damageScale);
+				const finalDamage = whoIsHit.damage(dmgAmount, poolKey);
+				if (finalDamage > 0) this.aggro = 1;
+			});
+			return 1;
+		}
+
+		getDialogOptions(actor) {
+			if (!actor || !actor.dialog) return [];
+			const dialogKeys = Object.keys(actor.dialog);
+			const actorInteractions = this.interactions[actor.blobId] || {};
+			const { unlockedDialogKeys = [] } = actorInteractions;
+			const pickAnswer = (dialogOption) => {
+				const dialogOptObj = (typeof dialogOption === 'object') ? dialogOption : {};
+				const answer = (
+					dialogOptObj.answer
+					|| dialogOptObj.a
+					|| ((typeof dialogOption === 'string') ? dialogOption : '???')
+				);
+				if (answer instanceof Array) {
+					const i = Math.floor(answer.length * actor.dna[0]);
+					return answer[i];
+				}
+				return answer;
+			};
+			// Filter the dialog keys then standardize the dialog format
+			const talkableDialogOptions = dialogKeys.filter(
+				(key) => !actor.dialog[key].locked || unlockedDialogKeys.includes(key),
+			).map((key) => {
+				const dialogOption = actor.dialog[key];
+				const dialogOptObj = (typeof dialogOption === 'object') ? dialogOption : {};
+				let { unlocks = [] } = dialogOptObj;
+				if (typeof unlocks === 'string') unlocks = [unlocks];
+				let { locks = [] } = dialogOptObj;
+				if (typeof locks === 'string') locks = [locks];
+				const answer = pickAnswer(dialogOption);
+				const { questionAudio, answerAudio, cost, requires, aggro } = dialogOptObj;
+				return {
+					// ...dialogOptObj,
+					key,
+					question: dialogOptObj.question || dialogOptObj.q || key,
+					answer,
+					locks,
+					unlocks,
+					questionAudio,
+					answerAudio,
+					cost,
+					requires,
+					aggro,
+				};
+			});
+			return talkableDialogOptions;
+		}
+
+		listenToDialog(dialogOption, actor) {
+			if (!dialogOption) throw new Error('Missing dialog option');
+			if (!this.interactions[actor.blobId]) this.interactions[actor.blobId] = {};
+			const actorInteractions = this.interactions[actor.blobId];
+			actorInteractions.unlockedDialogKeys = (actorInteractions.unlockedDialogKeys || [])
+				.concat(dialogOption.unlocks || []);
+			// console.log(actorInteractions.unlockedDialogKeys);
+		}
+
+		speakDialog(dialogOption) {
+			if (!dialogOption) {
+				console.error(this.name, 'cannot speak blank dialog option', dialogOption);
+				return;
+			}
+			this.lastSpoken = dialogOption.answer;
+			if (typeof dialogOption.aggro === 'number') this.aggro = dialogOption.aggro;
+		}
+
+		waitHeal(rounds = 1) {
+			this.blob.forEach((character) => {
+				character.waitHeal(rounds);
+			});
+		}
+
+		getDamage() {
+			const baseDmg = (this.isPlayerBlob) ? 8 : 2;
+			const dmg = Math.floor(Math.random() * baseDmg * this.damageScale) + 1;
+			return dmg;
+		}
+
+		kill() {
+			this.blob.forEach((character) => {
+				character.damage(Infinity, 'hp');
+			});
+			if (this.dead) return;
+			this.dead = true;
+			this.blocked = 0;
+			if (this.death) {
+				if (this.death.spawn) {
+					this.queueCommand(`spawn ${JSON.stringify(this.death.spawn)}`);
+				}
+				if (this.death.dialog) {
+					this.dialog = this.death.dialog;
+				}
+			}
+			this.changeRendering({
+				texture: this.deadTexture || this.texture,
+				onGround: true,
+				renderAs: 'plane',
+				// TODO: set rotation based on facing value
+				opacity: 0.5,
+				color: [1, 0, 0],
+			});
+		}
+
+		checkDeath() {
+			const totalHp = this.blob.map((character) => character.hp.get())
+				.reduce((sum, hp) => sum + hp, 0);
+			if (totalHp <= 0) {
+				this.kill();
+				return true;
+			}
+			return false;
+		}
+
+		/** Overwrite block entity's method so we dynamically create the tags */
+		getTags() {
+			const invTags = this.inventory.filter((invItem) => invItem)
+				.map((invItem) => `item:${invItem.key}`);
+			this.tags = invTags; // cache it
+			return invTags;
+		}
+
+		setInventory(inv = []) {
+			inv.forEach((invItem, i) => {
+				if (i > this.inventory.length - 1) {
+					console.warn('Item', invItem, 'could not fit in inventory');
+					return;
+				}
+				if (typeof invItem === 'string') {
+					this.inventory[i] = { ...BASE_INV_ITEM, key: invItem, name: invItem };
+					// TODO: ^ set this based on looking up an item from a legend of items
+					// based on the invItem being a key
+					return;
+				}
+				if (typeof invItem !== 'object') throw new Error('Bad invItem type');
+				this.inventory[i] = { ...BASE_INV_ITEM, ...invItem };
+			});
+		}
+
+		getInventoryItem(i) {
+			return this.inventory[i];
+		}
+	}
+
+	/** A Player and the blob of characters they control */
+	class PlayerBlob extends ActorBlob {
+		constructor(startAt = [], playerBlockLegendParam = {}) {
+			const playerBlockLegend = {
+				...playerBlockLegendParam,
+				blocked: 1,
+				//
+			};
+			super(startAt, playerBlockLegend);
+			this.isPlayerBlob = true;
+			this.blocked = 1;
+			this.color = [1, 1, 1];
+			this.renderAs = 'billboard';
+			if (!this.texture) this.texture = 'human_male.png';
+		}
+	}
+
+	const BRAINS = {
+		monster: {
+			wander: 0.8,
+			huntPlayers: 1,
+			sight: 10,
+		},
+		still: {
+			wander: 0,
+			//
+		},
+		wanderer: {
+			wander: 0.5,
+			//
+		},
+		villager: {
+			wander: 0.1,
+			//
+		},
+	};
+
+	/** A blob of NPCs */
+	class NpcBlob extends ActorBlob {
+		constructor(startAt = [], blockLegend = {}) {
+			super(startAt, blockLegend);
+			this.isNpcBlob = true;
+			this.brain = null;
+			if (blockLegend.npc && BRAINS[blockLegend.npc]) {
+				this.brain = BRAINS[blockLegend.npc];
+			}
+		}
+
+		plan(players = [], worldMap = {}) {
+			const roll = Math.random();
+			// If facing a wall, do a free turn
+			if (this.checkFacingWall(worldMap)) {
+				console.log(this.name, 'facing wall so turning');
+				this.turn((roll < 0.2) ? 1 : -1); // turning is free for NPCs
+			}
+			if (this.brain && !this.dead) {
+				// Hunters
+				const huntingValue = this.brain.huntPlayers || this.aggro;
+				if (this.aggro && roll < huntingValue) {
+					const isHunting = this.planHunt(players, worldMap);
+					if (isHunting) return;
+				}
+				// Wanderers
+				if (this.brain.wander && roll < this.brain.wander) {
+					this.planWander();
+					return;
+				}
+			}
+			this.queueCommand('wait');
+		}
+
+		planHunt(prey = [], worldMap = {}, command = 'attack') {
+			let nearestPrey;
+			let nearestDist = Infinity;
+			const nearPrey = prey.filter((a) => {
+				// If they both have factions and they're the same then don't hunt
+				if (this.faction && a.faction && a.faction === this.faction) return false;
+				if (a.dead) return false;
+				const dist = ArrayCoords.getDistance(a.coords, this.coords);
+				if (dist > this.sight) return false;
+				if (dist < nearestDist) {
+					nearestDist = dist;
+					nearestPrey = a;
+				}
+				return true;
+			});
+			if (!nearPrey.length) return false; // No one to hunt within sight
+			// TODO: Do A-star path finding to get to nearestPrey
+			this.turnTowards(nearestPrey.coords);
+			if (nearestDist > 1) {
+				console.log(this.name, 'planning to hunt', nearPrey);
+				this.queueCommand('forward');
+			} else if (nearestDist === 1) {
+				// TODO: Should we check getFacingActor?
+				const targetActor = this.getFacingActor(worldMap);
+				console.log(this.name, 'is next to', targetActor, ', so will attack');
+				this.queueCommand(command);
+			}
+			return true;
+		}
+
+		planWander() {
+			const roll = Math.random();
+			if (roll < 0.5) {
+				// const turnCommand = (roll < 0.1) ? 'turnRight' : 'turnLeft';
+				// this.queueCommand(turnCommand);
+				this.turn((roll < 0.1) ? 1 : -1); // turning is free for NPCs
+				this.queueCommand('forward');
+			} else {
+				this.queueCommand('forward');
+			}
+		}
+	}
+
+	class VoxelWorldMap {
+		constructor(mapKey, world, sourceMap = []) {
+			this.mapKey = mapKey;
+			this.world = world; // parent
+			this.sourceMap = sourceMap || world.sourceMaps[mapKey];
+			this.music = this.sourceMap.music || null;
+			// console.log('Making', mapKey, 'from', this.sourceMap);
+			const { map, legend } = this.sourceMap;
+			this.originalMap = map;
+			this.legend = legend;
+			this.blocks = VoxelWorldMap.parseWorldMapToBlocks(mapKey, map, legend);
+			this.npcBlobs = this.blocks.filter((block) => block instanceof NpcBlob);
+		}
+
+		static parseWorldMapToBlocks(mapKey, map, legend) {
+			const blocks = [];
+			map.forEach((floor, z) => {
+				floor.forEach((row, y) => {
+					row.split('').forEach((char, x) => {
+						const startAt = [mapKey, x, y, z];
+						const blockLegend = legend[char];
+						if (!blockLegend) console.error(char, 'not found in legend', legend);
+						// If it is called "clear", or it is not blocking and not being rendered,
+						// then it's not really a block.
+						if (blockLegend.name === 'clear' || (!blockLegend.renderAs && !blockLegend.blocked)) {
+							return;
+						}
+						const BlockClass = (blockLegend.npc) ? NpcBlob : BlockEntity;
+						const block = new BlockClass(startAt, blockLegend);
+						blocks.push(block);
+					});
+				});
+			});
+			return blocks;
+		}
+
+		getNearbyBlocks(coords = [], distance = []) {
+			const [nearX, nearY, nearZ] = coords;
+			const [dX, dY, dZ] = distance;
+			return this.blocks.filter((block) => {
+				if (block.mapKey !== this.mapKey) console.error('block has wrong mapKey', block, 'expecting', this.mapKey);
+				const [x, y, z] = block.coords;
+				return (
+					Math.abs(x - nearX) <= dX
+					&& Math.abs(y - nearY) <= dY
+					&& Math.abs(z - nearZ) <= dZ
+				);
+			});
+		}
+
+		getBlocksAtCoords(coords = []) {
+			return this.blocks.filter((block) => ArrayCoords.checkEqual(block.coords, coords));
+		}
+
+		getBlocksAtMoveCoordinates(coords, facing, forward = 0, strafe = 0, up = 0) {
+			const newCoords = ArrayCoords.getRelativeCoordsInDirection(coords, facing, forward, strafe, up);
+			return this.getBlocksAtCoords(newCoords);
+		}
+
+		getBlockedSumAtCoords(coords = []) {
+			const blocks = this.getBlocksAtCoords(coords);
+			const blockedSum = blocks.reduce((sum, block) => sum + (block.blocked || 0), 0);
+			return blockedSum;
+		}
+
+		isBlockedAtCoords(coords = []) {
+			return (this.getBlockedSumAtCoords(coords) >= 1);
+		}
+
+		getNpcs() {
+			return this.blocks.filter((block) => block.isNpcBlob);
+		}
+
+		getPlayerBlobs() {
+			return this.blocks.filter((block) => block.isPlayerBlob);
+		}
+
+		findBlock(block) {
+			const i = this.foundBlockIndex(block);
+			return (i === -1) ? null : this.blocks[i];
+		}
+
+		findBlockIndex(block) {
+			let foundIndex = -1;
+			for (let i = this.blocks.length - 1; i >= 0; i -= 1) {
+				if (this.blocks[i].blockId === block.blockId) {
+					foundIndex = i;
+					i = -1;
+				}
+			}
+			return foundIndex;
+		}
+
+		addBlock(block) {
+			const i = this.findBlockIndex(block);
+			if (i > -1) {
+				console.warn('Cannot add duplicate block', block);
+				return false;
+			}
+			this.blocks.push(block);
+			return true;
+		}
+
+		removeBlock(block) {
+			const i = this.findBlockIndex(block);
+			if (i === -1) return false;
+			this.blocks.splice(i, 1);
+			return true;
+		}
+	}
+
+	// import ArrayCoords from './ArrayCoords.js';
+
+	// const DEFAULT_BLOCK_TYPES = {
+	// ' ': { name: 'clear', blocked: 0, renderAs: false },
+	// '#': { name: 'stone', blocked: 1, renderAs: 'box', color: [0.8, 0.8, 0.7] },
+	// };
+
+	class VoxelWorld {
+		constructor(worldSourceMaps = {}) {
+			this.worldMaps = worldSourceMaps;
+			this.maps = VoxelWorld.parseSourceMapsToWorldMaps(worldSourceMaps, this);
+			// this.blocks = VoxelWorld.parseWorldMapsToBlocks(worldSourceMaps);
+			// this.blocksByMap = this.makeBlocksByMap();
+			this.beyondAbove = '#';
+			this.beyondBelow = '#';
+		}
+
+		static parseSourceMapsToWorldMaps(worldSourceMaps, world) {
+			const maps = {};
+			Object.keys(worldSourceMaps).forEach((mapKey) => {
+				maps[mapKey] = new VoxelWorldMap(mapKey, world, worldSourceMaps[mapKey]);
+			});
+			return maps;
+		}
+
+		/*
+		static parseWorldMapsToBlocks(worldMaps) {
+			const blocks = [];
+			Object.keys(worldMaps).forEach((mapKey) => {
+				const { map, legend } = worldMaps[mapKey];
+				map.forEach((floor, z) => {
+					floor.forEach((row, y) => {
+						row.split('').forEach((char, x) => {
+							const startAt = [mapKey, x, y, z];
+							const blockLegend = legend[char];
+							// If it is called "clear", or it is not blocking and not being rendered,
+							// then it's not really a block.
+							if (blockLegend.name === 'clear' || (!blockLegend.renderAs && !blockLegend.blocked)) {
+								return;
+							}
+							const BlockClass = (blockLegend.npc) ? NpcBlob : BlockEntity;
+							const block = new BlockClass(startAt, blockLegend);
+							blocks.push(block);
+						});
+					});
+				});
+			});
+			return blocks;
+		}
+
+		makeBlocksByMap() {
+			const maps = {};
+			this.blocks.forEach((block) => {
+				const { mapKey } = block;
+				if (!maps[mapKey]) maps[mapKey] = [];
+				maps[mapKey].push(block);
+			});
+			return maps;
+		}
+		*/
+
+		getMap(mapKey) {
+			return this.maps[mapKey];
+		}
+
+		getWorldMap(mapKey) {
+			const worldMap = this.worldMaps[mapKey];
+			if (!worldMap) throw new Error(`No world map: ${mapKey}`);
+			// if (!(worldMap.map instanceof Array)) {
+			// throw new Error(`World map ${mapKey} does not contain 'map' array`);
+			// }
+			return worldMap;
+		}
+
+		getFloor(mapKey, z = 0) {
+			const isBelow = (z < 0);
+			// One array for +z, one for -z
+			const worldMap = this.getWorldMap(mapKey);
+			if (worldMap.below) {
+				const obj = (isBelow) ? worldMap.below : worldMap.above || worldMap.map;
+				const zIndex = Math.abs(z);
+				return obj[zIndex];
+			}
+			const obj = worldMap.above || worldMap.map;
+			if (z < 0) throw new Error(`Map ${mapKey} does not support below 0 z`);
+			return obj[z];
+		}
+
+		getFloorClone(mapKey, z = 0) {
+			return JSON.parse(JSON.stringify(this.getFloor(mapKey, z)));
+		}
+
+		getFloorSize(mapKey, z = 0) {
+			const floor = this.getFloor(mapKey, z);
+			return [
+				floor[0].length, // Just look at the first row; assumes they're all the same
+				floor.length,
+			];
+		}
+
+		getFloorCenter(mapKey, z = 0) {
+			const [maxX, maxY] = this.getFloorSize(mapKey, z);
+			return [Math.floor(maxX / 2), Math.floor(maxY / 2)];
+		}
+
+		/*
+		getFloorBlocks(mapKey, z = 0) {
+			const floor = this.getFloor(mapKey, z);
+			if (!floor) return [];
+			const blocks = [];
+			floor.forEach((row, y) => {
+				row.split('').forEach((char, x) => {
+					const coords = [x, y, z];
+					const block = this.getBlockByType(mapKey, char, coords);
+					blocks.push(block);
+				});
+			});
+			return blocks;
+		}
+
+		getBlockByType(mapKey, char, coords) {
+			// Look up the basic block type and copy it
+			const worldMap = this.getWorldMap(mapKey);
+			const { legend } = worldMap;
+			const block = { ...legend[char] };
+			// If provided coords, then copy those
+			if (coords) block.coords = [...coords];
+			// And then figure out some procedural values
+			let seed = block.coords[0] + block.coords[1] + block.coords[2];
+			const getBlockRand = () => {
+				seed += 1;
+				return PseudoRandomizer.getPseudoRand(seed);
+			};
+			if (block.color) {
+				block.color = [...block.color];
+				const i = Math.floor(getBlockRand() * 3);
+				const alterColor = (getBlockRand() / 15) - (getBlockRand() / 15);
+				block.color[i] = clamp(block.color[i] + alterColor, 0, 1);
+			}
+			if (block.texture && block.textureRange) {
+				const n = block.textureRange[1] - block.textureRange[0];
+				const textureNum = block.textureRange[0] + Math.floor(getBlockRand() * n);
+				block.texture = block.texture.replace('.', `${textureNum}.`);
+				// block.color = '#ffffff';
+			}
+			return block;
+		}
+		*/
+
+		getBeyondBlock(mapKey, isBelow, coords) {
+			const block = this.getBlockByType(
+				mapKey,
+				isBelow ? this.beyondBelow : this.beyondAbove,
+				coords,
+			);
+			block.beyond = true;
+			return block;
+		}
+
+		// getBlock(mapKey, coords) {
+		// 	const [x = 0, y = 0, z = 0] = coords;
+		// 	const isBelow = (z < 0);
+		// 	// x and y are effectively indices in an array, so they can't be negative
+		// 	if (x < 0 || y < 0) {
+		// 		return this.getBeyondBlock(mapKey, isBelow, coords);
+		// 	}
+		// 	const floor = this.getFloor(mapKey, z);
+		// 	if (!floor) { // If nothing defined for that z level
+		// 		return this.getBeyondBlock(mapKey, isBelow, coords);
+		// 	}
+		// 	const row = floor[y];
+		// 	if (!row) {
+		// 		return this.getBeyondBlock(mapKey, isBelow, coords);
+		// 	}
+		// 	const blockChar = row.charAt(x);
+		// 	if (!blockChar) {
+		// 		return this.getBeyondBlock(mapKey, isBelow, coords);
+		// 	}
+		// 	return this.getBlockByType(mapKey, blockChar, coords);
+		// }
+	}
+
+	/* eslint-disable class-methods-use-this */
+
+	const POOL_ABBREV = {
+		hp: 'HP', willpower: 'W', balance: 'B', stamina: 'S',
+	};
+
+	const $$1 = (selector, warn = true) => {
+		const elt = window.document.querySelector(selector);
+		if (!elt && warn) console.warn('Could not find', selector);
+		return elt;
+	};
+	// const $all = (selector) => {
+	// 	const elt = window.document.querySelectorAll(selector);
+	// 	if (!elt) console.warn('Could not find', selector);
+	// 	return elt;
+	// };
+
+	function capitalizeFirstLetter(string) {
+		return string.charAt(0).toUpperCase() + string.slice(1);
+	}
+
+	class Interface {
+		constructor({ titleHtml, abilities }) {
+			this.abilities = abilities;
+			this.titleHtml = titleHtml || '';
+			this.OPTIONS_VIEWS = ['combat', 'talk', 'inventory'];
+			this.optionsView = 'closed'; // 'closed', 'combat', 'talk', 'inventory'
+			this.FULL_VIEWS = ['character', 'abilities', 'spells', 'menu', 'dead'];
+			this.fullView = 'closed'; // 'closed', 'character', 'abilities', 'spells', 'menu'
+			this.DUNGEONEER_VIEWS = ['engage', 'explore']; // or 'closed'
+			this.dungeoneerView = 'explore';
+			this.staticRow = 'open'; // or 'closed'
+			this.miniMapOn = false;
+			this.talkOptions = [];
+		}
+
+		view(what) {
+			// this.reset();
+			if (what === 'title') {
+				this.closeAll();
+				this.viewTitleScreen = true;
+				return this;
+			}
+			if (this.FULL_VIEWS.includes(what)) {
+				this.optionsView = 'closed';
+				this.fullView = (this.fullView === what) ? 'closed' : what;
+				this.dungeoneerView = 'explore';
+			} else if (this.OPTIONS_VIEWS.includes(what)) {
+				this.fullView = 'closed';
+				this.dungeoneerView = 'explore';
+				this.optionsView = (this.optionsView === what) ? 'closed' : what;
+			} else if (this.DUNGEONEER_VIEWS.includes(what)) {
+				this.fullView = 'closed';
+				this.dungeoneerView = what;
+			}
+			this.staticRow = 'open';
+			this.viewTitleScreen = false;
+			if (what === 'closed') {
+				this.fullView = 'closed';
+				this.optionsView = 'closed';
+			}
+			return this;
+		}
+
+		goBack() {
+			if (this.fullView === 'closed') ; else {
+				this.view('closed');
+			}
+			return this;
+		}
+
+		closeAll() {
+			this.optionsView = 'closed';
+			this.dungeoneerView = 'closed';
+			this.fullView = 'closed';
+			this.staticRow = 'closed';
+			this.viewTitleScreen = false;
+			return this;
+		}
+
+		reset() {
+			this.optionsView = 'closed';
+			this.dungeoneerView = 'explore';
+			this.fullView = 'closed';
+			this.staticRow = 'open';
+			this.viewTitleScreen = false;
+			return this;
+		}
+
+		flashBorder(color = '#f00', duration = 1000) {
+			const elt = $$1('#main');
+			const keyFrames = [ // Keyframes
+				{ borderColor: color },
+				{ borderColor: '#000' },
+			];
+			const keyFrameSettings = { duration, direction: 'alternate', easing: 'linear' };
+			const effect = new KeyframeEffect(elt, keyFrames, keyFrameSettings);
+			const animation = new Animation(effect, document.timeline);
+			animation.play();
+		}
+
+		renderMiniMap() {
+			if (!this.miniMapOn) return;
+			const mapHtml = this.getWorldTextRows().join('<br>');
+			$$1('#mini-map').innerHTML = mapHtml;
+		}
+
+		static getPoolObjHtml(poolObj) {
+			if (!poolObj) return '---';
+			return Object.keys(poolObj).map((poolKey) => {
+				let value = poolObj[poolKey];
+				if (value instanceof Array) value = value.join('-');
+				return `${value} ${POOL_ABBREV[poolKey]}`;
+			}).join(', ');
+		}
+
+		static getAbilityStatsHtml(abil, canAfford = true) {
+			return (
+				`<div class="ability-details ${(canAfford) ? '' : 'ability-cannot-afford'}">
+				<div class="ability-cost">Use: ${Interface.getPoolObjHtml(abil.cost)}</div>
+				<div class="ability-replenish">Gain: ${Interface.getPoolObjHtml(abil.replenish)}</div>
+				<div class="ability-damage">Damage: ${Interface.getPoolObjHtml(abil.damage)}</div>
+			</div>`
+			);
+		}
+
+		renderOptions(blob) {
+			const uiOptionsRow = $$1('#ui-options-row');
+			uiOptionsRow.classList.remove(...uiOptionsRow.classList);
+			uiOptionsRow.classList.add(`ui-options-row--${this.optionsView}`);
+			let html = '';
+			if (this.optionsView === 'combat') {
+				const abils = blob.getKnownAbilities().map((key) => this.abilities[key]);
+				html = abils.map((ability, i) => (
+					`<li>
+					<button type="button" data-command="attack ${i + 1}">
+						${ability.name}
+						${Interface.getAbilityStatsHtml(ability, blob.canAffordAbility(ability))}
+						<i class="key">${i + 1}</i>
+					</button>
+				</li>`
+				)).join('');
+			} else if (this.optionsView === 'talk') {
+				html = this.talkOptions.map((dialogItem, i) => (
+					`<li>
+					<button type="button" data-command="dialog ${i + 1}">
+						${capitalizeFirstLetter(dialogItem.question)}
+						<i class="key">${i + 1}</i>
+					</button>
+				</li>`
+				)).join('');
+			} else if (this.optionsView === 'inventory') {
+				html = blob.inventory.map((inventoryItem, i) => {
+					if (!inventoryItem) return '<li class="inventory-item inventory-item--empty">Empty</li>';
+					return `<li class="inventory-item">
+					<button type="button" data-command="option ${i + 1}">
+						${inventoryItem.name}
+						<i class="key">${i + 1}</i>
+					</button>
+				</li>`;
+				}).join('');
+			}
+			$$1('#ui-options-list').innerHTML = html;
+		}
+
+		static getAbilityItemHtml(blob, ability) {
+			const knownAbilities = blob.getKnownAbilities();
+			const isKnown = knownAbilities.includes(ability.key);
+			return (
+				`<li class="ability-item ${isKnown ? 'ability-item--known' : 'ability-item--unknown'}">
+				${ability.name || ability.key}
+				${isKnown ? 'Known' : 'Not known'}
+				${Interface.getAbilityStatsHtml(ability)}
+			</li>`
+			);
+		}
+
+		renderFullView(blob) {
+			const view = $$1('#ui-full-view');
+			view.classList.remove(...view.classList);
+			view.classList.add(`ui-full-view--${this.fullView}`);
+			// const knownAbilities = p.getKnownAbilities();
+			let html = '';
+			if (this.fullView === 'abilities') {
+				html = Object.keys(this.abilities)
+					.map((abilityKey) => this.abilities[abilityKey])
+					.filter((ability) => !ability.spell)
+					.map((ability) => Interface.getAbilityItemHtml(blob, ability))
+					.join('');
+				html = `<h1>Abilities</h1>${html}`;
+			} else if (this.fullView === 'spells') {
+				html = Object.keys(this.abilities)
+					.map((abilityKey) => this.abilities[abilityKey])
+					.filter((ability) => ability.spell)
+					.map((ability) => Interface.getAbilityItemHtml(blob, ability))
+					.join('');
+				html = `<h1>Spells</h1>${html}`;
+			} else if (this.fullView === 'character') {
+				html = (
+					`<h1>Character</h1>
+				<div class="character-sheet-intro">
+					${blob.characterSheetIntroHtml || ''}
+				</div>
+				<ul class="stats-list">
+					<li>
+						(HP) Health
+						<span id="hp-value"></span>
+					</li>
+					<li>
+						(W) Willpower
+						<span id="willpower-value"></span>
+					</li>
+					<li>
+						(S) Stamina
+						<span id="stamina-value"></span>
+					</li>
+					<li>
+						(B) Balance
+						<span id="balance-value"></span>
+					</li>
+				</ul>
+				<div>
+					<button type="button" class="ui-close-button" data-command="view character">
+						Close <i class="key">v</i>
+					</button>
+				</div>
+				`
+					// ${JSON.stringify(blob, null, ' ')}`
+				);
+			} else if (this.fullView === 'menu') {
+				html = 'Menu - Not implemented yet';
+			} else if (this.fullView === 'dead') {
+				html = `<div class="you-died">YOU DIED</div><p>💀</p>
+				Switch characters to continue ... or refresh the page to start over.
+				<div class="dead-options">
+					<button type="button" data-command="switch next-player">Switch</button>
+					<button type="button" data-command="reload page">Restart</button>
+				</div>
+			`;
+			}
+			view.innerHTML = html;
+		}
+
+		renderStats(blob) {
+			const leader = blob.getLeader();
+			['hp', 'willpower', 'stamina', 'balance'].forEach((key) => {
+				const elt = $$1(`#${key}-value`, false);
+				if (!elt) return;
+				elt.innerText = leader[key].getText();
+			});
+		}
+
+		getBarPercents(pool = {}) {
+			const deltaDownPercent = (pool.lastDelta < 0) ? 100 * (Math.abs(pool.lastDelta) / pool.max) : 0;
+			const deltaUpPercent = (pool.lastDelta > 0) ? 100 * (pool.lastDelta / pool.max) : 0;
+			const valuePercent = (100 * (pool.value / pool.max)) - deltaUpPercent;
+			const spacerPercent = 100 - valuePercent - deltaDownPercent - deltaUpPercent;
+			return { deltaDownPercent, deltaUpPercent, valuePercent, spacerPercent };
+		}
+
+		getBlobBars(blob) {
+			if (!blob) return [];
+			const leader = blob.getLeader();
+			const STYLE_KEYS = {
+				hp: 'hp',
+				stamina: 'st',
+				willpower: 'wp',
+				balance: 'ba',
+			};
+			const bars = leader.statPools.map((statName) => {
+				const pool = leader[statName];
+				const { value, max, lastDelta } = pool;
+				const {
+					deltaDownPercent, deltaUpPercent, valuePercent, spacerPercent,
+				} = this.getBarPercents(pool);
+				return {
+					value,
+					max,
+					lastDelta,
+					styleKey: STYLE_KEYS[statName],
+					deltaDownPercent,
+					deltaUpPercent,
+					valuePercent,
+					spacerPercent,
+				};
+			});
+			return bars;
+		}
+
+		renderBars(uiName, bars = []) {
+			const container = $$1(`#ui-${uiName}`);
+			const noBars = (bars.length === 0);
+			container.style.display = (noBars) ? 'none' : 'block';
+			if (noBars) return;
+			container.querySelector('.bar-numbers').innerHTML = bars.filter((bar) => bar.lastDelta !== 0)
+				.map((bar) => `<span class="bar-number bar-number-${bar.styleKey}">${bar.lastDelta}</span>`)
+				.join('');
+			const barSections = [
+				['.bar-spacer', 'spacerPercent'],
+				['.bar-delta-down', 'deltaDownPercent'],
+				['.bar-delta-up', 'deltaUpPercent'],
+				['.bar-value', 'valuePercent'],
+			];
+			bars.forEach((bar) => {
+				container.querySelectorAll(`.bar-list-item-${bar.styleKey}`).forEach((li) => {
+					barSections.forEach(([selector, barPropName]) => {
+						// eslint-disable-next-line no-param-reassign
+						li.querySelector(selector).style.height = `${bar[barPropName]}%`;
+					});
+				});
+			});
+		}
+
+		renderDungeoneerRow(blob, facingActorBlob) {
+			let { dungeoneerView } = this;
+			if (this.fullView !== 'closed') dungeoneerView = 'closed';
+			const view = $$1('#ui-dungeoneer-row');
+			view.classList.remove(...view.classList);
+			view.classList.add(`ui-view--${dungeoneerView}`);
+			if (dungeoneerView === 'closed') return;
+			$$1('#ui-direction-value').innerText = ArrayCoords.getDirectionName(blob.facing);
+			this.renderBars('target-stats', this.getBlobBars(facingActorBlob));
+			this.renderBars('player-stats', this.getBlobBars(blob));
+			$$1('#ui-target-name').innerText = (facingActorBlob) ? facingActorBlob.name : '';
+			$$1('#ui-target-mood').innerText = (facingActorBlob) ? facingActorBlob.getMoodEmoji() : '';
+		}
+
+		renderInteract(blob, facingActorBlob) {
+			$$1('#ui-interact-view').style.display = (this.fullView === 'closed') ? 'flex' : 'none';
+			$$1('#ui-interact-view').innerHTML = (facingActorBlob && facingActorBlob.lastSpoken)
+				? `<div class="dialog-bubble">${facingActorBlob.lastSpoken}</div>` : '';
+		}
+
+		renderStaticRow() {
+			const view = $$1('#ui-static-row');
+			view.classList.remove(...view.classList);
+			view.classList.add(`ui-view--${this.staticRow}`);
+		}
+
+		renderTitle() {
+			const view = $$1('#title-screen');
+			view.classList.remove(...view.classList);
+			view.classList.add(`ui-view--${this.viewTitleScreen ? 'open' : 'closed'}`);
+			view.innerHTML = `${this.titleHtml}
+			<div class="title-next">
+				<button type="button" data-command="view character">
+					Begin Game 
+					<span class="key">Enter</span>
+				</button>
+			</div>`;
+		}
+
+		render(blob, facingActorBlob) {
+			this.renderTitle();
+			if (blob.dead) {
+				this.view('dead');
+			}
+			this.renderStaticRow();
+			this.renderInteract(blob, facingActorBlob);
+			this.renderDungeoneerRow(blob, facingActorBlob);
+			this.renderOptions(blob);
+			this.renderFullView(blob);
+			this.renderStats(blob);
+		}
+	}
+
 	/**
 	 * @license
 	 * Copyright 2010-2023 Three.js Authors
@@ -303,7 +1994,7 @@
 
 	}
 
-	function clamp$1( value, min, max ) {
+	function clamp( value, min, max ) {
 
 		return Math.max( min, Math.min( max, value ) );
 
@@ -575,7 +2266,7 @@
 		DEG2RAD: DEG2RAD,
 		RAD2DEG: RAD2DEG,
 		generateUUID: generateUUID,
-		clamp: clamp$1,
+		clamp: clamp,
 		euclideanModulo: euclideanModulo,
 		mapLinear: mapLinear,
 		inverseLerp: inverseLerp,
@@ -1860,7 +3551,7 @@
 
 		angleTo( q ) {
 
-			return 2 * Math.acos( Math.abs( clamp$1( this.dot( q ), - 1, 1 ) ) );
+			return 2 * Math.acos( Math.abs( clamp( this.dot( q ), - 1, 1 ) ) );
 
 		}
 
@@ -2141,7 +3832,7 @@
 
 	}
 
-	let Vector3$1 = class Vector3 {
+	class Vector3 {
 
 		constructor( x = 0, y = 0, z = 0 ) {
 
@@ -2671,7 +4362,7 @@
 
 			// clamp, to handle numerical problems
 
-			return Math.acos( clamp$1( theta, - 1, 1 ) );
+			return Math.acos( clamp( theta, - 1, 1 ) );
 
 		}
 
@@ -2847,9 +4538,9 @@
 
 		}
 
-	};
+	}
 
-	const _vector$d = /*@__PURE__*/ new Vector3$1();
+	const _vector$d = /*@__PURE__*/ new Vector3();
 	const _quaternion$4 = /*@__PURE__*/ new Quaternion();
 
 	function SRGBToLinear( c ) {
@@ -2889,7 +4580,7 @@
 		0.0000001, 0.0000000, 1.0982735
 	] );
 
-	const _vector$c = new Vector3$1();
+	const _vector$c = new Vector3();
 
 	function DisplayP3ToLinearSRGB( color ) {
 
@@ -4444,7 +6135,7 @@
 
 	class Box3 {
 
-		constructor( min = new Vector3$1( + Infinity, + Infinity, + Infinity ), max = new Vector3$1( - Infinity, - Infinity, - Infinity ) ) {
+		constructor( min = new Vector3( + Infinity, + Infinity, + Infinity ), max = new Vector3( - Infinity, - Infinity, - Infinity ) ) {
 
 			this.isBox3 = true;
 
@@ -4920,36 +6611,36 @@
 	}
 
 	const _points = [
-		/*@__PURE__*/ new Vector3$1(),
-		/*@__PURE__*/ new Vector3$1(),
-		/*@__PURE__*/ new Vector3$1(),
-		/*@__PURE__*/ new Vector3$1(),
-		/*@__PURE__*/ new Vector3$1(),
-		/*@__PURE__*/ new Vector3$1(),
-		/*@__PURE__*/ new Vector3$1(),
-		/*@__PURE__*/ new Vector3$1()
+		/*@__PURE__*/ new Vector3(),
+		/*@__PURE__*/ new Vector3(),
+		/*@__PURE__*/ new Vector3(),
+		/*@__PURE__*/ new Vector3(),
+		/*@__PURE__*/ new Vector3(),
+		/*@__PURE__*/ new Vector3(),
+		/*@__PURE__*/ new Vector3(),
+		/*@__PURE__*/ new Vector3()
 	];
 
-	const _vector$b = /*@__PURE__*/ new Vector3$1();
+	const _vector$b = /*@__PURE__*/ new Vector3();
 
 	const _box$3 = /*@__PURE__*/ new Box3();
 
 	// triangle centered vertices
 
-	const _v0$2 = /*@__PURE__*/ new Vector3$1();
-	const _v1$7 = /*@__PURE__*/ new Vector3$1();
-	const _v2$4 = /*@__PURE__*/ new Vector3$1();
+	const _v0$2 = /*@__PURE__*/ new Vector3();
+	const _v1$7 = /*@__PURE__*/ new Vector3();
+	const _v2$4 = /*@__PURE__*/ new Vector3();
 
 	// triangle edge vectors
 
-	const _f0 = /*@__PURE__*/ new Vector3$1();
-	const _f1 = /*@__PURE__*/ new Vector3$1();
-	const _f2 = /*@__PURE__*/ new Vector3$1();
+	const _f0 = /*@__PURE__*/ new Vector3();
+	const _f1 = /*@__PURE__*/ new Vector3();
+	const _f2 = /*@__PURE__*/ new Vector3();
 
-	const _center = /*@__PURE__*/ new Vector3$1();
-	const _extents = /*@__PURE__*/ new Vector3$1();
-	const _triangleNormal = /*@__PURE__*/ new Vector3$1();
-	const _testAxis = /*@__PURE__*/ new Vector3$1();
+	const _center = /*@__PURE__*/ new Vector3();
+	const _extents = /*@__PURE__*/ new Vector3();
+	const _triangleNormal = /*@__PURE__*/ new Vector3();
+	const _testAxis = /*@__PURE__*/ new Vector3();
 
 	function satForAxes( axes, v0, v1, v2, extents ) {
 
@@ -4978,12 +6669,12 @@
 	}
 
 	const _box$2 = /*@__PURE__*/ new Box3();
-	const _v1$6 = /*@__PURE__*/ new Vector3$1();
-	const _v2$3 = /*@__PURE__*/ new Vector3$1();
+	const _v1$6 = /*@__PURE__*/ new Vector3();
+	const _v2$3 = /*@__PURE__*/ new Vector3();
 
 	class Sphere {
 
-		constructor( center = new Vector3$1(), radius = - 1 ) {
+		constructor( center = new Vector3(), radius = - 1 ) {
 
 			this.center = center;
 			this.radius = radius;
@@ -5216,18 +6907,18 @@
 
 	}
 
-	const _vector$a = /*@__PURE__*/ new Vector3$1();
-	const _segCenter = /*@__PURE__*/ new Vector3$1();
-	const _segDir = /*@__PURE__*/ new Vector3$1();
-	const _diff = /*@__PURE__*/ new Vector3$1();
+	const _vector$a = /*@__PURE__*/ new Vector3();
+	const _segCenter = /*@__PURE__*/ new Vector3();
+	const _segDir = /*@__PURE__*/ new Vector3();
+	const _diff = /*@__PURE__*/ new Vector3();
 
-	const _edge1 = /*@__PURE__*/ new Vector3$1();
-	const _edge2 = /*@__PURE__*/ new Vector3$1();
-	const _normal$1 = /*@__PURE__*/ new Vector3$1();
+	const _edge1 = /*@__PURE__*/ new Vector3();
+	const _edge2 = /*@__PURE__*/ new Vector3();
+	const _normal$1 = /*@__PURE__*/ new Vector3();
 
 	class Ray {
 
-		constructor( origin = new Vector3$1(), direction = new Vector3$1( 0, 0, - 1 ) ) {
+		constructor( origin = new Vector3(), direction = new Vector3( 0, 0, - 1 ) ) {
 
 			this.origin = origin;
 			this.direction = direction;
@@ -6555,13 +8246,13 @@
 
 	}
 
-	const _v1$5 = /*@__PURE__*/ new Vector3$1();
+	const _v1$5 = /*@__PURE__*/ new Vector3();
 	const _m1$2 = /*@__PURE__*/ new Matrix4();
-	const _zero = /*@__PURE__*/ new Vector3$1( 0, 0, 0 );
-	const _one = /*@__PURE__*/ new Vector3$1( 1, 1, 1 );
-	const _x = /*@__PURE__*/ new Vector3$1();
-	const _y = /*@__PURE__*/ new Vector3$1();
-	const _z = /*@__PURE__*/ new Vector3$1();
+	const _zero = /*@__PURE__*/ new Vector3( 0, 0, 0 );
+	const _one = /*@__PURE__*/ new Vector3( 1, 1, 1 );
+	const _x = /*@__PURE__*/ new Vector3();
+	const _y = /*@__PURE__*/ new Vector3();
+	const _z = /*@__PURE__*/ new Vector3();
 
 	const _matrix$1 = /*@__PURE__*/ new Matrix4();
 	const _quaternion$3 = /*@__PURE__*/ new Quaternion();
@@ -6676,7 +8367,7 @@
 
 				case 'XYZ':
 
-					this._y = Math.asin( clamp$1( m13, - 1, 1 ) );
+					this._y = Math.asin( clamp( m13, - 1, 1 ) );
 
 					if ( Math.abs( m13 ) < 0.9999999 ) {
 
@@ -6694,7 +8385,7 @@
 
 				case 'YXZ':
 
-					this._x = Math.asin( - clamp$1( m23, - 1, 1 ) );
+					this._x = Math.asin( - clamp( m23, - 1, 1 ) );
 
 					if ( Math.abs( m23 ) < 0.9999999 ) {
 
@@ -6712,7 +8403,7 @@
 
 				case 'ZXY':
 
-					this._x = Math.asin( clamp$1( m32, - 1, 1 ) );
+					this._x = Math.asin( clamp( m32, - 1, 1 ) );
 
 					if ( Math.abs( m32 ) < 0.9999999 ) {
 
@@ -6730,7 +8421,7 @@
 
 				case 'ZYX':
 
-					this._y = Math.asin( - clamp$1( m31, - 1, 1 ) );
+					this._y = Math.asin( - clamp( m31, - 1, 1 ) );
 
 					if ( Math.abs( m31 ) < 0.9999999 ) {
 
@@ -6748,7 +8439,7 @@
 
 				case 'YZX':
 
-					this._z = Math.asin( clamp$1( m21, - 1, 1 ) );
+					this._z = Math.asin( clamp( m21, - 1, 1 ) );
 
 					if ( Math.abs( m21 ) < 0.9999999 ) {
 
@@ -6766,7 +8457,7 @@
 
 				case 'XZY':
 
-					this._z = Math.asin( - clamp$1( m12, - 1, 1 ) );
+					this._z = Math.asin( - clamp( m12, - 1, 1 ) );
 
 					if ( Math.abs( m12 ) < 0.9999999 ) {
 
@@ -6933,23 +8624,23 @@
 
 	let _object3DId = 0;
 
-	const _v1$4 = /*@__PURE__*/ new Vector3$1();
+	const _v1$4 = /*@__PURE__*/ new Vector3();
 	const _q1 = /*@__PURE__*/ new Quaternion();
 	const _m1$1 = /*@__PURE__*/ new Matrix4();
-	const _target = /*@__PURE__*/ new Vector3$1();
+	const _target = /*@__PURE__*/ new Vector3();
 
-	const _position$3 = /*@__PURE__*/ new Vector3$1();
-	const _scale$2 = /*@__PURE__*/ new Vector3$1();
+	const _position$3 = /*@__PURE__*/ new Vector3();
+	const _scale$2 = /*@__PURE__*/ new Vector3();
 	const _quaternion$2 = /*@__PURE__*/ new Quaternion();
 
-	const _xAxis = /*@__PURE__*/ new Vector3$1( 1, 0, 0 );
-	const _yAxis = /*@__PURE__*/ new Vector3$1( 0, 1, 0 );
-	const _zAxis = /*@__PURE__*/ new Vector3$1( 0, 0, 1 );
+	const _xAxis = /*@__PURE__*/ new Vector3( 1, 0, 0 );
+	const _yAxis = /*@__PURE__*/ new Vector3( 0, 1, 0 );
+	const _zAxis = /*@__PURE__*/ new Vector3( 0, 0, 1 );
 
 	const _addedEvent = { type: 'added' };
 	const _removedEvent = { type: 'removed' };
 
-	let Object3D$1 = class Object3D extends EventDispatcher {
+	class Object3D extends EventDispatcher {
 
 		constructor() {
 
@@ -6969,10 +8660,10 @@
 
 			this.up = Object3D.DEFAULT_UP.clone();
 
-			const position = new Vector3$1();
+			const position = new Vector3();
 			const rotation = new Euler();
 			const quaternion = new Quaternion();
-			const scale = new Vector3$1( 1, 1, 1 );
+			const scale = new Vector3( 1, 1, 1 );
 
 			function onRotationChange() {
 
@@ -7885,27 +9576,27 @@
 
 		}
 
-	};
+	}
 
-	Object3D$1.DEFAULT_UP = /*@__PURE__*/ new Vector3$1( 0, 1, 0 );
-	Object3D$1.DEFAULT_MATRIX_AUTO_UPDATE = true;
-	Object3D$1.DEFAULT_MATRIX_WORLD_AUTO_UPDATE = true;
+	Object3D.DEFAULT_UP = /*@__PURE__*/ new Vector3( 0, 1, 0 );
+	Object3D.DEFAULT_MATRIX_AUTO_UPDATE = true;
+	Object3D.DEFAULT_MATRIX_WORLD_AUTO_UPDATE = true;
 
-	const _v0$1 = /*@__PURE__*/ new Vector3$1();
-	const _v1$3 = /*@__PURE__*/ new Vector3$1();
-	const _v2$2 = /*@__PURE__*/ new Vector3$1();
-	const _v3$1 = /*@__PURE__*/ new Vector3$1();
+	const _v0$1 = /*@__PURE__*/ new Vector3();
+	const _v1$3 = /*@__PURE__*/ new Vector3();
+	const _v2$2 = /*@__PURE__*/ new Vector3();
+	const _v3$1 = /*@__PURE__*/ new Vector3();
 
-	const _vab = /*@__PURE__*/ new Vector3$1();
-	const _vac = /*@__PURE__*/ new Vector3$1();
-	const _vbc = /*@__PURE__*/ new Vector3$1();
-	const _vap = /*@__PURE__*/ new Vector3$1();
-	const _vbp = /*@__PURE__*/ new Vector3$1();
-	const _vcp = /*@__PURE__*/ new Vector3$1();
+	const _vab = /*@__PURE__*/ new Vector3();
+	const _vac = /*@__PURE__*/ new Vector3();
+	const _vbc = /*@__PURE__*/ new Vector3();
+	const _vap = /*@__PURE__*/ new Vector3();
+	const _vbp = /*@__PURE__*/ new Vector3();
+	const _vcp = /*@__PURE__*/ new Vector3();
 
 	class Triangle {
 
-		constructor( a = new Vector3$1(), b = new Vector3$1(), c = new Vector3$1() ) {
+		constructor( a = new Vector3(), b = new Vector3(), c = new Vector3() ) {
 
 			this.a = a;
 			this.b = b;
@@ -8798,8 +10489,8 @@
 
 			// h,s,l ranges are in 0.0 - 1.0
 			h = euclideanModulo( h, 1 );
-			s = clamp$1( s, 0, 1 );
-			l = clamp$1( l, 0, 1 );
+			s = clamp( s, 0, 1 );
+			l = clamp( l, 0, 1 );
 
 			if ( s === 0 ) {
 
@@ -9030,7 +10721,7 @@
 
 			ColorManagement.fromWorkingColorSpace( _color.copy( this ), colorSpace );
 
-			return clamp$1( _color.r * 255, 0, 255 ) << 16 ^ clamp$1( _color.g * 255, 0, 255 ) << 8 ^ clamp$1( _color.b * 255, 0, 255 ) << 0;
+			return clamp( _color.r * 255, 0, 255 ) << 16 ^ clamp( _color.g * 255, 0, 255 ) << 8 ^ clamp( _color.b * 255, 0, 255 ) << 0;
 
 		}
 
@@ -9353,7 +11044,7 @@
 
 	}
 
-	const _vector$9 = /*@__PURE__*/ new Vector3$1();
+	const _vector$9 = /*@__PURE__*/ new Vector3();
 	const _vector2$1 = /*@__PURE__*/ new Vector2();
 
 	class BufferAttribute {
@@ -9829,11 +11520,11 @@
 	let _id$1 = 0;
 
 	const _m1 = /*@__PURE__*/ new Matrix4();
-	const _obj = /*@__PURE__*/ new Object3D$1();
-	const _offset = /*@__PURE__*/ new Vector3$1();
+	const _obj = /*@__PURE__*/ new Object3D();
+	const _offset = /*@__PURE__*/ new Vector3();
 	const _box$1 = /*@__PURE__*/ new Box3();
 	const _boxMorphTargets = /*@__PURE__*/ new Box3();
-	const _vector$8 = /*@__PURE__*/ new Vector3$1();
+	const _vector$8 = /*@__PURE__*/ new Vector3();
 
 	class BufferGeometry extends EventDispatcher {
 
@@ -10119,8 +11810,8 @@
 				console.error( 'THREE.BufferGeometry.computeBoundingBox(): GLBufferAttribute requires a manual bounding box. Alternatively set "mesh.frustumCulled" to "false".', this );
 
 				this.boundingBox.set(
-					new Vector3$1( - Infinity, - Infinity, - Infinity ),
-					new Vector3$1( + Infinity, + Infinity, + Infinity )
+					new Vector3( - Infinity, - Infinity, - Infinity ),
+					new Vector3( + Infinity, + Infinity, + Infinity )
 				);
 
 				return;
@@ -10188,7 +11879,7 @@
 
 				console.error( 'THREE.BufferGeometry.computeBoundingSphere(): GLBufferAttribute requires a manual bounding sphere. Alternatively set "mesh.frustumCulled" to "false".', this );
 
-				this.boundingSphere.set( new Vector3$1(), Infinity );
+				this.boundingSphere.set( new Vector3(), Infinity );
 
 				return;
 
@@ -10322,21 +12013,21 @@
 
 			for ( let i = 0; i < nVertices; i ++ ) {
 
-				tan1[ i ] = new Vector3$1();
-				tan2[ i ] = new Vector3$1();
+				tan1[ i ] = new Vector3();
+				tan2[ i ] = new Vector3();
 
 			}
 
-			const vA = new Vector3$1(),
-				vB = new Vector3$1(),
-				vC = new Vector3$1(),
+			const vA = new Vector3(),
+				vB = new Vector3(),
+				vC = new Vector3(),
 
 				uvA = new Vector2(),
 				uvB = new Vector2(),
 				uvC = new Vector2(),
 
-				sdir = new Vector3$1(),
-				tdir = new Vector3$1();
+				sdir = new Vector3(),
+				tdir = new Vector3();
 
 			function handleTriangle( a, b, c ) {
 
@@ -10403,8 +12094,8 @@
 
 			}
 
-			const tmp = new Vector3$1(), tmp2 = new Vector3$1();
-			const n = new Vector3$1(), n2 = new Vector3$1();
+			const tmp = new Vector3(), tmp2 = new Vector3();
+			const n = new Vector3(), n2 = new Vector3();
 
 			function handleVertex( v ) {
 
@@ -10476,9 +12167,9 @@
 
 				}
 
-				const pA = new Vector3$1(), pB = new Vector3$1(), pC = new Vector3$1();
-				const nA = new Vector3$1(), nB = new Vector3$1(), nC = new Vector3$1();
-				const cb = new Vector3$1(), ab = new Vector3$1();
+				const pA = new Vector3(), pB = new Vector3(), pC = new Vector3();
+				const nA = new Vector3(), nB = new Vector3(), nC = new Vector3();
+				const cb = new Vector3(), ab = new Vector3();
 
 				// indexed elements
 
@@ -10904,23 +12595,23 @@
 	const _inverseMatrix$2 = /*@__PURE__*/ new Matrix4();
 	const _ray$2 = /*@__PURE__*/ new Ray();
 	const _sphere$3 = /*@__PURE__*/ new Sphere();
-	const _sphereHitAt = /*@__PURE__*/ new Vector3$1();
+	const _sphereHitAt = /*@__PURE__*/ new Vector3();
 
-	const _vA$1 = /*@__PURE__*/ new Vector3$1();
-	const _vB$1 = /*@__PURE__*/ new Vector3$1();
-	const _vC$1 = /*@__PURE__*/ new Vector3$1();
+	const _vA$1 = /*@__PURE__*/ new Vector3();
+	const _vB$1 = /*@__PURE__*/ new Vector3();
+	const _vC$1 = /*@__PURE__*/ new Vector3();
 
-	const _tempA = /*@__PURE__*/ new Vector3$1();
-	const _morphA = /*@__PURE__*/ new Vector3$1();
+	const _tempA = /*@__PURE__*/ new Vector3();
+	const _morphA = /*@__PURE__*/ new Vector3();
 
 	const _uvA$1 = /*@__PURE__*/ new Vector2();
 	const _uvB$1 = /*@__PURE__*/ new Vector2();
 	const _uvC$1 = /*@__PURE__*/ new Vector2();
 
-	const _intersectionPoint = /*@__PURE__*/ new Vector3$1();
-	const _intersectionPointWorld = /*@__PURE__*/ new Vector3$1();
+	const _intersectionPoint = /*@__PURE__*/ new Vector3();
+	const _intersectionPointWorld = /*@__PURE__*/ new Vector3();
 
-	class Mesh extends Object3D$1 {
+	class Mesh extends Object3D {
 
 		constructor( geometry = new BufferGeometry(), material = new MeshBasicMaterial() ) {
 
@@ -11275,7 +12966,7 @@
 				a: a,
 				b: b,
 				c: c,
-				normal: new Vector3$1(),
+				normal: new Vector3(),
 				materialIndex: 0
 			};
 
@@ -11357,7 +13048,7 @@
 				let vertexCounter = 0;
 				let groupCount = 0;
 
-				const vector = new Vector3$1();
+				const vector = new Vector3();
 
 				// generate vertices, normals and uvs
 
@@ -11735,7 +13426,7 @@
 
 	}
 
-	class Camera extends Object3D$1 {
+	class Camera extends Object3D {
 
 		constructor() {
 
@@ -12031,7 +13722,7 @@
 	const fov = - 90; // negative fov is not an error
 	const aspect = 1;
 
-	class CubeCamera extends Object3D$1 {
+	class CubeCamera extends Object3D {
 
 		constructor( near, far, renderTarget ) {
 
@@ -12295,13 +13986,13 @@
 
 	}
 
-	const _vector1 = /*@__PURE__*/ new Vector3$1();
-	const _vector2 = /*@__PURE__*/ new Vector3$1();
+	const _vector1 = /*@__PURE__*/ new Vector3();
+	const _vector2 = /*@__PURE__*/ new Vector3();
 	const _normalMatrix = /*@__PURE__*/ new Matrix3();
 
 	class Plane {
 
-		constructor( normal = new Vector3$1( 1, 0, 0 ), constant = 0 ) {
+		constructor( normal = new Vector3( 1, 0, 0 ), constant = 0 ) {
 
 			this.isPlane = true;
 
@@ -12497,7 +14188,7 @@
 	}
 
 	const _sphere$2 = /*@__PURE__*/ new Sphere();
-	const _vector$7 = /*@__PURE__*/ new Vector3$1();
+	const _vector$7 = /*@__PURE__*/ new Vector3();
 
 	class Frustum {
 
@@ -13892,7 +15583,7 @@
 				UniformsLib.common,
 				UniformsLib.displacementmap,
 				{
-					referencePosition: { value: /*@__PURE__*/ new Vector3$1() },
+					referencePosition: { value: /*@__PURE__*/ new Vector3() },
 					nearDistance: { value: 1 },
 					farDistance: { value: 1000 }
 				}
@@ -15405,16 +17096,16 @@
 	// Vertices of a dodecahedron (except the opposites, which represent the
 	// same axis), used as axis directions evenly spread on a sphere.
 	const _axisDirections = [
-		/*@__PURE__*/ new Vector3$1( 1, 1, 1 ),
-		/*@__PURE__*/ new Vector3$1( - 1, 1, 1 ),
-		/*@__PURE__*/ new Vector3$1( 1, 1, - 1 ),
-		/*@__PURE__*/ new Vector3$1( - 1, 1, - 1 ),
-		/*@__PURE__*/ new Vector3$1( 0, PHI, INV_PHI ),
-		/*@__PURE__*/ new Vector3$1( 0, PHI, - INV_PHI ),
-		/*@__PURE__*/ new Vector3$1( INV_PHI, 0, PHI ),
-		/*@__PURE__*/ new Vector3$1( - INV_PHI, 0, PHI ),
-		/*@__PURE__*/ new Vector3$1( PHI, INV_PHI, 0 ),
-		/*@__PURE__*/ new Vector3$1( - PHI, INV_PHI, 0 ) ];
+		/*@__PURE__*/ new Vector3( 1, 1, 1 ),
+		/*@__PURE__*/ new Vector3( - 1, 1, 1 ),
+		/*@__PURE__*/ new Vector3( 1, 1, - 1 ),
+		/*@__PURE__*/ new Vector3( - 1, 1, - 1 ),
+		/*@__PURE__*/ new Vector3( 0, PHI, INV_PHI ),
+		/*@__PURE__*/ new Vector3( 0, PHI, - INV_PHI ),
+		/*@__PURE__*/ new Vector3( INV_PHI, 0, PHI ),
+		/*@__PURE__*/ new Vector3( - INV_PHI, 0, PHI ),
+		/*@__PURE__*/ new Vector3( PHI, INV_PHI, 0 ),
+		/*@__PURE__*/ new Vector3( - PHI, INV_PHI, 0 ) ];
 
 	/**
 	 * This class generates a Prefiltered, Mipmapped Radiance Environment Map
@@ -16019,7 +17710,7 @@
 	function _getBlurShader( lodMax, width, height ) {
 
 		const weights = new Float32Array( MAX_SAMPLES );
-		const poleAxis = new Vector3$1( 0, 1, 0 );
+		const poleAxis = new Vector3( 0, 1, 0 );
 		const shaderMaterial = new ShaderMaterial( {
 
 			name: 'SphericalGaussianBlur',
@@ -20172,15 +21863,15 @@
 
 					case 'DirectionalLight':
 						uniforms = {
-							direction: new Vector3$1(),
+							direction: new Vector3(),
 							color: new Color()
 						};
 						break;
 
 					case 'SpotLight':
 						uniforms = {
-							position: new Vector3$1(),
-							direction: new Vector3$1(),
+							position: new Vector3(),
+							direction: new Vector3(),
 							color: new Color(),
 							distance: 0,
 							coneCos: 0,
@@ -20191,7 +21882,7 @@
 
 					case 'PointLight':
 						uniforms = {
-							position: new Vector3$1(),
+							position: new Vector3(),
 							color: new Color(),
 							distance: 0,
 							decay: 0
@@ -20200,7 +21891,7 @@
 
 					case 'HemisphereLight':
 						uniforms = {
-							direction: new Vector3$1(),
+							direction: new Vector3(),
 							skyColor: new Color(),
 							groundColor: new Color()
 						};
@@ -20209,9 +21900,9 @@
 					case 'RectAreaLight':
 						uniforms = {
 							color: new Color(),
-							position: new Vector3$1(),
-							halfWidth: new Vector3$1(),
-							halfHeight: new Vector3$1()
+							position: new Vector3(),
+							halfWidth: new Vector3(),
+							halfHeight: new Vector3()
 						};
 						break;
 
@@ -20344,9 +22035,9 @@
 
 		};
 
-		for ( let i = 0; i < 9; i ++ ) state.probe.push( new Vector3$1() );
+		for ( let i = 0; i < 9; i ++ ) state.probe.push( new Vector3() );
 
-		const vector3 = new Vector3$1();
+		const vector3 = new Vector3();
 		const matrix4 = new Matrix4();
 		const matrix42 = new Matrix4();
 
@@ -20877,7 +22568,7 @@
 
 			this.type = 'MeshDistanceMaterial';
 
-			this.referencePosition = new Vector3$1();
+			this.referencePosition = new Vector3();
 			this.nearDistance = 1;
 			this.farDistance = 1000;
 
@@ -24848,7 +26539,7 @@
 
 	}
 
-	class Group extends Object3D$1 {
+	class Group extends Object3D {
 
 		constructor() {
 
@@ -24899,9 +26590,9 @@
 				this._targetRay.matrixAutoUpdate = false;
 				this._targetRay.visible = false;
 				this._targetRay.hasLinearVelocity = false;
-				this._targetRay.linearVelocity = new Vector3$1();
+				this._targetRay.linearVelocity = new Vector3();
 				this._targetRay.hasAngularVelocity = false;
-				this._targetRay.angularVelocity = new Vector3$1();
+				this._targetRay.angularVelocity = new Vector3();
 
 			}
 
@@ -24917,9 +26608,9 @@
 				this._grip.matrixAutoUpdate = false;
 				this._grip.visible = false;
 				this._grip.hasLinearVelocity = false;
-				this._grip.linearVelocity = new Vector3$1();
+				this._grip.linearVelocity = new Vector3();
 				this._grip.hasAngularVelocity = false;
-				this._grip.angularVelocity = new Vector3$1();
+				this._grip.angularVelocity = new Vector3();
 
 			}
 
@@ -25637,8 +27328,8 @@
 
 			//
 
-			const cameraLPos = new Vector3$1();
-			const cameraRPos = new Vector3$1();
+			const cameraLPos = new Vector3();
+			const cameraRPos = new Vector3();
 
 			/**
 			 * Assumes 2 cameras that are parallel and share an X-axis, and that
@@ -27227,7 +28918,7 @@
 
 		const _projScreenMatrix = new Matrix4();
 
-		const _vector3 = new Vector3$1();
+		const _vector3 = new Vector3();
 
 		const _emptyScene = { background: null, fog: null, environment: null, overrideMaterial: null, isScene: true };
 
@@ -29377,7 +31068,7 @@
 
 	}
 
-	class Scene extends Object3D$1 {
+	class Scene extends Object3D {
 
 		constructor() {
 
@@ -29594,7 +31285,7 @@
 
 	}
 
-	const _vector$6 = /*@__PURE__*/ new Vector3$1();
+	const _vector$6 = /*@__PURE__*/ new Vector3();
 
 	class InterleavedBufferAttribute {
 
@@ -29971,23 +31662,23 @@
 
 	let _geometry;
 
-	const _intersectPoint = /*@__PURE__*/ new Vector3$1();
-	const _worldScale = /*@__PURE__*/ new Vector3$1();
-	const _mvPosition = /*@__PURE__*/ new Vector3$1();
+	const _intersectPoint = /*@__PURE__*/ new Vector3();
+	const _worldScale = /*@__PURE__*/ new Vector3();
+	const _mvPosition = /*@__PURE__*/ new Vector3();
 
 	const _alignedPosition = /*@__PURE__*/ new Vector2();
 	const _rotatedPosition = /*@__PURE__*/ new Vector2();
 	const _viewWorldMatrix = /*@__PURE__*/ new Matrix4();
 
-	const _vA = /*@__PURE__*/ new Vector3$1();
-	const _vB = /*@__PURE__*/ new Vector3$1();
-	const _vC = /*@__PURE__*/ new Vector3$1();
+	const _vA = /*@__PURE__*/ new Vector3();
+	const _vB = /*@__PURE__*/ new Vector3();
+	const _vC = /*@__PURE__*/ new Vector3();
 
 	const _uvA = /*@__PURE__*/ new Vector2();
 	const _uvB = /*@__PURE__*/ new Vector2();
 	const _uvC = /*@__PURE__*/ new Vector2();
 
-	class Sprite extends Object3D$1 {
+	class Sprite extends Object3D {
 
 		constructor( material ) {
 
@@ -30139,10 +31830,10 @@
 
 	}
 
-	const _v1$2 = /*@__PURE__*/ new Vector3$1();
-	const _v2$1 = /*@__PURE__*/ new Vector3$1();
+	const _v1$2 = /*@__PURE__*/ new Vector3();
+	const _v2$1 = /*@__PURE__*/ new Vector3();
 
-	class LOD extends Object3D$1 {
+	class LOD extends Object3D {
 
 		constructor() {
 
@@ -30348,12 +32039,12 @@
 
 	}
 
-	const _basePosition = /*@__PURE__*/ new Vector3$1();
+	const _basePosition = /*@__PURE__*/ new Vector3();
 
 	const _skinIndex = /*@__PURE__*/ new Vector4();
 	const _skinWeight = /*@__PURE__*/ new Vector4();
 
-	const _vector$5 = /*@__PURE__*/ new Vector3$1();
+	const _vector$5 = /*@__PURE__*/ new Vector3();
 	const _matrix = /*@__PURE__*/ new Matrix4();
 
 	class SkinnedMesh extends Mesh {
@@ -30493,7 +32184,7 @@
 
 	}
 
-	class Bone extends Object3D$1 {
+	class Bone extends Object3D {
 
 		constructor() {
 
@@ -31001,13 +32692,13 @@
 
 	}
 
-	const _start$1 = /*@__PURE__*/ new Vector3$1();
-	const _end$1 = /*@__PURE__*/ new Vector3$1();
+	const _start$1 = /*@__PURE__*/ new Vector3();
+	const _end$1 = /*@__PURE__*/ new Vector3();
 	const _inverseMatrix$1 = /*@__PURE__*/ new Matrix4();
 	const _ray$1 = /*@__PURE__*/ new Ray();
 	const _sphere$1 = /*@__PURE__*/ new Sphere();
 
-	class Line extends Object3D$1 {
+	class Line extends Object3D {
 
 		constructor( geometry = new BufferGeometry(), material = new LineBasicMaterial() ) {
 
@@ -31093,10 +32784,10 @@
 			const localThreshold = threshold / ( ( this.scale.x + this.scale.y + this.scale.z ) / 3 );
 			const localThresholdSq = localThreshold * localThreshold;
 
-			const vStart = new Vector3$1();
-			const vEnd = new Vector3$1();
-			const interSegment = new Vector3$1();
-			const interRay = new Vector3$1();
+			const vStart = new Vector3();
+			const vEnd = new Vector3();
+			const interSegment = new Vector3();
+			const interRay = new Vector3();
 			const step = this.isLineSegments ? 2 : 1;
 
 			const index = geometry.index;
@@ -31213,8 +32904,8 @@
 
 	}
 
-	const _start = /*@__PURE__*/ new Vector3$1();
-	const _end = /*@__PURE__*/ new Vector3$1();
+	const _start = /*@__PURE__*/ new Vector3();
+	const _end = /*@__PURE__*/ new Vector3();
 
 	class LineSegments extends Line {
 
@@ -31326,9 +33017,9 @@
 	const _inverseMatrix = /*@__PURE__*/ new Matrix4();
 	const _ray = /*@__PURE__*/ new Ray();
 	const _sphere = /*@__PURE__*/ new Sphere();
-	const _position$2 = /*@__PURE__*/ new Vector3$1();
+	const _position$2 = /*@__PURE__*/ new Vector3();
 
-	class Points extends Object3D$1 {
+	class Points extends Object3D {
 
 		constructor( geometry = new BufferGeometry(), material = new PointsMaterial() ) {
 
@@ -31456,7 +33147,7 @@
 
 		if ( rayPointDistanceSq < localThresholdSq ) {
 
-			const intersectPoint = new Vector3$1();
+			const intersectPoint = new Vector3();
 
 			_ray.closestPointToPoint( point, intersectPoint );
 			intersectPoint.applyMatrix4( matrixWorld );
@@ -31844,7 +33535,7 @@
 			const pt1 = this.getPoint( t1 );
 			const pt2 = this.getPoint( t2 );
 
-			const tangent = optionalTarget || ( ( pt1.isVector2 ) ? new Vector2() : new Vector3$1() );
+			const tangent = optionalTarget || ( ( pt1.isVector2 ) ? new Vector2() : new Vector3() );
 
 			tangent.copy( pt2 ).sub( pt1 ).normalize();
 
@@ -31863,13 +33554,13 @@
 
 			// see http://www.cs.indiana.edu/pub/techreports/TR425.pdf
 
-			const normal = new Vector3$1();
+			const normal = new Vector3();
 
 			const tangents = [];
 			const normals = [];
 			const binormals = [];
 
-			const vec = new Vector3$1();
+			const vec = new Vector3();
 			const mat = new Matrix4();
 
 			// compute the tangent vectors for each segment on the curve
@@ -31878,15 +33569,15 @@
 
 				const u = i / segments;
 
-				tangents[ i ] = this.getTangentAt( u, new Vector3$1() );
+				tangents[ i ] = this.getTangentAt( u, new Vector3() );
 
 			}
 
 			// select an initial normal vector perpendicular to the first tangent vector,
 			// and in the direction of the minimum tangent xyz component
 
-			normals[ 0 ] = new Vector3$1();
-			binormals[ 0 ] = new Vector3$1();
+			normals[ 0 ] = new Vector3();
+			binormals[ 0 ] = new Vector3();
 			let min = Number.MAX_VALUE;
 			const tx = Math.abs( tangents[ 0 ].x );
 			const ty = Math.abs( tangents[ 0 ].y );
@@ -31932,7 +33623,7 @@
 
 					vec.normalize();
 
-					const theta = Math.acos( clamp$1( tangents[ i - 1 ].dot( tangents[ i ] ), - 1, 1 ) ); // clamp for floating pt errors
+					const theta = Math.acos( clamp( tangents[ i - 1 ].dot( tangents[ i ] ), - 1, 1 ) ); // clamp for floating pt errors
 
 					normals[ i ].applyMatrix4( mat.makeRotationAxis( vec, theta ) );
 
@@ -31946,7 +33637,7 @@
 
 			if ( closed === true ) {
 
-				let theta = Math.acos( clamp$1( normals[ 0 ].dot( normals[ segments ] ), - 1, 1 ) );
+				let theta = Math.acos( clamp( normals[ 0 ].dot( normals[ segments ] ), - 1, 1 ) );
 				theta /= segments;
 
 				if ( tangents[ 0 ].dot( vec.crossVectors( normals[ 0 ], normals[ segments ] ) ) > 0 ) {
@@ -32257,7 +33948,7 @@
 
 	//
 
-	const tmp = /*@__PURE__*/ new Vector3$1();
+	const tmp = /*@__PURE__*/ new Vector3();
 	const px = /*@__PURE__*/ new CubicPoly();
 	const py = /*@__PURE__*/ new CubicPoly();
 	const pz = /*@__PURE__*/ new CubicPoly();
@@ -32279,7 +33970,7 @@
 
 		}
 
-		getPoint( t, optionalTarget = new Vector3$1() ) {
+		getPoint( t, optionalTarget = new Vector3() ) {
 
 			const point = optionalTarget;
 
@@ -32417,7 +34108,7 @@
 			for ( let i = 0, l = json.points.length; i < l; i ++ ) {
 
 				const point = json.points[ i ];
-				this.points.push( new Vector3$1().fromArray( point ) );
+				this.points.push( new Vector3().fromArray( point ) );
 
 			}
 
@@ -32584,7 +34275,7 @@
 
 	class CubicBezierCurve3 extends Curve {
 
-		constructor( v0 = new Vector3$1(), v1 = new Vector3$1(), v2 = new Vector3$1(), v3 = new Vector3$1() ) {
+		constructor( v0 = new Vector3(), v1 = new Vector3(), v2 = new Vector3(), v3 = new Vector3() ) {
 
 			super();
 
@@ -32599,7 +34290,7 @@
 
 		}
 
-		getPoint( t, optionalTarget = new Vector3$1() ) {
+		getPoint( t, optionalTarget = new Vector3() ) {
 
 			const point = optionalTarget;
 
@@ -32746,7 +34437,7 @@
 
 	class LineCurve3 extends Curve {
 
-		constructor( v1 = new Vector3$1(), v2 = new Vector3$1() ) {
+		constructor( v1 = new Vector3(), v2 = new Vector3() ) {
 
 			super();
 
@@ -32758,7 +34449,7 @@
 			this.v2 = v2;
 
 		}
-		getPoint( t, optionalTarget = new Vector3$1() ) {
+		getPoint( t, optionalTarget = new Vector3() ) {
 
 			const point = optionalTarget;
 
@@ -32783,7 +34474,7 @@
 
 		}
 
-		getTangent( t, optionalTarget = new Vector3$1() ) {
+		getTangent( t, optionalTarget = new Vector3() ) {
 
 			return optionalTarget.subVectors( this.v2, this.v1 ).normalize();
 
@@ -32899,7 +34590,7 @@
 
 	class QuadraticBezierCurve3 extends Curve {
 
-		constructor( v0 = new Vector3$1(), v1 = new Vector3$1(), v2 = new Vector3$1() ) {
+		constructor( v0 = new Vector3(), v1 = new Vector3(), v2 = new Vector3() ) {
 
 			super();
 
@@ -32913,7 +34604,7 @@
 
 		}
 
-		getPoint( t, optionalTarget = new Vector3$1() ) {
+		getPoint( t, optionalTarget = new Vector3() ) {
 
 			const point = optionalTarget;
 
@@ -33525,7 +35216,7 @@
 
 			// clamp phiLength so it's in range of [ 0, 2PI ]
 
-			phiLength = clamp$1( phiLength, 0, Math.PI * 2 );
+			phiLength = clamp( phiLength, 0, Math.PI * 2 );
 
 			// buffers
 
@@ -33538,11 +35229,11 @@
 			// helper variables
 
 			const inverseSegments = 1.0 / segments;
-			const vertex = new Vector3$1();
+			const vertex = new Vector3();
 			const uv = new Vector2();
-			const normal = new Vector3$1();
-			const curNormal = new Vector3$1();
-			const prevNormal = new Vector3$1();
+			const normal = new Vector3();
+			const curNormal = new Vector3();
+			const prevNormal = new Vector3();
 			let dx = 0;
 			let dy = 0;
 
@@ -33742,7 +35433,7 @@
 
 			// helper variables
 
-			const vertex = new Vector3$1();
+			const vertex = new Vector3();
 			const uv = new Vector2();
 
 			// center point
@@ -33868,8 +35559,8 @@
 
 			function generateTorso() {
 
-				const normal = new Vector3$1();
-				const vertex = new Vector3$1();
+				const normal = new Vector3();
+				const vertex = new Vector3();
 
 				let groupCount = 0;
 
@@ -33967,7 +35658,7 @@
 				const centerIndexStart = index;
 
 				const uv = new Vector2();
-				const vertex = new Vector3$1();
+				const vertex = new Vector3();
 
 				let groupCount = 0;
 
@@ -34169,9 +35860,9 @@
 
 			function subdivide( detail ) {
 
-				const a = new Vector3$1();
-				const b = new Vector3$1();
-				const c = new Vector3$1();
+				const a = new Vector3();
+				const b = new Vector3();
+				const c = new Vector3();
 
 				// iterate over all faces and apply a subdivision with the given detail value
 
@@ -34256,7 +35947,7 @@
 
 			function applyRadius( radius ) {
 
-				const vertex = new Vector3$1();
+				const vertex = new Vector3();
 
 				// iterate over the entire buffer and apply the radius to each vertex
 
@@ -34278,7 +35969,7 @@
 
 			function generateUVs() {
 
-				const vertex = new Vector3$1();
+				const vertex = new Vector3();
 
 				for ( let i = 0; i < vertexBuffer.length; i += 3 ) {
 
@@ -34345,11 +36036,11 @@
 
 			function correctUVs() {
 
-				const a = new Vector3$1();
-				const b = new Vector3$1();
-				const c = new Vector3$1();
+				const a = new Vector3();
+				const b = new Vector3();
+				const c = new Vector3();
 
-				const centroid = new Vector3$1();
+				const centroid = new Vector3();
 
 				const uvA = new Vector2();
 				const uvB = new Vector2();
@@ -34492,9 +36183,9 @@
 
 	}
 
-	const _v0 = /*@__PURE__*/ new Vector3$1();
-	const _v1$1 = /*@__PURE__*/ new Vector3$1();
-	const _normal = /*@__PURE__*/ new Vector3$1();
+	const _v0 = /*@__PURE__*/ new Vector3();
+	const _v1$1 = /*@__PURE__*/ new Vector3();
+	const _normal = /*@__PURE__*/ new Vector3();
 	const _triangle = /*@__PURE__*/ new Triangle();
 
 	class EdgesGeometry extends BufferGeometry {
@@ -35709,9 +37400,9 @@
 
 					// console.log(splineTube, 'splineTube', splineTube.normals.length, 'steps', steps, 'extrudePts', extrudePts.length);
 
-					binormal = new Vector3$1();
-					normal = new Vector3$1();
-					position2 = new Vector3$1();
+					binormal = new Vector3();
+					normal = new Vector3();
+					position2 = new Vector3();
 
 				}
 
@@ -36518,7 +38209,7 @@
 
 			let radius = innerRadius;
 			const radiusStep = ( ( outerRadius - innerRadius ) / phiSegments );
-			const vertex = new Vector3$1();
+			const vertex = new Vector3();
 			const uv = new Vector2();
 
 			// generate vertices, normals and uvs
@@ -36822,8 +38513,8 @@
 			let index = 0;
 			const grid = [];
 
-			const vertex = new Vector3$1();
-			const normal = new Vector3$1();
+			const vertex = new Vector3();
+			const normal = new Vector3();
 
 			// buffers
 
@@ -36987,9 +38678,9 @@
 
 			// helper variables
 
-			const center = new Vector3$1();
-			const vertex = new Vector3$1();
-			const normal = new Vector3$1();
+			const center = new Vector3();
+			const vertex = new Vector3();
+			const normal = new Vector3();
 
 			// generate vertices, normals and uvs
 
@@ -37103,15 +38794,15 @@
 
 			// helper variables
 
-			const vertex = new Vector3$1();
-			const normal = new Vector3$1();
+			const vertex = new Vector3();
+			const normal = new Vector3();
 
-			const P1 = new Vector3$1();
-			const P2 = new Vector3$1();
+			const P1 = new Vector3();
+			const P2 = new Vector3();
 
-			const B = new Vector3$1();
-			const T = new Vector3$1();
-			const N = new Vector3$1();
+			const B = new Vector3();
+			const T = new Vector3();
+			const N = new Vector3();
 
 			// generate vertices, normals and uvs
 
@@ -37238,7 +38929,7 @@
 
 	class TubeGeometry extends BufferGeometry {
 
-		constructor( path = new QuadraticBezierCurve3( new Vector3$1( - 1, - 1, 0 ), new Vector3$1( - 1, 1, 0 ), new Vector3$1( 1, 1, 0 ) ), tubularSegments = 64, radius = 1, radialSegments = 8, closed = false ) {
+		constructor( path = new QuadraticBezierCurve3( new Vector3( - 1, - 1, 0 ), new Vector3( - 1, 1, 0 ), new Vector3( 1, 1, 0 ) ), tubularSegments = 64, radius = 1, radialSegments = 8, closed = false ) {
 
 			super();
 
@@ -37262,10 +38953,10 @@
 
 			// helper variables
 
-			const vertex = new Vector3$1();
-			const normal = new Vector3$1();
+			const vertex = new Vector3();
+			const normal = new Vector3();
 			const uv = new Vector2();
-			let P = new Vector3$1();
+			let P = new Vector3();
 
 			// buffer
 
@@ -37452,8 +39143,8 @@
 
 				// helper variables
 
-				const start = new Vector3$1();
-				const end = new Vector3$1();
+				const start = new Vector3();
+				const end = new Vector3();
 
 				if ( geometry.index !== null ) {
 
@@ -37790,7 +39481,7 @@
 			Object.defineProperty( this, 'reflectivity', {
 				get: function () {
 
-					return ( clamp$1( 2.5 * ( this.ior - 1 ) / ( this.ior + 1 ), 0, 1 ) );
+					return ( clamp( 2.5 * ( this.ior - 1 ) / ( this.ior + 1 ), 0, 1 ) );
 
 				},
 				set: function ( reflectivity ) {
@@ -41236,7 +42927,7 @@
 
 	}
 
-	class Light extends Object3D$1 {
+	class Light extends Object3D {
 
 		constructor( color, intensity = 1 ) {
 
@@ -41300,7 +42991,7 @@
 
 			this.type = 'HemisphereLight';
 
-			this.position.copy( Object3D$1.DEFAULT_UP );
+			this.position.copy( Object3D.DEFAULT_UP );
 			this.updateMatrix();
 
 			this.groundColor = new Color( groundColor );
@@ -41320,8 +43011,8 @@
 	}
 
 	const _projScreenMatrix$1 = /*@__PURE__*/ new Matrix4();
-	const _lightPositionWorld$1 = /*@__PURE__*/ new Vector3$1();
-	const _lookTarget$1 = /*@__PURE__*/ new Vector3$1();
+	const _lightPositionWorld$1 = /*@__PURE__*/ new Vector3();
+	const _lookTarget$1 = /*@__PURE__*/ new Vector3();
 
 	class LightShadow {
 
@@ -41514,10 +43205,10 @@
 
 			this.type = 'SpotLight';
 
-			this.position.copy( Object3D$1.DEFAULT_UP );
+			this.position.copy( Object3D.DEFAULT_UP );
 			this.updateMatrix();
 
-			this.target = new Object3D$1();
+			this.target = new Object3D();
 
 			this.distance = distance;
 			this.angle = angle;
@@ -41571,8 +43262,8 @@
 	}
 
 	const _projScreenMatrix = /*@__PURE__*/ new Matrix4();
-	const _lightPositionWorld = /*@__PURE__*/ new Vector3$1();
-	const _lookTarget = /*@__PURE__*/ new Vector3$1();
+	const _lightPositionWorld = /*@__PURE__*/ new Vector3();
+	const _lookTarget = /*@__PURE__*/ new Vector3();
 
 	class PointLightShadow extends LightShadow {
 
@@ -41615,13 +43306,13 @@
 			];
 
 			this._cubeDirections = [
-				new Vector3$1( 1, 0, 0 ), new Vector3$1( - 1, 0, 0 ), new Vector3$1( 0, 0, 1 ),
-				new Vector3$1( 0, 0, - 1 ), new Vector3$1( 0, 1, 0 ), new Vector3$1( 0, - 1, 0 )
+				new Vector3( 1, 0, 0 ), new Vector3( - 1, 0, 0 ), new Vector3( 0, 0, 1 ),
+				new Vector3( 0, 0, - 1 ), new Vector3( 0, 1, 0 ), new Vector3( 0, - 1, 0 )
 			];
 
 			this._cubeUps = [
-				new Vector3$1( 0, 1, 0 ), new Vector3$1( 0, 1, 0 ), new Vector3$1( 0, 1, 0 ),
-				new Vector3$1( 0, 1, 0 ), new Vector3$1( 0, 0, 1 ),	new Vector3$1( 0, 0, - 1 )
+				new Vector3( 0, 1, 0 ), new Vector3( 0, 1, 0 ), new Vector3( 0, 1, 0 ),
+				new Vector3( 0, 1, 0 ), new Vector3( 0, 0, 1 ),	new Vector3( 0, 0, - 1 )
 			];
 
 		}
@@ -41733,10 +43424,10 @@
 
 			this.type = 'DirectionalLight';
 
-			this.position.copy( Object3D$1.DEFAULT_UP );
+			this.position.copy( Object3D.DEFAULT_UP );
 			this.updateMatrix();
 
-			this.target = new Object3D$1();
+			this.target = new Object3D();
 
 			this.shadow = new DirectionalLightShadow();
 
@@ -41848,7 +43539,7 @@
 
 			for ( let i = 0; i < 9; i ++ ) {
 
-				this.coefficients.push( new Vector3$1() );
+				this.coefficients.push( new Vector3() );
 
 			}
 
@@ -42283,7 +43974,7 @@
 							break;
 
 						case 'v3':
-							material.uniforms[ name ].value = new Vector3$1().fromArray( uniform.value );
+							material.uniforms[ name ].value = new Vector3().fromArray( uniform.value );
 							break;
 
 						case 'v4':
@@ -42738,7 +44429,7 @@
 
 			if ( boundingSphere !== undefined ) {
 
-				const center = new Vector3$1();
+				const center = new Vector3();
 
 				if ( boundingSphere.center !== undefined ) {
 
@@ -43638,7 +45329,7 @@
 
 				default:
 
-					object = new Object3D$1();
+					object = new Object3D();
 
 			}
 
@@ -43968,8 +45659,8 @@
 			const color1 = new Color().set( skyColor );
 			const color2 = new Color().set( groundColor );
 
-			const sky = new Vector3$1( color1.r, color1.g, color1.b );
-			const ground = new Vector3$1( color2.r, color2.g, color2.b );
+			const sky = new Vector3( color1.r, color1.g, color1.b );
+			const ground = new Vector3( color2.r, color2.g, color2.b );
 
 			// without extra factor of PI in the shader, should = 1 / Math.sqrt( Math.PI );
 			const c0 = Math.sqrt( Math.PI );
@@ -44167,12 +45858,12 @@
 
 	}
 
-	const _position$1 = /*@__PURE__*/ new Vector3$1();
+	const _position$1 = /*@__PURE__*/ new Vector3();
 	const _quaternion$1 = /*@__PURE__*/ new Quaternion();
-	const _scale$1 = /*@__PURE__*/ new Vector3$1();
-	const _orientation$1 = /*@__PURE__*/ new Vector3$1();
+	const _scale$1 = /*@__PURE__*/ new Vector3();
+	const _orientation$1 = /*@__PURE__*/ new Vector3();
 
-	class AudioListener extends Object3D$1 {
+	class AudioListener extends Object3D {
 
 		constructor() {
 
@@ -44297,7 +45988,7 @@
 
 	}
 
-	let Audio$1 = class Audio extends Object3D$1 {
+	let Audio$1 = class Audio extends Object3D {
 
 		constructor( listener ) {
 
@@ -44690,10 +46381,10 @@
 
 	};
 
-	const _position = /*@__PURE__*/ new Vector3$1();
+	const _position = /*@__PURE__*/ new Vector3();
 	const _quaternion = /*@__PURE__*/ new Quaternion();
-	const _scale = /*@__PURE__*/ new Vector3$1();
-	const _orientation = /*@__PURE__*/ new Vector3$1();
+	const _scale = /*@__PURE__*/ new Vector3();
+	const _orientation = /*@__PURE__*/ new Vector3();
 
 	class PositionalAudio extends Audio$1 {
 
@@ -48112,7 +49803,7 @@
 			} else {
 
 				this.theta = Math.atan2( x, z );
-				this.phi = Math.acos( clamp$1( y / this.radius, - 1, 1 ) );
+				this.phi = Math.acos( clamp( y / this.radius, - 1, 1 ) );
 
 			}
 
@@ -48389,12 +50080,12 @@
 
 	}
 
-	const _startP = /*@__PURE__*/ new Vector3$1();
-	const _startEnd = /*@__PURE__*/ new Vector3$1();
+	const _startP = /*@__PURE__*/ new Vector3();
+	const _startEnd = /*@__PURE__*/ new Vector3();
 
 	class Line3 {
 
-		constructor( start = new Vector3$1(), end = new Vector3$1() ) {
+		constructor( start = new Vector3(), end = new Vector3() ) {
 
 			this.start = start;
 			this.end = end;
@@ -48461,7 +50152,7 @@
 
 			if ( clampToLine ) {
 
-				t = clamp$1( t, 0, 1 );
+				t = clamp( t, 0, 1 );
 
 			}
 
@@ -48500,9 +50191,9 @@
 
 	}
 
-	const _vector$3 = /*@__PURE__*/ new Vector3$1();
+	const _vector$3 = /*@__PURE__*/ new Vector3();
 
-	class SpotLightHelper extends Object3D$1 {
+	class SpotLightHelper extends Object3D {
 
 		constructor( light, color ) {
 
@@ -48585,7 +50276,7 @@
 
 	}
 
-	const _vector$2 = /*@__PURE__*/ new Vector3$1();
+	const _vector$2 = /*@__PURE__*/ new Vector3();
 	const _boneMatrix = /*@__PURE__*/ new Matrix4();
 	const _matrixWorldInv = /*@__PURE__*/ new Matrix4();
 
@@ -48789,11 +50480,11 @@
 
 	}
 
-	const _vector$1 = /*@__PURE__*/ new Vector3$1();
+	const _vector$1 = /*@__PURE__*/ new Vector3();
 	const _color1 = /*@__PURE__*/ new Color();
 	const _color2 = /*@__PURE__*/ new Color();
 
-	class HemisphereLightHelper extends Object3D$1 {
+	class HemisphereLightHelper extends Object3D {
 
 		constructor( light, size, color ) {
 
@@ -49003,11 +50694,11 @@
 
 	}
 
-	const _v1 = /*@__PURE__*/ new Vector3$1();
-	const _v2 = /*@__PURE__*/ new Vector3$1();
-	const _v3 = /*@__PURE__*/ new Vector3$1();
+	const _v1 = /*@__PURE__*/ new Vector3();
+	const _v2 = /*@__PURE__*/ new Vector3();
+	const _v3 = /*@__PURE__*/ new Vector3();
 
-	class DirectionalLightHelper extends Object3D$1 {
+	class DirectionalLightHelper extends Object3D {
 
 		constructor( light, size, color ) {
 
@@ -49087,7 +50778,7 @@
 
 	}
 
-	const _vector = /*@__PURE__*/ new Vector3$1();
+	const _vector = /*@__PURE__*/ new Vector3();
 	const _camera = /*@__PURE__*/ new Camera();
 
 	/**
@@ -49556,14 +51247,14 @@
 
 	}
 
-	const _axis = /*@__PURE__*/ new Vector3$1();
+	const _axis = /*@__PURE__*/ new Vector3();
 	let _lineGeometry, _coneGeometry;
 
-	class ArrowHelper extends Object3D$1 {
+	class ArrowHelper extends Object3D {
 
 		// dir is assumed to be normalized
 
-		constructor( dir = new Vector3$1( 0, 0, 1 ), origin = new Vector3$1( 0, 0, 0 ), length = 1, color = 0xffff00, headLength = length * 0.2, headWidth = headLength * 0.2 ) {
+		constructor( dir = new Vector3( 0, 0, 1 ), origin = new Vector3( 0, 0, 0 ), length = 1, color = 0xffff00, headLength = length * 0.2, headWidth = headLength * 0.2 ) {
 
 			super();
 
@@ -50147,7 +51838,7 @@
 
 		if ( Math.abs( val ) > 65504 ) console.warn( 'THREE.DataUtils.toHalfFloat(): Value out of range.' );
 
-		val = clamp$1( val, - 65504, 65504 );
+		val = clamp( val, - 65504, 65504 );
 
 		_tables.floatView[ 0 ] = val;
 		const f = _tables.uint32View[ 0 ];
@@ -50675,7 +52366,7 @@
 		NotEqualDepth: NotEqualDepth,
 		NotEqualStencilFunc: NotEqualStencilFunc,
 		NumberKeyframeTrack: NumberKeyframeTrack,
-		Object3D: Object3D$1,
+		Object3D: Object3D,
 		ObjectLoader: ObjectLoader,
 		ObjectSpaceNormalMap: ObjectSpaceNormalMap,
 		OctahedronBufferGeometry: OctahedronBufferGeometry,
@@ -50831,7 +52522,7 @@
 		UnsignedShortType: UnsignedShortType,
 		VSMShadowMap: VSMShadowMap,
 		Vector2: Vector2,
-		Vector3: Vector3$1,
+		Vector3: Vector3,
 		Vector4: Vector4,
 		VectorKeyframeTrack: VectorKeyframeTrack,
 		VideoTexture: VideoTexture,
@@ -50852,150 +52543,6 @@
 		_SRGBAFormat: _SRGBAFormat,
 		sRGBEncoding: sRGBEncoding
 	});
-
-	class Observer {
-		constructor() {
-			this.eventListeners = {};
-		}
-
-		/** Add event, analogous to `addEventListener` and jQuery's `on` */
-		on(eventTypeName, listener) {
-			let eventListenerSet = this.eventListeners[eventTypeName];
-			if (!eventListenerSet) {
-				this.eventListeners[eventTypeName] = new Set();
-				eventListenerSet = this.eventListeners[eventTypeName];
-			}
-			eventListenerSet.add(listener);
-		}
-
-		/** Remove event, analogous to `removeEventListener` and jQuery's `off` */
-		off(eventTypeName, listener) {
-			const eventListenerSet = this.eventListeners[eventTypeName];
-			if (!eventListenerSet) return;
-			eventListenerSet.delete(listener);
-		}
-
-		/** Trigger an event */
-		trigger(eventTypeName, data) {
-			const eventListenerSet = this.eventListeners[eventTypeName];
-			if (!eventListenerSet) return;
-			eventListenerSet.forEach((listener) => listener(data));
-		}
-	}
-
-	// Events
-	const COMMAND_EVENT = 'command';
-	const MISSING_COMMAND_EVENT = 'missingCommand';
-	const MOUNT_EVENT = 'mount';
-	const UNMOUNT_EVENT = 'unmount';
-	const MAPPING_EVENT = 'mapping';
-	const ALL_EVENTS = [
-		COMMAND_EVENT, MISSING_COMMAND_EVENT, MOUNT_EVENT, UNMOUNT_EVENT, MAPPING_EVENT,
-	];
-	// Other constants
-	const KEY_EVENT = 'keydown'; // Note that keyPress acts different and doesn't trigger for some keys
-
-	class KeyboardCommander extends Observer {
-		constructor(keyCommandMapping = {}, options = {}) {
-			super();
-			// this.state = options.state || 'default';
-			this.mapping = {};
-			this.setMapping(keyCommandMapping);
-			this.document = options.document || window?.document || null;
-			if (!this.document?.addEventListener) throw error('document with addEventListener is required');
-			this.keyPressListener = (event) => this.handleKeyPress(event);
-			// Set up event hooks, if provided
-			this.setupEventListeners(options);
-			// Advanced settings
-			this.nodeNamesDontTrigger = ['TEXTAREA', 'INPUT'];
-			this.nodeNamesAllowDefault = ['TEXTAREA', 'INPUT']; // redundant since they won't get triggered
-			// Start it up - default is to automatically mount
-			if (options.autoMount === undefined || options.autoMount) this.mount();
-		}
-
-		setMapping(mappingParam = {}) {
-			if (typeof mappingParam !== 'object') throw new Error('Invalid type for mapping param');
-			this.mapping = {...mappingParam};
-			this.trigger(MAPPING_EVENT);
-			return this.mapping;
-		}
-
-		mapKey(key, command) {
-			this.mapping[key] = command;
-			this.trigger(MAPPING_EVENT);
-			return true;
-		}
-
-		mapUnmappedKey(key, command) {
-			if (this.mapping[key]) return false; // Don't overwrite a mapping
-			return this.mapKey(key, command);
-		}
-
-		unmapKey(key) {
-			if (this.mapping[key]) return false;
-			delete this.mapping[key];
-			this.trigger(MAPPING_EVENT);
-			return true;
-		}
-
-		mount() {
-			this.document.addEventListener(KEY_EVENT, this.keyPressListener);
-			this.trigger(MOUNT_EVENT);
-		}
-
-		unmount() {
-			this.document.removeEventListener(KEY_EVENT, this.keyPressListener);
-			this.trigger(UNMOUNT_EVENT);
-		}
-
-		handleKeyPress(event) {
-			// https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent
-			const { key, code, keyCode, altKey, ctrlKey, shiftKey, metaKey, repeat } = event;
-			const details = { code, keyCode, altKey, ctrlKey, shiftKey, metaKey, repeat };
-			const { nodeName } = event.target;
-			if (this.nodeNamesDontTrigger.includes(nodeName)) return;
-			if (!this.nodeNamesAllowDefault.includes(nodeName)) {
-				event.preventDefault();
-			}
-			this.triggerKey(key, details);
-		}
-
-		setupEventListeners(listenersObj = {}) {
-			ALL_EVENTS.forEach((eventName) => {
-				// Assumes that the value will be a function
-				if (listenersObj[eventName]) this.on(eventName, listenersObj[eventName]);
-			});
-		}
-
-		triggerCommand(command) {
-			this.trigger(COMMAND_EVENT, command);
-		}
-
-		triggerMissingCommand(key) {
-			// console.warn('No command for', key);
-			this.trigger(MISSING_COMMAND_EVENT, key);
-		}
-
-		triggerKey(key, details = {}) {
-			const command = this.mapping[key];
-			// TODO: Look at details and handle them in the mapping
-			if (command) {
-				this.triggerCommand(command);
-			} else {
-				this.triggerMissingCommand(key);
-			}
-		}
-
-		getKeysMapped() {
-			return Object.keys(this.mapping);
-		}
-
-		getCommands() {
-			const uniqueCommands = new Set();
-			this.getKeysMapped().forEach((key) => uniqueCommands.add(this.mapping[key]));
-			return Array.from(uniqueCommands);
-		}
-	}
 
 	class Renderer extends WebGLRenderer {
 		constructor(options = {}) {
@@ -51037,1623 +52584,300 @@
 		}
 	}
 
-	// Constants
-	const NORTH = 0;
-	const EAST = 1;
-	const SOUTH = 2;
-	const WEST = 3;
-	const X$1 = 0;
-	const Y$1 = 1;
-	const Z$1 = 2;
-	const DIRECTION_NAMES = Object.freeze(['North', 'East', 'South', 'West']);
-	const DIRECTIONS = Object.freeze([NORTH, EAST, SOUTH, WEST]);
-	const RADIANS = Object.freeze([0, Math.PI * 0.5, Math.PI, Math.PI * 1.5]);
+	// External modules
 
-	//       /^\ -y North
-	// West   |
-	// -x <---o---> +x East
-	//        |
-	//       \./ +y South
-
-	class ArrayCoords {
-		static getRelativeCoordsInDirection(coords, facing, forward = 0, strafe = 0, up = 0) {
-			const newCoords = [...coords];
-			const facingEastWest = (facing % 2);
-			const forwardAxis = facingEastWest ? X$1 : Y$1;
-			const strafeAxis = facingEastWest ? Y$1 : X$1;
-			const forwardDirection = (facing === NORTH || facing === WEST) ? -1 : 1;
-			const strafeDirection = (facing === NORTH || facing === EAST) ? 1 : -1;
-			newCoords[forwardAxis] += (forward * forwardDirection);
-			newCoords[strafeAxis] += (strafe * strafeDirection);
-			newCoords[Z$1] += up;
-			return newCoords;
-		}
-
-		static normalizeDirection(facing) {
-			const fixedFacing = facing % DIRECTIONS.length;
-			return (fixedFacing < 0) ? (DIRECTIONS.length + fixedFacing) : fixedFacing;
-		}
-
-		static getDirectionName(facingParam) {
-			const facing = ArrayCoords.normalizeDirection(facingParam);
-			return DIRECTION_NAMES[facing];
-		}
-
-		static getDirectionRadians(facingParam) {
-			const facing = ArrayCoords.normalizeDirection(facingParam);
-			return RADIANS[facing];
-		}
-
-		static getDistance(coords1, coords2) {
-			return Math.sqrt(
-				(coords2[X$1] - coords1[X$1]) ** 2
-				+ (coords2[Y$1] - coords1[Y$1]) ** 2
-				+ (coords2[Z$1] - coords1[Z$1]) ** 2,
-			);
-		}
-
-		static checkEqual(coords1, coords2) {
-			return (coords1[X$1] === coords2[X$1] && coords1[Y$1] === coords2[Y$1] && coords1[Z$1] === coords2[Z$1]);
-		}
-
-		static subtract(coords1, coords2) {
-			return [coords1[X$1] - coords2[X$1], coords1[Y$1] - coords2[Y$1], coords1[Z$1] - coords2[Z$1]];
-		}
-
-		static add(coords1, coords2) {
-			return [coords1[X$1] + coords2[X$1], coords1[Y$1] + coords2[Y$1], coords1[Z$1] + coords2[Z$1]];
-		}
-	}
-
-	// Indices
-	ArrayCoords.X = X$1;
-	ArrayCoords.Y = Y$1;
-	ArrayCoords.Z = Z$1;
-	ArrayCoords.NORTH = NORTH;
-	ArrayCoords.EAST = EAST;
-	ArrayCoords.SOUTH = SOUTH;
-	ArrayCoords.WEST = WEST;
-	ArrayCoords.DIRECTIONS = DIRECTIONS;
-	window.ArrayCoords = ArrayCoords;
-
-	class Pool {
-		constructor(max = 0, value = undefined) {
-			this.max = max;
-			this.min = 0;
-			this.value = (typeof value === 'undefined') ? max : value;
-			if (typeof this.max !== 'number' || typeof this.value !== 'number') {
-				throw new Error('Need numbers for max and value');
-			}
-			this.lastDelta = 0; // track the last change for display purposes
-		}
-
-		get() {
-			return this.value;
-		}
-
-		set(v) {
-			if (typeof v !== 'number') throw new Error('Cannot set to a non-number');
-			const ogValue = this.value;
-			this.value = Math.max(Math.min(this.max, v), this.min);
-			this.lastDelta = this.value - ogValue;
-			return this.value;
-		}
-
-		getText() {
-			return `${this.value} / ${this.max}`;
-		}
-
-		add(n = 0) {
-			if (n < 0) return -1 * this.subtract(-n);
-			const maxToAdd = Math.min(this.max - this.value, n);
-			this.set(this.value + maxToAdd);
-			return maxToAdd;
-		}
-
-		subtract(n = 0) {
-			if (n < 0) return -1 * this.add(-n);
-			const maxToSubtract = Math.min(this.value, n);
-			this.set(this.value - maxToSubtract);
-			return maxToSubtract;
-		}
-
-		belowMax() { return this.value < this.max; }
-
-		atMax() { return this.value === this.max; }
-
-		atMin() { return this.value === this.min; }
-
-		aboveMin() { return this.value > this.min; }
-
-		clearLastDelta() {
-			this.lastDelta = 0;
-		}
-	}
-
-	const DEFAULT_POOL_MAX = 10;
-
-	class Actor {
-		constructor(blob) {
-			this.isActor = true;
-			this.statPools = ['hp', 'stamina', 'willpower', 'balance'];
-			const poolMaxes = this.statPools.map((poolName) => (
-				blob[poolName] || DEFAULT_POOL_MAX
-			));
-			this.statPools.forEach((poolName, i) => {
-				this[poolName] = new Pool(poolMaxes[i]);
-			});
-			// this.hp = new Pool(10, 10);
-			// this.willpower = new Pool(10, 10);
-			// this.stamina = new Pool(10, 10);
-			// this.balance = new Pool(10, 10);
-			this.xp = 0;
-			this.knownAbilities = ['hack'];
-		}
-
-		clearLastRound() {
-			this.statPools.forEach((statName) => {
-				this[statName].clearLastDelta();
-			});
-		}
-
-		hurt(dmg = 0) {
-			return this.hp.subtract(dmg);
-		}
-
-		heal(healing = 0, poolType = 'hp') {
-			return this[poolType].add(healing);
-		}
-
-		waitHeal(rounds = 1) {
-			this.hp.add(1 * rounds);
-			this.willpower.add(1 * rounds);
-			this.stamina.add(2 * rounds);
-			this.balance.add(3 * rounds);
-		}
-
-		damage(dmg = 0, poolType = 'hp') {
-			// if (dmg) this.blob.aggro = 1;
-			return this[poolType].subtract(dmg);
-		}
-	}
-
-	// import { clamp } from 'three/src/math/mathutils.js';
-	const clamp = (v, min = 0, max = 1) => v < min ? min : v > max ? max : v;
-
-	class PseudoRandomizer {
-		constructor(seed) {
-			this.seed = seed || Math.round(Math.random() * 9999);
-		}
-
-		static getPseudoRand(seed) {
-			// http://stackoverflow.com/a/19303725/1766230
-			const x = Math.sin(seed) * 10000;
-			return x - Math.floor(x);
-		}
-
-		random(n) {
-			this.seed += 1;
-			const r = PseudoRandomizer.getPseudoRand(this.seed);
-			if (n) return Math.floor(r * n);
-			return r;
-		}
-	}
-
-	const clone = (value) => JSON.parse(JSON.stringify(value));
-	const objEqual = (o1, o2) => {
-		const value1 = (typeof o1 === 'object') ? JSON.stringify(o1) : o1;
-		const value2 = (typeof o2 === 'object') ? JSON.stringify(o2) : o2;
-		return value1 === value2;
-	};
-
-	/** A block entity is jjust something that exists at a space in the grid/voxel world */
-	class BlockEntity {
-		constructor(startAt = [], blockLegend = {}) {
-			const [mapKey, x, y, z] = startAt;
-			this.mapKey = mapKey;
-			this.coords = [x, y, z];
-			this.tags = [];
-			this.blockId = Number(new Date()).toString(36) + Math.round(Math.random() * 99999).toString(36);
-			// Add all properties from legend
-			Object.keys(blockLegend).forEach((key) => {
-				if (typeof blockLegend[key] === 'object') {
-					this[key] = clone(blockLegend[key]);
-					return;
-				}
-				this[key] = blockLegend[key];
-			});
-			// this.name = blockLegend.name;
-			// this.renderAs = blockLegend.renderAs;
-			// this.texture = blockLegend.texture;
-			// this.textureRange = blockLegend.textureRange;
-			// this.npc = blockLegend.npc;
-			// Add properties from legend that have a default value
-			this.blocked = blockLegend.blocked || 0;
-
-			// Procedural (seed-based) randomness
-			this.seed = parseInt(this.name || 'dude', 32) + this.coords[0] + this.coords[1] + this.coords[2];
-			if (Number.isNaN(this.seed)) {
-				console.warn('seed is NaN', this); // TODO: There is a bug that's setting this wrong for the hero
-				this.seed = Math.round(Math.random() * 99999);
-			}
-			// Modify color
-			if (this.color) {
-				const i = Math.floor(this.getBlockRand() * 3);
-				const alterColor = (this.getBlockRand() / 15) - (this.getBlockRand() / 15);
-				this.color[i] = clamp(this.color[i] + alterColor, 0, 1);
-				this.originalColor = [...this.color];
-			}
-			// Modify texture for texture range
-			if (this.texture && this.textureRange) {
-				const n = this.textureRange[1] - this.textureRange[0];
-				const textureNum = this.textureRange[0] + Math.floor(this.getBlockRand() * n);
-				this.texture = this.texture.replace('.', `${textureNum}.`);
-				// this.color = '#ffffff';
-			}
-			this.dna = Object.freeze([this.getBlockRand(), this.getBlockRand(), this.getBlockRand()]);
-			// We want a small offset amount to stop overlaps when two blocks are on the same location
-			this.wiggle = [this.getBlockRand(), this.getBlockRand(), 0];
-			this.redraw = false; // Do we need to redraw the thing (likely due to a texture change)
-		}
-
-		getBlockRand() {
-			this.seed += 1;
-			return PseudoRandomizer.getPseudoRand(this.seed);
-		}
-
-		switchMap(mapKey) {
-			this.mapKey = mapKey;
-		}
-
-		getMapKey() {
-			return this.mapKey;
-		}
-
-		getCoords() {
-			return [...this.coords];
-		}
-
-		moveTo(coords) {
-			const [x, y, z] = coords;
-			if (typeof x === 'number') this.coords[0] = x;
-			if (typeof y === 'number') this.coords[1] = y;
-			if (typeof z === 'number') this.coords[2] = z;
-		}
-
-		move(relativeCoords) {
-			const newCoords = [0, 1, 2].forEach((i) => this.coords[i] + relativeCoords[i]);
-			this.moveTo(newCoords);
-		}
-
-		changeRendering(changes = { /* texture, onGround, renderAs */ }) {
-			let changeCount = 0;
-			Object.keys(changes).forEach((changeKey) => {
-				if (objEqual(this[changeKey], changes[changeKey])) return;
-				this[changeKey] = changes[changeKey];
-				changeCount += 1;
-			});
-			if (changeCount > 0) this.redraw = true;
-		}
-
-		getTags() {
-			return this.tags;
-		}
-
-		hasTag(tag) {
-			const blobTags = this.getTags();
-			return blobTags.includes(tag);
-		}
-
-		hasOneOfTags(tags = []) {
-			const blobTags = this.getTags();
-			const matchingTags = blobTags.filter((tag) => tags.includes(tag));
-			return (matchingTags.length > 0);
-		}
-
-		getVisibilityTo(lookerBlob) {
-			if (!this.invisible) return true;
-			if (this.invisible instanceof Array) {
-				return lookerBlob.hasOneOfTags(this.invisible);
-			}
-			return false;
-		}
-	}
-
-	const MAX_COMMAND_QUEUE_SIZE = 3;
-	const BASE_INV_ITEM = {
-		key: '?unknown_item?',
-		name: '?unknown_item?',
-		quantity: 1,
-		description: '',
-	};
-
-	/** A blob of characters that can interact with the world */
-	class ActorBlob extends BlockEntity {
-		constructor(ActorClass, startAt = [], blockLegend = {}) {
-			super(startAt, blockLegend);
-			this.isActorBlob = true;
-			this.damageScale = (typeof this.damageScale !== 'number') ? 1 : this.damageScale;
-			this.facing = blockLegend.facing || 0;
-			this.active = true; // Inactive characters don't need to be ready
-			this.ready = false; // Ready for next turn?
-			this.commandQueue = [];
-			this.blobId = Number(new Date()).toString(36) + Math.round(Math.random() * 99999).toString(36);
-			this.inventory = [null, null, null, null, null, null];
-			if (blockLegend.inventory) this.setInventory(blockLegend.inventory);
-			// Update defaults for some actor-specific legend properties
-			if (typeof this.aggro !== 'number') this.aggro = 0;
-			this.dead = false;
-			this.interactions = {};
-			this.lastSpoken = '';
-			this.blob = [
-				new (ActorClass || Actor)(this),
-			];
-		}
-
-		clearLastRound() {
-			this.blob.forEach((actor) => {
-				actor.clearLastRound();
-			});
-			this.lastSpoken = '';
-		}
-
-		getMoodEmoji() {
-			if (this.dead) return '💀';
-			if (this.aggro) return '😡';
-			return '☮';
-		}
-
-		turn(n = 0) {
-			this.facing = ArrayCoords.normalizeDirection(this.facing + n);
-		}
-
-		turnTo(f) {
-			if (typeof f === 'number') {
-				this.facing = ArrayCoords.normalizeDirection(f);
-			}
-		}
-
-		turnTowards(coords = []) {
-			const [deltaX, deltaY] = ArrayCoords.subtract(this.coords, coords);
-			let { facing } = this;
-			if (deltaX < 0) facing = 1;
-			else if (deltaX > 0) facing = 3;
-			if (deltaY < 0) facing = 2;
-			else if (deltaY > 0) facing = 0;
-			// TODO: This could be improved so that it doesn't favor Y direction if the target
-			// is at a diagnol angle
-			this.turnTo(facing);
-		}
-
-		queueCommand(command) {
-			if (this.commandQueue > MAX_COMMAND_QUEUE_SIZE) return false;
-			this.commandQueue.push(command);
-			return true;
-		}
-
-		dequeueCommand() {
-			// TODO: Remove command if it's not possible to do?
-			return this.commandQueue.shift();
-		}
-
-		getLeader() {
-			return this.blob[0];
-		}
-
-		getRandomMember() {
-			const i = Math.floor(this.blob.length * Math.random());
-			return this.blob[i];
-		}
-
-		checkReady() {
-			if (!this.active) return true;
-			return (this.commandQueue.length > 0);
-		}
-
-		getAheadCoords() {
-			return ArrayCoords.getRelativeCoordsInDirection(this.coords, this.facing, 1, 0, 0);
-		}
-
-		getFacingBlocks(worldMap) {
-			const aheadCoords = this.getAheadCoords();
-			return worldMap.getBlocksAtCoords(aheadCoords);
-		}
-
-		checkFacingWall(worldMap) {
-			const aheadCoords = this.getAheadCoords();
-			return worldMap.isBlockedAtCoords(aheadCoords);
-		}
-
-		getFacingActor(worldMap) {
-			const blocksAhead = this.getFacingBlocks(worldMap);
-			const actorsAhead = blocksAhead
-				.filter((block) => (
-					block.isActorBlob && block.getVisibilityTo(this)
-				))
-				// put living actors at the front of the list
-				// otherwise we can end up attacking corpses
-				.sort((a, b) => ((a.dead && !b.dead) ? 1 : -1));
-			// if (actorsAhead.length > 1)
-			// console.warn('More than 1 actor ahead of', this.name,
-			// '. that probably should not happen', actorsAhead);
-			if (actorsAhead.length) return actorsAhead[0];
-			return null;
-		}
-
-		getKnownAbilities() {
-			const allBlobAbilitiesSet = new Set();
-			this.blob.forEach((character) => {
-				character.knownAbilities.forEach((abilityName) => {
-					allBlobAbilitiesSet.add(abilityName);
-				});
-			});
-			return Array.from(allBlobAbilitiesSet);
-		}
-
-		static getPoolAmount(numOrArray, special) {
-			if (typeof numOrArray === 'number') return numOrArray;
-			if (numOrArray instanceof Array) {
-				const [min, max] = numOrArray;
-				const spread = max - min;
-				const rand = (special === 'max') ? 1 : Math.random();
-				return Math.floor(rand * spread) + Math.round(min);
-			}
-			throw new Error('bad numOrarray');
-		}
-
-		static getDamageAmount(numOrArray, effectiveness = 1, scale = 1) {
-			if (typeof numOrArray === 'number') {
-				return Math.floor(numOrArray * scale * effectiveness);
-			}
-			if (numOrArray instanceof Array) {
-				let [min, max] = numOrArray;
-				min *= scale;
-				max *= scale;
-				const spread = max - min;
-				return Math.floor(((Math.random() * spread) + min) * effectiveness);
-			}
-			throw new Error('bad numOrarray');
-		}
-
-		payAbilityCost(cost = {}) {
-			let effectiveness = 1;
-			const who = this.getLeader();
-			Object.keys(cost).forEach((poolKey) => {
-				const costAmount = ActorBlob.getPoolAmount(cost[poolKey]);
-				const actualCostSpent = who.damage(costAmount, poolKey);
-				const diff = costAmount - actualCostSpent;
-				if (diff > 0) effectiveness = 1 - (diff / costAmount);
-			});
-			return effectiveness;
-		}
-
-		canAffordAbility(ability) {
-			const { cost } = ability;
-			if (!cost) return true;
-			const who = this.getLeader();
-			let canAfford = true;
-			Object.keys(cost).forEach((poolKey) => {
-				const costAmount = ActorBlob.getPoolAmount(cost[poolKey], 'max');
-				if (costAmount > who[poolKey].get()) canAfford = false;
-			});
-			return canAfford;
-		}
-
-		replenish(replenish = {}, effectiveness = 1) {
-			Object.keys(replenish).forEach((poolKey) => {
-				const healAmount = Math.floor(ActorBlob.getPoolAmount(replenish[poolKey]) * effectiveness);
-				this.getLeader().heal(healAmount, poolKey);
-			});
-		}
-
-		/** Uses an ability for the blob, paying the cost, and returning the effectiveness 0-1 */
-		useAbility(ability = {}) {
-			const { cost, replenish } = ability;
-			const effectiveness = (cost) ? this.payAbilityCost(cost) : 1;
-			if (replenish) this.replenish(replenish, effectiveness);
-			return effectiveness;
-		}
-
-		applyAbility(ability = {}, effectiveness = 1, damageScale = 1) {
-			const { damage } = ability;
-			if (!damage) return 0;
-			const whoIsHit = this.getRandomMember();
-			Object.keys(damage).forEach((poolKey) => {
-				const dmgAmount = ActorBlob.getDamageAmount(damage[poolKey], effectiveness, damageScale);
-				const finalDamage = whoIsHit.damage(dmgAmount, poolKey);
-				if (finalDamage > 0) this.aggro = 1;
-			});
-			return 1;
-		}
-
-		getDialogOptions(actor) {
-			if (!actor || !actor.dialog) return [];
-			const dialogKeys = Object.keys(actor.dialog);
-			const actorInteractions = this.interactions[actor.blobId] || {};
-			const { unlockedDialogKeys = [] } = actorInteractions;
-			const pickAnswer = (dialogOption) => {
-				const dialogOptObj = (typeof dialogOption === 'object') ? dialogOption : {};
-				const answer = (
-					dialogOptObj.answer
-					|| dialogOptObj.a
-					|| ((typeof dialogOption === 'string') ? dialogOption : '???')
-				);
-				if (answer instanceof Array) {
-					const i = Math.floor(answer.length * actor.dna[0]);
-					return answer[i];
-				}
-				return answer;
-			};
-			// Filter the dialog keys then standardize the dialog format
-			const talkableDialogOptions = dialogKeys.filter(
-				(key) => !actor.dialog[key].locked || unlockedDialogKeys.includes(key),
-			).map((key) => {
-				const dialogOption = actor.dialog[key];
-				const dialogOptObj = (typeof dialogOption === 'object') ? dialogOption : {};
-				let { unlocks = [] } = dialogOptObj;
-				if (typeof unlocks === 'string') unlocks = [unlocks];
-				let { locks = [] } = dialogOptObj;
-				if (typeof locks === 'string') locks = [locks];
-				const answer = pickAnswer(dialogOption);
-				const { questionAudio, answerAudio, cost, requires, aggro } = dialogOptObj;
-				return {
-					// ...dialogOptObj,
-					key,
-					question: dialogOptObj.question || dialogOptObj.q || key,
-					answer,
-					locks,
-					unlocks,
-					questionAudio,
-					answerAudio,
-					cost,
-					requires,
-					aggro,
-				};
-			});
-			return talkableDialogOptions;
-		}
-
-		listenToDialog(dialogOption, actor) {
-			if (!dialogOption) throw new Error('Missing dialog option');
-			if (!this.interactions[actor.blobId]) this.interactions[actor.blobId] = {};
-			const actorInteractions = this.interactions[actor.blobId];
-			actorInteractions.unlockedDialogKeys = (actorInteractions.unlockedDialogKeys || [])
-				.concat(dialogOption.unlocks || []);
-			// console.log(actorInteractions.unlockedDialogKeys);
-		}
-
-		speakDialog(dialogOption) {
-			if (!dialogOption) {
-				console.error(this.name, 'cannot speak blank dialog option', dialogOption);
-				return;
-			}
-			this.lastSpoken = dialogOption.answer;
-			if (typeof dialogOption.aggro === 'number') this.aggro = dialogOption.aggro;
-		}
-
-		waitHeal(rounds = 1) {
-			this.blob.forEach((character) => {
-				character.waitHeal(rounds);
-			});
-		}
-
-		getDamage() {
-			const baseDmg = (this.isPlayerBlob) ? 8 : 2;
-			const dmg = Math.floor(Math.random() * baseDmg * this.damageScale) + 1;
-			return dmg;
-		}
-
-		kill() {
-			this.blob.forEach((character) => {
-				character.damage(Infinity, 'hp');
-			});
-			if (this.dead) return;
-			this.dead = true;
-			this.blocked = 0;
-			if (this.death) {
-				if (this.death.spawn) {
-					this.queueCommand(`spawn ${JSON.stringify(this.death.spawn)}`);
-				}
-				if (this.death.dialog) {
-					this.dialog = this.death.dialog;
-				}
-			}
-			this.changeRendering({
-				texture: this.deadTexture || this.texture,
-				onGround: true,
-				renderAs: 'plane',
-				// TODO: set rotation based on facing value
-				opacity: 0.5,
-				color: [1, 0, 0],
-			});
-		}
-
-		checkDeath() {
-			const totalHp = this.blob.map((character) => character.hp.get())
-				.reduce((sum, hp) => sum + hp, 0);
-			if (totalHp <= 0) {
-				this.kill();
-				return true;
-			}
-			return false;
-		}
-
-		/** Overwrite block entity's method so we dynamically create the tags */
-		getTags() {
-			const invTags = this.inventory.filter((invItem) => invItem)
-				.map((invItem) => `item:${invItem.key}`);
-			this.tags = invTags; // cache it
-			return invTags;
-		}
-
-		setInventory(inv = []) {
-			inv.forEach((invItem, i) => {
-				if (i > this.inventory.length - 1) {
-					console.warn('Item', invItem, 'could not fit in inventory');
-					return;
-				}
-				if (typeof invItem === 'string') {
-					this.inventory[i] = { ...BASE_INV_ITEM, key: invItem, name: invItem };
-					// TODO: ^ set this based on looking up an item from a legend of items
-					// based on the invItem being a key
-					return;
-				}
-				if (typeof invItem !== 'object') throw new Error('Bad invItem type');
-				this.inventory[i] = { ...BASE_INV_ITEM, ...invItem };
-			});
-		}
-
-		getInventoryItem(i) {
-			return this.inventory[i];
-		}
-	}
-
-	class PlayerCharacter extends Actor {
-		constructor(playerBlob, startAt = []) {
-			super(playerBlob, startAt);
-			this.knownAbilities = ['hack', 'slash', 'bash', 'rally'];
-		}
-	}
-
-	/** A Player and the blob of characters they control */
-	class PlayerBlob extends ActorBlob {
-		constructor(startAt = [], playerBlockLegendParam = {}) {
-			const playerBlockLegend = {
-				...playerBlockLegendParam,
-				blocked: 1,
-				//
-			};
-			super(PlayerCharacter, startAt, playerBlockLegend);
-			this.isPlayerBlob = true;
-			this.blocked = 1;
-			this.color = [1, 1, 1];
-			this.renderAs = 'billboard';
-			if (!this.texture) this.texture = 'human_male.png';
-		}
-	}
-
-	class NonPlayerCharacter extends Actor {
-		constructor(blob, startAt = []) {
-			super(blob, startAt);
-			this.knownAbilities = ['hack', 'slash', 'bash'];
-		}
-	}
-
-	const BRAINS = {
-		monster: {
-			wander: 0.8,
-			huntPlayers: 1,
-			sight: 10,
-		},
-		still: {
-			wander: 0,
-			//
-		},
-		wanderer: {
-			wander: 0.5,
-			//
-		},
-		villager: {
-			wander: 0.1,
-			//
-		},
-	};
-
-	/** A blob of NPCs */
-	class NpcBlob extends ActorBlob {
-		constructor(startAt = [], blockLegend = {}) {
-			super(NonPlayerCharacter, startAt, blockLegend);
-			this.isNpcBlob = true;
-			this.brain = null;
-			if (blockLegend.npc && BRAINS[blockLegend.npc]) {
-				this.brain = BRAINS[blockLegend.npc];
-			}
-		}
-
-		plan(players = [], worldMap = {}) {
-			const roll = Math.random();
-			// If facing a wall, do a free turn
-			if (this.checkFacingWall(worldMap)) {
-				console.log(this.name, 'facing wall so turning');
-				this.turn((roll < 0.2) ? 1 : -1); // turning is free for NPCs
-			}
-			if (this.brain && !this.dead) {
-				// Hunters
-				const huntingValue = this.brain.huntPlayers || this.aggro;
-				if (this.aggro && roll < huntingValue) {
-					const isHunting = this.planHunt(players, worldMap);
-					if (isHunting) return;
-				}
-				// Wanderers
-				if (this.brain.wander && roll < this.brain.wander) {
-					this.planWander();
-					return;
-				}
-			}
-			this.queueCommand('wait');
-		}
-
-		planHunt(prey = [], worldMap = {}, command = 'attack') {
-			let nearestPrey;
-			let nearestDist = Infinity;
-			const nearPrey = prey.filter((a) => {
-				// If they both have factions and they're the same then don't hunt
-				if (this.faction && a.faction && a.faction === this.faction) return false;
-				if (a.dead) return false;
-				const dist = ArrayCoords.getDistance(a.coords, this.coords);
-				if (dist > this.sight) return false;
-				if (dist < nearestDist) {
-					nearestDist = dist;
-					nearestPrey = a;
-				}
-				return true;
-			});
-			if (!nearPrey.length) return false; // No one to hunt within sight
-			// TODO: Do A-star path finding to get to nearestPrey
-			this.turnTowards(nearestPrey.coords);
-			if (nearestDist > 1) {
-				console.log(this.name, 'planning to hunt', nearPrey);
-				this.queueCommand('forward');
-			} else if (nearestDist === 1) {
-				// TODO: Should we check getFacingActor?
-				const targetActor = this.getFacingActor(worldMap);
-				console.log(this.name, 'is next to', targetActor, ', so will attack');
-				this.queueCommand(command);
-			}
-			return true;
-		}
-
-		planWander() {
-			const roll = Math.random();
-			if (roll < 0.5) {
-				// const turnCommand = (roll < 0.1) ? 'turnRight' : 'turnLeft';
-				// this.queueCommand(turnCommand);
-				this.turn((roll < 0.1) ? 1 : -1); // turning is free for NPCs
-				this.queueCommand('forward');
-			} else {
-				this.queueCommand('forward');
-			}
-		}
-	}
-
-	class VoxelWorldMap {
-		constructor(mapKey, world, sourceMap = []) {
-			this.mapKey = mapKey;
-			this.world = world; // parent
-			this.sourceMap = sourceMap || world.sourceMaps[mapKey];
-			this.music = this.sourceMap.music || null;
-			// console.log('Making', mapKey, 'from', this.sourceMap);
-			const { map, legend } = this.sourceMap;
-			this.originalMap = map;
-			this.legend = legend;
-			this.blocks = VoxelWorldMap.parseWorldMapToBlocks(mapKey, map, legend);
-			this.npcBlobs = this.blocks.filter((block) => block instanceof NpcBlob);
-		}
-
-		static parseWorldMapToBlocks(mapKey, map, legend) {
-			const blocks = [];
-			map.forEach((floor, z) => {
-				floor.forEach((row, y) => {
-					row.split('').forEach((char, x) => {
-						const startAt = [mapKey, x, y, z];
-						const blockLegend = legend[char];
-						if (!blockLegend) console.error(char, 'not found in legend', legend);
-						// If it is called "clear", or it is not blocking and not being rendered,
-						// then it's not really a block.
-						if (blockLegend.name === 'clear' || (!blockLegend.renderAs && !blockLegend.blocked)) {
-							return;
-						}
-						const BlockClass = (blockLegend.npc) ? NpcBlob : BlockEntity;
-						const block = new BlockClass(startAt, blockLegend);
-						blocks.push(block);
-					});
-				});
-			});
-			return blocks;
-		}
-
-		getNearbyBlocks(coords = [], distance = []) {
-			const [nearX, nearY, nearZ] = coords;
-			const [dX, dY, dZ] = distance;
-			return this.blocks.filter((block) => {
-				if (block.mapKey !== this.mapKey) console.error('block has wrong mapKey', block, 'expecting', this.mapKey);
-				const [x, y, z] = block.coords;
-				return (
-					Math.abs(x - nearX) <= dX
-					&& Math.abs(y - nearY) <= dY
-					&& Math.abs(z - nearZ) <= dZ
-				);
-			});
-		}
-
-		getBlocksAtCoords(coords = []) {
-			return this.blocks.filter((block) => ArrayCoords.checkEqual(block.coords, coords));
-		}
-
-		getBlocksAtMoveCoordinates(coords, facing, forward = 0, strafe = 0, up = 0) {
-			const newCoords = ArrayCoords.getRelativeCoordsInDirection(coords, facing, forward, strafe, up);
-			return this.getBlocksAtCoords(newCoords);
-		}
-
-		getBlockedSumAtCoords(coords = []) {
-			const blocks = this.getBlocksAtCoords(coords);
-			const blockedSum = blocks.reduce((sum, block) => sum + (block.blocked || 0), 0);
-			return blockedSum;
-		}
-
-		isBlockedAtCoords(coords = []) {
-			return (this.getBlockedSumAtCoords(coords) >= 1);
-		}
-
-		getNpcs() {
-			return this.blocks.filter((block) => block.isNpcBlob);
-		}
-
-		getPlayerBlobs() {
-			return this.blocks.filter((block) => block.isPlayerBlob);
-		}
-
-		findBlock(block) {
-			const i = this.foundBlockIndex(block);
-			return (i === -1) ? null : this.blocks[i];
-		}
-
-		findBlockIndex(block) {
-			let foundIndex = -1;
-			for (let i = this.blocks.length - 1; i >= 0; i -= 1) {
-				if (this.blocks[i].blockId === block.blockId) {
-					foundIndex = i;
-					i = -1;
-				}
-			}
-			return foundIndex;
-		}
-
-		addBlock(block) {
-			const i = this.findBlockIndex(block);
-			if (i > -1) {
-				console.warn('Cannot add duplicate block', block);
-				return false;
-			}
-			this.blocks.push(block);
-			return true;
-		}
-
-		removeBlock(block) {
-			const i = this.findBlockIndex(block);
-			if (i === -1) return false;
-			this.blocks.splice(i, 1);
-			return true;
-		}
-	}
-
-	// import ArrayCoords from './ArrayCoords.js';
-
-	// const DEFAULT_BLOCK_TYPES = {
-	// ' ': { name: 'clear', blocked: 0, renderAs: false },
-	// '#': { name: 'stone', blocked: 1, renderAs: 'box', color: [0.8, 0.8, 0.7] },
-	// };
-
-	class VoxelWorld {
-		constructor(worldSourceMaps = {}) {
-			this.worldMaps = worldSourceMaps;
-			this.maps = VoxelWorld.parseSourceMapsToWorldMaps(worldSourceMaps, this);
-			// this.blocks = VoxelWorld.parseWorldMapsToBlocks(worldSourceMaps);
-			// this.blocksByMap = this.makeBlocksByMap();
-			this.beyondAbove = '#';
-			this.beyondBelow = '#';
-		}
-
-		static parseSourceMapsToWorldMaps(worldSourceMaps, world) {
-			const maps = {};
-			Object.keys(worldSourceMaps).forEach((mapKey) => {
-				maps[mapKey] = new VoxelWorldMap(mapKey, world, worldSourceMaps[mapKey]);
-			});
-			return maps;
-		}
-
-		/*
-		static parseWorldMapsToBlocks(worldMaps) {
-			const blocks = [];
-			Object.keys(worldMaps).forEach((mapKey) => {
-				const { map, legend } = worldMaps[mapKey];
-				map.forEach((floor, z) => {
-					floor.forEach((row, y) => {
-						row.split('').forEach((char, x) => {
-							const startAt = [mapKey, x, y, z];
-							const blockLegend = legend[char];
-							// If it is called "clear", or it is not blocking and not being rendered,
-							// then it's not really a block.
-							if (blockLegend.name === 'clear' || (!blockLegend.renderAs && !blockLegend.blocked)) {
-								return;
-							}
-							const BlockClass = (blockLegend.npc) ? NpcBlob : BlockEntity;
-							const block = new BlockClass(startAt, blockLegend);
-							blocks.push(block);
-						});
-					});
-				});
-			});
-			return blocks;
-		}
-
-		makeBlocksByMap() {
-			const maps = {};
-			this.blocks.forEach((block) => {
-				const { mapKey } = block;
-				if (!maps[mapKey]) maps[mapKey] = [];
-				maps[mapKey].push(block);
-			});
-			return maps;
-		}
-		*/
-
-		getMap(mapKey) {
-			return this.maps[mapKey];
-		}
-
-		getWorldMap(mapKey) {
-			const worldMap = this.worldMaps[mapKey];
-			if (!worldMap) throw new Error(`No world map: ${mapKey}`);
-			// if (!(worldMap.map instanceof Array)) {
-			// throw new Error(`World map ${mapKey} does not contain 'map' array`);
-			// }
-			return worldMap;
-		}
-
-		getFloor(mapKey, z = 0) {
-			const isBelow = (z < 0);
-			// One array for +z, one for -z
-			const worldMap = this.getWorldMap(mapKey);
-			if (worldMap.below) {
-				const obj = (isBelow) ? worldMap.below : worldMap.above || worldMap.map;
-				const zIndex = Math.abs(z);
-				return obj[zIndex];
-			}
-			const obj = worldMap.above || worldMap.map;
-			if (z < 0) throw new Error(`Map ${mapKey} does not support below 0 z`);
-			return obj[z];
-		}
-
-		getFloorClone(mapKey, z = 0) {
-			return JSON.parse(JSON.stringify(this.getFloor(mapKey, z)));
-		}
-
-		getFloorSize(mapKey, z = 0) {
-			const floor = this.getFloor(mapKey, z);
-			return [
-				floor[0].length, // Just look at the first row; assumes they're all the same
-				floor.length,
-			];
-		}
-
-		getFloorCenter(mapKey, z = 0) {
-			const [maxX, maxY] = this.getFloorSize(mapKey, z);
-			return [Math.floor(maxX / 2), Math.floor(maxY / 2)];
-		}
-
-		getFloorBlocks(mapKey, z = 0) {
-			const floor = this.getFloor(mapKey, z);
-			if (!floor) return [];
-			const blocks = [];
-			floor.forEach((row, y) => {
-				row.split('').forEach((char, x) => {
-					const coords = [x, y, z];
-					const block = this.getBlockByType(mapKey, char, coords);
-					blocks.push(block);
-				});
-			});
-			return blocks;
-		}
-
-		getBlockByType(mapKey, char, coords) {
-			// Look up the basic block type and copy it
-			const worldMap = this.getWorldMap(mapKey);
-			const { legend } = worldMap;
-			const block = { ...legend[char] };
-			// If provided coords, then copy those
-			if (coords) block.coords = [...coords];
-			// And then figure out some procedural values
-			let seed = block.coords[0] + block.coords[1] + block.coords[2];
-			const getBlockRand = () => {
-				seed += 1;
-				return PseudoRandomizer.getPseudoRand(seed);
-			};
-			if (block.color) {
-				block.color = [...block.color];
-				const i = Math.floor(getBlockRand() * 3);
-				const alterColor = (getBlockRand() / 15) - (getBlockRand() / 15);
-				block.color[i] = clamp(block.color[i] + alterColor, 0, 1);
-			}
-			if (block.texture && block.textureRange) {
-				const n = block.textureRange[1] - block.textureRange[0];
-				const textureNum = block.textureRange[0] + Math.floor(getBlockRand() * n);
-				block.texture = block.texture.replace('.', `${textureNum}.`);
-				// block.color = '#ffffff';
-			}
-			return block;
-		}
-
-		getBeyondBlock(mapKey, isBelow, coords) {
-			const block = this.getBlockByType(
-				mapKey,
-				isBelow ? this.beyondBelow : this.beyondAbove,
-				coords,
-			);
-			block.beyond = true;
-			return block;
-		}
-
-		// getBlock(mapKey, coords) {
-		// 	const [x = 0, y = 0, z = 0] = coords;
-		// 	const isBelow = (z < 0);
-		// 	// x and y are effectively indices in an array, so they can't be negative
-		// 	if (x < 0 || y < 0) {
-		// 		return this.getBeyondBlock(mapKey, isBelow, coords);
-		// 	}
-		// 	const floor = this.getFloor(mapKey, z);
-		// 	if (!floor) { // If nothing defined for that z level
-		// 		return this.getBeyondBlock(mapKey, isBelow, coords);
-		// 	}
-		// 	const row = floor[y];
-		// 	if (!row) {
-		// 		return this.getBeyondBlock(mapKey, isBelow, coords);
-		// 	}
-		// 	const blockChar = row.charAt(x);
-		// 	if (!blockChar) {
-		// 		return this.getBeyondBlock(mapKey, isBelow, coords);
-		// 	}
-		// 	return this.getBlockByType(mapKey, blockChar, coords);
-		// }
-	}
-
-	const abilities = {
-		// --- Non-Spells ---
-		hack: {
-			name: 'Hack',
-			combat: true,
-			cost: { stamina: 2 },
-			damage: { hp: [4, 8] },
-		},
-		slash: {
-			name: 'Slash',
-			combat: true,
-			cost: { stamina: 2, balance: 4 },
-			damage: { hp: [8, 10] },
-		},
-		bash: {
-			name: 'Bash',
-			combat: true,
-			cost: { stamina: 2, hp: 2 },
-			damage: { hp: [4, 14] },
-		},
-		rally: {
-			name: 'Rally',
-			combat: true,
-			cost: { willpower: 10 },
-			replenish: { hp: [2, 8], stamina: [2, 10] },
-		},
-		// rally: {
-		// 	name: 'Rally',
-		// 	combat: true,
-		// 	replenish: { willpower: [1, 5], stamina: [1, 5] },
-		// },
-		// dodge: {
-		// 	name: 'Dodge',
-		// 	combat: true,
-		// 	cost: { balance: 2 },
-		// 	effect: { evasion: 0.75, rounds: 1 },
-		// },
-		tactics: {
-			name: 'Tactics',
-			combat: true,
-			cost: { willpower: 4 },
-			replenish: { health: [1, 2], stamina: [1, 5], balance: [2, 6] },
-		},
-		lunge: {
-			name: 'Lunge',
-			combat: true,
-			cost: { balance: 2, stamina: 1 },
-			damage: { hp: [4, 8] },
-		},
-		swift: {
-			name: 'Swift Attack',
-			combat: true,
-			cost: { balance: 3 },
-			damage: { hp: [5, 7] },
-		},
-		spin: {
-			name: 'Spin Attack',
-			combat: true,
-			cost: { balance: 4 },
-			damage: { hp: [5, 12] },
-		},
-		// feint: {
-		// 	name: 'Feint',
-		// 	combat: true,
-		// 	cost: { balance: 5 },
-		// 	damage: { balance: [1, 5] },
-		// 	replenish: { balance: [0, 4] },
-		// 	effect: { evasion: 0.25, rounds: 1 },
-		// },
-		// parry: {
-		// 	name: 'Parry',
-		// 	combat: true,
-		// 	cost: { stamina: 1, balance: 1 },
-		// 	effect: { evasion: 0.5, rounds: 1 },
-		// },
-		reprise: {
-			name: 'Reprise',
-			combat: true,
-			damage: { hp: [1, 4] },
-			cost: { stamina: 1 },
-			replenish: { balance: [1, 5] },
-		},
-		push: {
-			name: 'Push',
-			combat: true,
-			cost: { stamina: 1 },
-			damage: { hp: 1, balance: [4, 8] },
-		},
-		insistence: {
-			name: 'Insistence',
-			cost: { willpower: 2 },
-			replenish: { stamina: [5, 8] },
-		},
-		sweep: {
-			name: 'Sweep',
-			cost: { stamina: 3 },
-			damage: { hp: [2, 6] },
-		},
-		berserk: {
-			name: 'Berserk',
-			cost: { willpower: 10, stamina: 8 },
-			damage: { hp: [4, 12], stamina: [1, 4] },
-			replenish: { hp: [2, 6] },
-		},
-		rage: {
-			name: 'Rage',
-			cost: { willpower: 4, stamina: 4, hp: 1 },
-			replenish: { willpower: [1, 4], stamina: [1, 4] },
-		},
-		counterStrike: {
-			name: 'Counter-strike',
-			cost: { willpower: 1, stamina: 1, balance: 1 },
-			damage: { hp: [4, 5] },
-		},
-		endure: {
-			name: 'Endure',
-			cost: { willpower: 1 },
-			replenish: { stamina: 1, hp: 1 },
-		},
-		// --- Spells ---
-		// light: {
-		// 	name: 'Light',
-		// 	spell: true,
-		// 	cost: { willpower: 1 },
-		// 	effect: { brightness: 10, rounds: 20 },
-		// },
-		focus: {
-			name: 'Mental Focus',
-			spell: true,
-			cost: { stamina: 1 },
-			replenish: { willpower: 5 },
-		},
-		heal: {
-			name: 'Heal I',
-			spell: true,
-			cost: { willpower: 2 },
-			replenish: { hp: [5, 10] },
-		},
-		heal2: {
-			name: 'Heal II',
-			spell: true,
-			cost: { willpower: 5 },
-			replenish: { hp: [10, 16] },
-		},
-	};
-	Object.keys(abilities).forEach((key) => {
-		abilities[key].key = key;
-	});
-	var abilities$1 = Object.freeze(abilities);
-
-	/* eslint-disable class-methods-use-this */
-
-	const POOL_ABBREV = {
-		hp: 'HP', willpower: 'W', balance: 'B', stamina: 'S',
-	};
-
-	const $$1 = (selector, warn = true) => {
-		const elt = window.document.querySelector(selector);
-		if (!elt && warn) console.warn('Could not find', selector);
-		return elt;
-	};
-	// const $all = (selector) => {
-	// 	const elt = window.document.querySelectorAll(selector);
-	// 	if (!elt) console.warn('Could not find', selector);
-	// 	return elt;
-	// };
-
-	function capitalizeFirstLetter(string) {
-		return string.charAt(0).toUpperCase() + string.slice(1);
-	}
-
-	class Interface {
-		constructor({ titleHtml }) {
-			this.titleHtml = titleHtml || '';
-			this.OPTIONS_VIEWS = ['combat', 'talk', 'inventory'];
-			this.optionsView = 'closed'; // 'closed', 'combat', 'talk', 'inventory'
-			this.FULL_VIEWS = ['character', 'abilities', 'spells', 'menu', 'dead'];
-			this.fullView = 'closed'; // 'closed', 'character', 'abilities', 'spells', 'menu'
-			this.DUNGEONEER_VIEWS = ['engage', 'explore']; // or 'closed'
-			this.dungeoneerView = 'explore';
-			this.staticRow = 'open'; // or 'closed'
-			this.miniMapOn = false;
-			this.talkOptions = [];
-		}
-
-		view(what) {
-			if (what === 'title') {
-				this.closeAll();
-				this.viewTitleScreen = true;
-				return this;
-			}
-			if (this.FULL_VIEWS.includes(what)) {
-				this.optionsView = 'closed';
-				this.fullView = (this.fullView === what) ? 'closed' : what;
-			} else if (this.OPTIONS_VIEWS.includes(what)) {
-				this.fullView = 'closed';
-				this.optionsView = (this.optionsView === what) ? 'closed' : what;
-			} else if (this.DUNGEONEER_VIEWS.includes(what)) {
-				this.fullView = 'closed';
-				this.dungeoneerView = what;
-			}
-			this.staticRow = 'open';
-			this.viewTitleScreen = false;
-			if (what === 'closed') {
-				this.fullView = 'closed';
-				this.optionsView = 'closed';
-			}
-			return this;
-		}
-
-		goBack() {
-			if (this.fullView === 'closed') ; else {
-				this.view('closed');
-			}
-			return this;
-		}
-
-		closeAll() {
-			this.optionsView = 'closed';
-			this.dungeoneerView = 'closed';
-			this.fullView = 'closed';
-			this.staticRow = 'closed';
-			this.viewTitleScreen = false;
-			return this;
-		}
-
-		reset() {
-			this.optionsView = 'closed';
-			this.dungeoneerView = 'explore';
-			this.fullView = 'closed';
-			this.staticRow = 'open';
-			this.viewTitleScreen = false;
-			return this;
-		}
-
-		flashBorder(color = '#f00', duration = 1000) {
-			const elt = $$1('#main');
-			const keyFrames = [ // Keyframes
-				{ borderColor: color },
-				{ borderColor: '#000' },
-			];
-			const keyFrameSettings = { duration, direction: 'alternate', easing: 'linear' };
-			const effect = new KeyframeEffect(elt, keyFrames, keyFrameSettings);
-			const animation = new Animation(effect, document.timeline);
-			animation.play();
-		}
-
-		renderMiniMap() {
-			if (!this.miniMapOn) return;
-			const mapHtml = this.getWorldTextRows().join('<br>');
-			$$1('#mini-map').innerHTML = mapHtml;
-		}
-
-		static getPoolObjHtml(poolObj) {
-			if (!poolObj) return '---';
-			return Object.keys(poolObj).map((poolKey) => {
-				let value = poolObj[poolKey];
-				if (value instanceof Array) value = value.join('-');
-				return `${value} ${POOL_ABBREV[poolKey]}`;
-			}).join(', ');
-		}
-
-		static getAbilityStatsHtml(abil, canAfford = true) {
-			return (
-				`<div class="ability-details ${(canAfford) ? '' : 'ability-cannot-afford'}">
-				<div class="ability-cost">Use: ${Interface.getPoolObjHtml(abil.cost)}</div>
-				<div class="ability-replenish">Gain: ${Interface.getPoolObjHtml(abil.replenish)}</div>
-				<div class="ability-damage">Damage: ${Interface.getPoolObjHtml(abil.damage)}</div>
-			</div>`
-			);
-		}
-
-		renderOptions(blob) {
-			const uiOptionsRow = $$1('#ui-options-row');
-			uiOptionsRow.classList.remove(...uiOptionsRow.classList);
-			uiOptionsRow.classList.add(`ui-options-row--${this.optionsView}`);
-			let html = '';
-			if (this.optionsView === 'combat') {
-				const abils = blob.getKnownAbilities().map((key) => abilities$1[key]);
-				html = abils.map((ability, i) => (
-					`<li>
-					<button type="button" data-command="attack ${i + 1}">
-						${ability.name}
-						${Interface.getAbilityStatsHtml(ability, blob.canAffordAbility(ability))}
-						<i class="key">${i + 1}</i>
-					</button>
-				</li>`
-				)).join('');
-			} else if (this.optionsView === 'talk') {
-				html = this.talkOptions.map((dialogItem, i) => (
-					`<li>
-					<button type="button" data-command="dialog ${i + 1}">
-						${capitalizeFirstLetter(dialogItem.question)}
-						<i class="key">${i + 1}</i>
-					</button>
-				</li>`
-				)).join('');
-			} else if (this.optionsView === 'inventory') {
-				html = blob.inventory.map((inventoryItem, i) => {
-					if (!inventoryItem) return '<li class="inventory-item inventory-item--empty">Empty</li>';
-					return `<li class="inventory-item">
-					<button type="button" data-command="option ${i + 1}">
-						${inventoryItem.name}
-						<i class="key">${i + 1}</i>
-					</button>
-				</li>`;
-				}).join('');
-			}
-			$$1('#ui-options-list').innerHTML = html;
-		}
-
-		static getAbilityItemHtml(blob, ability) {
-			const knownAbilities = blob.getKnownAbilities();
-			const isKnown = knownAbilities.includes(ability.key);
-			return (
-				`<li class="ability-item ${isKnown ? 'ability-item--known' : 'ability-item--unknown'}">
-				${ability.name || ability.key}
-				${isKnown ? 'Known' : 'Not known'}
-				${Interface.getAbilityStatsHtml(ability)}
-			</li>`
-			);
-		}
-
-		renderFullView(blob) {
-			const view = $$1('#ui-full-view');
-			view.classList.remove(...view.classList);
-			view.classList.add(`ui-full-view--${this.fullView}`);
-			// const knownAbilities = p.getKnownAbilities();
-			let html = '';
-			if (this.fullView === 'abilities') {
-				html = Object.keys(abilities$1)
-					.map((abilityKey) => abilities$1[abilityKey])
-					.filter((ability) => !ability.spell)
-					.map((ability) => Interface.getAbilityItemHtml(blob, ability))
-					.join('');
-				html = `<h1>Abilities</h1>${html}`;
-			} else if (this.fullView === 'spells') {
-				html = Object.keys(abilities$1)
-					.map((abilityKey) => abilities$1[abilityKey])
-					.filter((ability) => ability.spell)
-					.map((ability) => Interface.getAbilityItemHtml(blob, ability))
-					.join('');
-				html = `<h1>Spells</h1>${html}`;
-			} else if (this.fullView === 'character') {
-				html = (
-					`<h1>Character</h1>
-				<div class="character-sheet-intro">
-					${blob.characterSheetIntroHtml || ''}
-				</div>
-				<ul class="stats-list">
-					<li>
-						(HP) Health
-						<span id="hp-value"></span>
-					</li>
-					<li>
-						(W) Willpower
-						<span id="willpower-value"></span>
-					</li>
-					<li>
-						(S) Stamina
-						<span id="stamina-value"></span>
-					</li>
-					<li>
-						(B) Balance
-						<span id="balance-value"></span>
-					</li>
-				</ul>
-				<div>
-					<button type="button" class="ui-close-button" data-command="view character">
-						Close <i class="key">v</i>
-					</button>
-				</div>
-				`
-					// ${JSON.stringify(blob, null, ' ')}`
-				);
-			} else if (this.fullView === 'menu') {
-				html = 'Menu - Not implemented yet';
-			} else if (this.fullView === 'dead') {
-				html = `<div class="you-died">YOU DIED</div><p>💀</p>
-				Switch characters to continue ... or refresh the page to start over.
-				<div class="dead-options">
-					<button type="button" data-command="switch next-player">Switch</button>
-					<button type="button" data-command="reload page">Restart</button>
-				</div>
-			`;
-			}
-			view.innerHTML = html;
-		}
-
-		renderStats(blob) {
-			const leader = blob.getLeader();
-			['hp', 'willpower', 'stamina', 'balance'].forEach((key) => {
-				const elt = $$1(`#${key}-value`, false);
-				if (!elt) return;
-				elt.innerText = leader[key].getText();
-			});
-		}
-
-		getBarPercents(pool = {}) {
-			const deltaDownPercent = (pool.lastDelta < 0) ? 100 * (Math.abs(pool.lastDelta) / pool.max) : 0;
-			const deltaUpPercent = (pool.lastDelta > 0) ? 100 * (pool.lastDelta / pool.max) : 0;
-			const valuePercent = (100 * (pool.value / pool.max)) - deltaUpPercent;
-			const spacerPercent = 100 - valuePercent - deltaDownPercent - deltaUpPercent;
-			return { deltaDownPercent, deltaUpPercent, valuePercent, spacerPercent };
-		}
-
-		getBlobBars(blob) {
-			if (!blob) return [];
-			const leader = blob.getLeader();
-			const STYLE_KEYS = {
-				hp: 'hp',
-				stamina: 'st',
-				willpower: 'wp',
-				balance: 'ba',
-			};
-			const bars = leader.statPools.map((statName) => {
-				const pool = leader[statName];
-				const { value, max, lastDelta } = pool;
-				const {
-					deltaDownPercent, deltaUpPercent, valuePercent, spacerPercent,
-				} = this.getBarPercents(pool);
-				return {
-					value,
-					max,
-					lastDelta,
-					styleKey: STYLE_KEYS[statName],
-					deltaDownPercent,
-					deltaUpPercent,
-					valuePercent,
-					spacerPercent,
-				};
-			});
-			return bars;
-		}
-
-		renderBars(uiName, bars = []) {
-			const container = $$1(`#ui-${uiName}`);
-			const noBars = (bars.length === 0);
-			container.style.display = (noBars) ? 'none' : 'block';
-			if (noBars) return;
-			container.querySelector('.bar-numbers').innerHTML = bars.filter((bar) => bar.lastDelta !== 0)
-				.map((bar) => `<span class="bar-number bar-number-${bar.styleKey}">${bar.lastDelta}</span>`)
-				.join('');
-			const barSections = [
-				['.bar-spacer', 'spacerPercent'],
-				['.bar-delta-down', 'deltaDownPercent'],
-				['.bar-delta-up', 'deltaUpPercent'],
-				['.bar-value', 'valuePercent'],
-			];
-			bars.forEach((bar) => {
-				container.querySelectorAll(`.bar-list-item-${bar.styleKey}`).forEach((li) => {
-					barSections.forEach(([selector, barPropName]) => {
-						// eslint-disable-next-line no-param-reassign
-						li.querySelector(selector).style.height = `${bar[barPropName]}%`;
-					});
-				});
-			});
-		}
-
-		renderDungeoneerRow(blob, facingActorBlob) {
-			let { dungeoneerView } = this;
-			if (this.fullView !== 'closed') dungeoneerView = 'closed';
-			const view = $$1('#ui-dungeoneer-row');
-			view.classList.remove(...view.classList);
-			view.classList.add(`ui-view--${dungeoneerView}`);
-			if (dungeoneerView === 'closed') return;
-			$$1('#ui-direction-value').innerText = ArrayCoords.getDirectionName(blob.facing);
-			this.renderBars('target-stats', this.getBlobBars(facingActorBlob));
-			this.renderBars('player-stats', this.getBlobBars(blob));
-			$$1('#ui-target-name').innerText = (facingActorBlob) ? facingActorBlob.name : '';
-			$$1('#ui-target-mood').innerText = (facingActorBlob) ? facingActorBlob.getMoodEmoji() : '';
-		}
-
-		renderInteract(blob, facingActorBlob) {
-			$$1('#ui-interact-view').style.display = (this.fullView === 'closed') ? 'flex' : 'none';
-			$$1('#ui-interact-view').innerHTML = (facingActorBlob && facingActorBlob.lastSpoken)
-				? `<div class="dialog-bubble">${facingActorBlob.lastSpoken}</div>` : '';
-		}
-
-		renderStaticRow() {
-			const view = $$1('#ui-static-row');
-			view.classList.remove(...view.classList);
-			view.classList.add(`ui-view--${this.staticRow}`);
-		}
-
-		renderTitle() {
-			const view = $$1('#title-screen');
-			view.classList.remove(...view.classList);
-			view.classList.add(`ui-view--${this.viewTitleScreen ? 'open' : 'closed'}`);
-			view.innerHTML = `${this.titleHtml}
-			<div class="title-next">
-				<button type="button" data-command="view character">
-					Begin Game 
-					<span class="key">Enter</span>
-				</button>
-			</div>`;
-		}
-
-		render(blob, facingActorBlob) {
-			this.renderTitle();
-			if (blob.dead) {
-				this.view('dead');
-			}
-			this.renderStaticRow();
-			this.renderInteract(blob, facingActorBlob);
-			this.renderDungeoneerRow(blob, facingActorBlob);
-			this.renderOptions(blob);
-			this.renderFullView(blob);
-			this.renderStats(blob);
-		}
-	}
-
-	/* eslint-disable max-lines */
-	// import Renderer from './Renderer.js';
-
-	window.THREE = THREE;
-	const { Vector3, Object3D } = THREE;
 	const { X, Y, Z } = ArrayCoords;
 	const { PI } = Math;
-
 	const TAU = PI * 2;
-	// const NOOP = () => {};
+	const EYE_LIGHT_BLOCK_DISTANCE = 6;
+	const BACKGROUND_COLOR = '#77bbff';
+	const DEFAULT_BLOCK_SIZE = 20;
 
+	window.THREE = THREE; // expose for testing in console
+
+	class BlockScene {
+		constructor(options = {}) {
+			this.blockSize = DEFAULT_BLOCK_SIZE;
+			this.planeSize = this.blockSize - 1;
+			this.clearColor = options.clearColor || BACKGROUND_COLOR;
+			this.renderer = null;
+			this.scene = null;
+			this.eyeLight = null;
+			this.autoFacingObjects = []; // Things (like sprite planes) that need to auto-face the camera
+			this.camera = null;
+			this.cameraZOffset = -1; // TODO: why negative for "above"?
+			this.cameraZMapBaseOffset = -80;
+			this.cameraZMapMaxOffset = -800;
+			this.cameraZMapOffset = this.cameraZMapBaseOffset;
+			this.cameraGoal = new Object3D();
+			this.cameraCurrent = new Object3D();
+			this.lookGoal = new Vector3();
+			this.lookCurrent = new Vector3();
+			this.blocksAboveGroup = new Group();
+			this.blocksAtOrBelowGroup = new Group();
+			this.blockSceneObjectMapping = {};
+			this.mapView = false;
+		}
+
+		convertMapToRenderingVector3(mapCoords) {
+			const [x = 0, y = 0, z = 0] = mapCoords;
+			return new Vector3(
+				x * this.blockSize,
+				y * this.blockSize,
+				-z * this.blockSize,
+			);
+		}
+
+		getBlockGoalPosition(block) {
+			const [x, y, z] = block.coords;
+			const wiggleOffsetX = (block.isActorBlob) ? block.wiggle[X] * 2 : 0;
+			const wiggleOffsetY = (block.isActorBlob) ? block.wiggle[Y] * 2 : 0;
+			return new Vector3(
+				(x * this.blockSize) + wiggleOffsetX,
+				(y * this.blockSize) + wiggleOffsetY,
+				-z * this.blockSize + ((block.onGround) ? this.blockSize * 0.4 : 0),
+				// ^ 0.4 instead of 0.5 so that it is slightly above the ground
+			);
+		}
+
+		setup(blocks = [], viewingBlob = null) {
+			if (!this.renderer) this.setupRenderer();
+			this.scene = new Scene();
+			this.camera = this.makeCamera();
+			this.makeLight();
+
+			// Test code
+			// const geometry = new THREE.BoxGeometry(
+			// VISUAL_BLOCK_SIZE, VISUAL_BLOCK_SIZE, VISUAL_BLOCK_SIZE);
+			// const material = new THREE.MeshPhongMaterial({ color: '#433F81' }); // 0x44aa88 });
+			// const mesh = new THREE.Mesh(geometry, material);
+			// this.scene.add(mesh);
+			// const axesHelper = new THREE.AxesHelper(5);
+			// this.scene.add(axesHelper);
+
+			this.blockSceneObjectMapping = {};
+			if (viewingBlob) {
+				this.addMapBlocks(blocks, viewingBlob);
+			}
+		}
+
+		setupRenderer() {
+			this.renderer = new Renderer();
+			this.renderer.setClearColor(this.clearColor);
+		}
+
+		addMapBlocks(blocks = [], viewingBlob = null) {
+			this.blocksAboveGroup = new Group();
+			this.blocksAtOrBelowGroup = new Group();
+			this.scene.add(this.blocksAboveGroup);
+			this.scene.add(this.blocksAtOrBelowGroup);
+			const [,, viewZ] = viewingBlob.coords;
+			blocks.forEach((block) => {
+				const group = (block.coords[Z] > viewZ) ? this.blocksAboveGroup : this.blocksAtOrBelowGroup;
+				this.addMapBlock(block, group, viewingBlob);
+			});
+		}
+
+		addMapBlock(block, group, viewingBlob) {
+			if (!block.renderAs) return;
+			const { blockSize } = this;
+			let texture;
+			let sceneObj; // mesh, plane, sprite, etc.
+			let color;
+			if (block.texture) {
+				const imageUrl = `./images/${block.texture || 'zero.png'}`;
+				texture = new TextureLoader().load(imageUrl);
+				texture.magFilter = NearestFilter;
+				texture.minFilter = LinearMipMapLinearFilter;
+			}
+			if (block.color) {
+				const [r, g, b] = block.color;
+				color = new Color(r, g, b);
+			}
+			if (block.renderAs === 'box') {
+				const geometry = new BoxGeometry(
+					blockSize,
+					blockSize,
+					blockSize,
+				);
+				const materialOptions = {};
+				if (color) materialOptions.color = color;
+				if (block.texture) materialOptions.map = texture;
+				const material = new MeshStandardMaterial(materialOptions);
+				sceneObj = new Mesh(geometry, material);
+			} else if (block.renderAs === 'sprite') {
+				const material = new SpriteMaterial({ map: texture });
+				const sprite = new Sprite(material);
+				sprite.scale.set(blockSize, blockSize, blockSize);
+				sceneObj = sprite;
+			} else if (block.renderAs === 'billboard' || block.renderAs === 'plane') {
+				// TODO: render a plane differently without auto-facing
+				const geometry = new PlaneGeometry(this.planeSize, this.planeSize);
+				const material = new MeshStandardMaterial({
+					color: 0xffffff,
+					side: DoubleSide,
+					map: texture,
+					transparent: true,
+				});
+				if (typeof block.opacity === 'number') material.opacity = block.opacity;
+				const plane = new Mesh(geometry, material);
+				if (block.renderAs === 'billboard') {
+					this.autoFacingObjects.push(plane);
+				} else { // plane
+					let { rotateX = 0, rotateY = 0, rotateZ = 0 } = block;
+					rotateX += -0.25;
+					rotateY += 0;
+					rotateZ += 0;
+					if (block.onGround) {
+						rotateX += 0.25;
+						rotateY += 0;
+						rotateZ += 0;
+					}
+					plane.rotation.setFromVector3(new Vector3(0, 0, 0), 'YZX');
+					plane.rotateY(rotateY * TAU);
+					plane.rotateZ(rotateZ * TAU);
+					plane.rotateX(rotateX * TAU);
+				}
+				sceneObj = plane;
+			}
+			if (sceneObj) {
+				this.blockSceneObjectMapping[block.blockId] = sceneObj;
+				sceneObj.position.copy(this.getBlockGoalPosition(block));
+				// Hide the current main character
+				// const viewingBlob = this.getMainPlayer();
+				if (block.isPlayerBlob && viewingBlob.blockId === block.blockId) {
+					sceneObj.visible = this.mapView;
+				}
+				// Check for block invisibility
+				if (block.invisible) {
+					sceneObj.visible = block.getVisibilityTo(viewingBlob);
+				}
+				if (block.light) {
+					const [intensity, distance] = block.light;
+					const pointLight = new PointLight(0xb4b0dd, intensity, distance * blockSize);
+					sceneObj.add(pointLight);
+					window.torch = sceneObj;
+				}
+				if (group) group.add(sceneObj);
+				else this.scene.add(sceneObj);
+			} else {
+				console.warn('No scene object to render');
+			}
+		}
+
+		makeCamera() { // eslint-disable-line class-methods-use-this
+			// const FOV = 75;
+			const FOV = 105;
+			const camera = new PerspectiveCamera(FOV, window.innerWidth / window.innerHeight, 0.1, 1000);
+			camera.position.z = 300;
+			camera.position.x = 200;
+			camera.position.y = 200;
+			return camera;
+		}
+
+		makeLight() {
+			// const color = 0xFFFFFF;
+			// const intensity = .005;
+			// const light = new THREE.DirectionalLight(color, intensity);
+			// light.position.set(-1, 2, 4);
+			// grid.scene.add(light);
+			this.eyeLight = new PointLight(0xffffff, 0.9, this.blockSize * EYE_LIGHT_BLOCK_DISTANCE);
+			this.scene.add(this.eyeLight);
+
+			// const pointLight = new THREE.PointLight(0xffffff, 0.15, 1000);
+			// pointLight.position.set(-100, -100, -100);
+			// this.scene.add(pointLight);
+
+			const ambientLight = new AmbientLight(0x404040, 0.25);
+			this.scene.add(ambientLight);
+
+			// const sphereSize = 1;
+			// const pointLightHelper = new THREE.PointLightHelper(pointLight, sphereSize);
+			// this.scene.add(pointLightHelper);
+		}
+
+		updateBlockPosition(block, t = 0.1) {
+			const sceneObject = this.blockSceneObjectMapping[block.blockId];
+			if (!sceneObject) {
+				// console.warn(`Cannot find sceneObject
+				// in blockSceneObjectMapping with blockId ${block.blockId}`);
+				// TODO: Investigate and fix this error
+				return;
+			}
+			// sceneObject.iterimPos = new Vector3();
+			const goalPos = this.getBlockGoalPosition(block);
+			const q = 1.0 - (0.24 ** t); // This q & lerp logic is from simondev
+			// sceneObject.iterimPos.lerp(goalPos, q);
+			// sceneObject.position.copy(sceneObject.iterimPos);
+			sceneObject.position.lerp(goalPos, q);
+			// To do it instantly:
+			// sceneObject.position.copy(goalPos);
+		}
+
+		setCameraGoals(focusVec3, facing) {
+			// Set the camera goal
+			// const playerVec3 = this.getMainPlayerRenderingVector3();
+			this.cameraGoal.position.copy(focusVec3);
+			const cameraZ = (this.mapView) ? this.cameraZMapOffset : this.cameraZOffset;
+			this.cameraGoal.position.add(new Vector3(0, 0, cameraZ));
+			const rotX = (this.mapView) ? (PI * 0.1) : (PI * 0.5);
+			const rotY = PI;
+			const rotZ = PI - ArrayCoords.getDirectionRadians(facing);
+			this.cameraGoal.rotation.setFromVector3(new Vector3(rotX, rotY, rotZ), 'YZX');
+			// this.cameraGoal.rotation.copy(new Euler(PI, PI, PI));
+
+			// this.eyeLight.position.copy(playerVec3);
+
+			// Set the looking goal
+			// const rad = ArrayCoords.getDirectionRadians(this.getMainPlayer().facing);
+			// const look = new Vector3(0, 20, 0);
+			// const axis = new Vector3(0, 0, 1);
+			// look.applyAxisAngle(axis, rad);
+			// look.add(playerVec3);
+			// this.lookGoal.copy(look);
+		}
+
+		updateCamera(focusVec3, facing, t = 0.1) {
+			this.setCameraGoals(focusVec3, facing);
+
+			// This q & lerp logic is from simondev but needs some tweaking
+			const q = 1.0 - (0.24 ** t);
+			this.cameraCurrent.position.lerp(this.cameraGoal.position, q);
+			this.lookCurrent.lerp(this.lookGoal, q);
+			// TODO: Add slerp-like changes
+			// this.cameraCurrent.quaternion.copy(this.cameraGoal.quaternion);
+			this.cameraCurrent.quaternion.slerp(this.cameraGoal.quaternion, q);
+			// Set the current camera position and look
+			this.camera.position.copy(this.cameraCurrent.position);
+			this.camera.quaternion.copy(this.cameraCurrent.quaternion);
+			if (!this.mapView) {
+				this.eyeLight.position.copy(this.cameraCurrent.position);
+			}
+			// this.camera.lookAt(this.lookCurrent);
+		}
+
+		render({ focus, facing, t = 0.1, blocks }) { // Just render the three js scene
+			if (focus instanceof Vector3) {
+				this.updateCamera(focus, facing, t);
+			} else if (focus instanceof Array) {
+				const focusVec3 = this.convertMapToRenderingVector3(focus);
+				this.updateCamera(focusVec3, facing, t);
+			}
+			if (blocks) {
+				blocks.forEach((block) => this.updateBlockPosition(block));
+			}
+			this.blocksAboveGroup.visible = !this.mapView;
+			this.renderer.render(this.scene, this.camera);
+			this.autoFacingObjects.forEach((obj) => {
+				obj.quaternion.copy(this.camera.quaternion);
+			});
+		}
+	}
+
+	// External modules
+
+	const DEFAULT_ABILITY_KEY = 'hack';
 	const WORLD_VOXEL_LIMITS = [64, 64, 12];
-	const VISUAL_BLOCK_SIZE = 20;
-	const VISUAL_PLANE_SIZE = 19;
-	// const HALF_BLOCK_SIZE = VISUAL_BLOCK_SIZE / 2;
 
 	const KB_MAPPING = {
 		w: 'forward',
@@ -52686,7 +52910,6 @@
 		Enter: 'view character',
 	};
 
-	const BACKGROUND_COLOR = '#77bbff';
 	const TURN_COMMANDS = ['turnLeft', 'turnRight'];
 	const MOVE_COMMANDS = ['forward', 'back', 'strafeLeft', 'strafeRight'];
 	const DEFAULT_SOUNDS = {
@@ -52702,10 +52925,10 @@
 
 	class DungeonCrawlerGame {
 		constructor(options = {}) {
+			this.abilities = options.abilities;
 			this.worldSourceMaps = options.worldMaps;
 			this.titleHtml = options.titleHtml;
 			this.startAt = options.startAt;
-			this.customEvents = options.customEvents || {};
 			this.sounds = options.sounds || DEFAULT_SOUNDS;
 			this.world = new VoxelWorld(this.worldSourceMaps);
 			this.players = [];
@@ -52713,26 +52936,13 @@
 			this.kbCommander = new KeyboardCommander(KB_MAPPING);
 			this.round = 0;
 			this.isStopped = true;
-			this.mapView = false;
-			// Rendering properties
-			this.interface = new Interface({ titleHtml: this.titleHtml });
-			this.clearColor = options.clearColor || BACKGROUND_COLOR;
-			this.renderer = null;
-			this.scene = null;
-			this.eyeLight = null;
-			this.autoFacingObjects = []; // Things (like sprite planes) that need to auto-face the camera
-			this.camera = null;
-			this.cameraZOffset = -1; // TODO: why negative for "above"?
-			this.cameraZMapBaseOffset = -80;
-			this.cameraZMapMaxOffset = -800;
-			this.cameraZMapOffset = this.cameraZMapBaseOffset;
-			this.cameraGoal = new Object3D();
-			this.cameraCurrent = new Object3D();
-			this.lookGoal = new Vector3();
-			this.lookCurrent = new Vector3();
-			this.blocksAboveGroup = new Group();
-			this.blocksAtOrBelowGroup = new Group();
-			this.blockSceneObjectMapping = {};
+			this.interface = new Interface({
+				titleHtml: this.titleHtml,
+				abilities: this.abilities,
+			});
+			this.dungeonScene = new BlockScene({
+				clearColor: options.clearColor,
+			});
 		}
 
 		/** The main player is the active player (allows ability to pass-and-play and multiple player) */
@@ -52759,232 +52969,12 @@
 
 		// ----------------------------------- Rendering
 
-		convertMapToRenderingVector3(mapCoords) { // eslint-disable-line class-methods-use-this
-			const [x = 0, y = 0, z = 0] = mapCoords;
-			return new Vector3(
-				x * VISUAL_BLOCK_SIZE,
-				y * VISUAL_BLOCK_SIZE,
-				-z * VISUAL_BLOCK_SIZE,
-			);
-		}
-
-		getMainPlayerRenderingVector3() {
-			const coords = this.getMainPlayer().getCoords();
-			const vec3 = this.convertMapToRenderingVector3(coords);
-			// vec3.add(new Vector3(HALF_BLOCK_SIZE, HALF_BLOCK_SIZE, HALF_BLOCK_SIZE));
-			return vec3;
-		}
-
 		setupScene() {
-			this.scene = new Scene();
-			this.camera = this.makeCamera();
-			this.makeLight();
-
-			// Test code
-			// const geometry = new THREE.BoxGeometry(
-			// VISUAL_BLOCK_SIZE, VISUAL_BLOCK_SIZE, VISUAL_BLOCK_SIZE);
-			// const material = new THREE.MeshPhongMaterial({ color: '#433F81' }); // 0x44aa88 });
-			// const mesh = new THREE.Mesh(geometry, material);
-			// this.scene.add(mesh);
-			// const axesHelper = new THREE.AxesHelper(5);
-			// this.scene.add(axesHelper);
-
-			this.blockSceneObjectMapping = {};
-			this.addMapBlocks();
-		}
-
-		setupRendering() {
-			this.renderer = new Renderer();
-			this.renderer.setClearColor(this.clearColor);
-			this.setupScene();
-		}
-
-		addMapBlocks() {
 			const p = this.getMainPlayer();
 			const coords = p.getCoords();
-			const [, , pZ] = coords;
-			const floorBlocks = this.getMainPlayerMap().getNearbyBlocks(coords, WORLD_VOXEL_LIMITS);
+			const mapBlocks = this.getMainPlayerMap().getNearbyBlocks(coords, WORLD_VOXEL_LIMITS);
 			// TODO: Fix this ^ - bigger range? until we load/unload blocks dynamically
-			this.blocksAboveGroup = new Group();
-			this.blocksAtOrBelowGroup = new Group();
-			this.scene.add(this.blocksAboveGroup);
-			this.scene.add(this.blocksAtOrBelowGroup);
-			floorBlocks.forEach((block) => {
-				const group = (block.coords[Z] > pZ) ? this.blocksAboveGroup : this.blocksAtOrBelowGroup;
-				this.addMapBlock(block, group);
-			});
-		}
-
-		getBlockGoalPosition(block) { // eslint-disable-line class-methods-use-this
-			const [x, y, z] = block.coords;
-			const wiggleOffsetX = (block.isActorBlob) ? block.wiggle[X] * 2 : 0;
-			const wiggleOffsetY = (block.isActorBlob) ? block.wiggle[Y] * 2 : 0;
-			return new Vector3(
-				(x * VISUAL_BLOCK_SIZE) + wiggleOffsetX,
-				(y * VISUAL_BLOCK_SIZE) + wiggleOffsetY,
-				-z * VISUAL_BLOCK_SIZE + ((block.onGround) ? VISUAL_BLOCK_SIZE * 0.4 : 0),
-				// ^ 0.4 instead of 0.5 so that it is slightly above the ground
-			);
-		}
-
-		addMapBlock(block, group) {
-			if (!block.renderAs) return;
-			let texture;
-			let sceneObj; // mesh, plane, sprite, etc.
-			let color;
-			if (block.texture) {
-				const imageUrl = `./images/${block.texture || 'zero.png'}`;
-				texture = new TextureLoader().load(imageUrl);
-				texture.magFilter = NearestFilter;
-				texture.minFilter = LinearMipMapLinearFilter;
-			}
-			if (block.color) {
-				const [r, g, b] = block.color;
-				color = new Color(r, g, b);
-			}
-			if (block.renderAs === 'box') {
-				const geometry = new BoxGeometry(
-					VISUAL_BLOCK_SIZE,
-					VISUAL_BLOCK_SIZE,
-					VISUAL_BLOCK_SIZE,
-				);
-				const materialOptions = {};
-				if (color) materialOptions.color = color;
-				if (block.texture) materialOptions.map = texture;
-				const material = new MeshStandardMaterial(materialOptions);
-				sceneObj = new Mesh(geometry, material);
-			} else if (block.renderAs === 'sprite') {
-				const material = new SpriteMaterial({ map: texture });
-				const sprite = new Sprite(material);
-				sprite.scale.set(VISUAL_BLOCK_SIZE, VISUAL_BLOCK_SIZE, VISUAL_BLOCK_SIZE);
-				sceneObj = sprite;
-			} else if (block.renderAs === 'billboard' || block.renderAs === 'plane') {
-				// TODO: render a plane differently without auto-facing
-				const geometry = new PlaneGeometry(VISUAL_PLANE_SIZE, VISUAL_PLANE_SIZE);
-				const material = new MeshStandardMaterial({
-					color: 0xffffff,
-					side: DoubleSide,
-					map: texture,
-					transparent: true,
-				});
-				if (typeof block.opacity === 'number') material.opacity = block.opacity;
-				const plane = new Mesh(geometry, material);
-				if (block.renderAs === 'billboard') {
-					this.autoFacingObjects.push(plane);
-				} else { // plane
-					let { rotateX = 0, rotateY = 0, rotateZ = 0 } = block;
-					rotateX += -0.25;
-					rotateY += 0;
-					rotateZ += 0;
-					if (block.onGround) {
-						rotateX += 0.25;
-						rotateY += 0;
-						rotateZ += 0;
-					}
-					plane.rotation.setFromVector3(new Vector3$1(0, 0, 0), 'YZX');
-					plane.rotateY(rotateY * TAU);
-					plane.rotateZ(rotateZ * TAU);
-					plane.rotateX(rotateX * TAU);
-				}
-				sceneObj = plane;
-			}
-			if (sceneObj) {
-				this.blockSceneObjectMapping[block.blockId] = sceneObj;
-				sceneObj.position.copy(this.getBlockGoalPosition(block));
-				// Hide the current main character
-				const mainBlob = this.getMainPlayer();
-				if (block.isPlayerBlob && mainBlob.blockId === block.blockId) {
-					sceneObj.visible = this.mapView;
-				}
-				// Check for block invisibility
-				if (block.invisible) {
-					sceneObj.visible = block.getVisibilityTo(mainBlob);
-				}
-				if (block.light) {
-					const [intensity, distance] = block.light;
-					const pointLight = new PointLight(0xb4b0dd, intensity, distance * VISUAL_BLOCK_SIZE);
-					sceneObj.add(pointLight);
-					window.torch = sceneObj;
-				}
-				if (group) group.add(sceneObj);
-				else this.scene.add(sceneObj);
-			} else {
-				console.warn('No scene object to render');
-			}
-		}
-
-		updateBlockPosition(block, t = 0.1) {
-			const sceneObject = this.blockSceneObjectMapping[block.blockId];
-			if (!sceneObject) {
-				// console.warn(`Cannot find sceneObject in blockSceneObjectMapping with blockId ${block.blockId}`);
-				// TODO: Investigate and fix this error
-				return;
-			}
-			// sceneObject.iterimPos = new Vector3();
-			const goalPos = this.getBlockGoalPosition(block);
-			const q = 1.0 - (0.24 ** t); // This q & lerp logic is from simondev
-			// sceneObject.iterimPos.lerp(goalPos, q);
-			// sceneObject.position.copy(sceneObject.iterimPos);
-			sceneObject.position.lerp(goalPos, q);
-			// To do it instantly:
-			// sceneObject.position.copy(goalPos);
-		}
-
-		getWorldTextRows() {
-			const p = this.getMainPlayer();
-			const coords = p.getCoords();
-			const [x, y, z] = coords;
-			const mapKey = p.getMapKey();
-			const floor = this.world.getFloorClone(mapKey, z);
-			const row = floor[y];
-			if (row) {
-				const rowArray = row.split('');
-				rowArray.splice(x, 1, '@');
-				floor[y] = rowArray.join('');
-			}
-			return floor;
-		}
-
-		setCameraGoals() {
-			// Set the camera goal
-			const playerVec3 = this.getMainPlayerRenderingVector3();
-			this.cameraGoal.position.copy(playerVec3);
-			const cameraZ = (this.mapView) ? this.cameraZMapOffset : this.cameraZOffset;
-			this.cameraGoal.position.add(new Vector3(0, 0, cameraZ));
-			const rotX = (this.mapView) ? (PI * 0.1) : (PI * 0.5);
-			const rotY = PI;
-			const rotZ = PI - ArrayCoords.getDirectionRadians(this.getMainPlayer().facing);
-			this.cameraGoal.rotation.setFromVector3(new Vector3$1(rotX, rotY, rotZ), 'YZX');
-			// this.cameraGoal.rotation.copy(new Euler(PI, PI, PI));
-
-			// this.eyeLight.position.copy(playerVec3);
-
-			// Set the looking goal
-			// const rad = ArrayCoords.getDirectionRadians(this.getMainPlayer().facing);
-			// const look = new Vector3(0, 20, 0);
-			// const axis = new Vector3(0, 0, 1);
-			// look.applyAxisAngle(axis, rad);
-			// look.add(playerVec3);
-			// this.lookGoal.copy(look);
-		}
-
-		updateCamera(t = 0.1) {
-			this.setCameraGoals();
-
-			// This q & lerp logic is from simondev but needs some tweaking
-			const q = 1.0 - (0.24 ** t);
-			this.cameraCurrent.position.lerp(this.cameraGoal.position, q);
-			this.lookCurrent.lerp(this.lookGoal, q);
-			// TODO: Add slerp-like changes
-			// this.cameraCurrent.quaternion.copy(this.cameraGoal.quaternion);
-			this.cameraCurrent.quaternion.slerp(this.cameraGoal.quaternion, q);
-			// Set the current camera position and look
-			this.camera.position.copy(this.cameraCurrent.position);
-			this.camera.quaternion.copy(this.cameraCurrent.quaternion);
-			if (!this.mapView) {
-				this.eyeLight.position.copy(this.cameraCurrent.position);
-			}
-			// this.camera.lookAt(this.lookCurrent);
+			this.dungeonScene.setup(mapBlocks, p);
 		}
 
 		renderUI() {
@@ -52995,70 +52985,25 @@
 			this.interface.render(blob, facingActorBlob);
 		}
 
-		renderScene() { // Just render the three js scene
-			this.blocksAboveGroup.visible = !this.mapView;
-			this.renderer.render(this.scene, this.camera);
-			this.autoFacingObjects.forEach((obj) => {
-				obj.quaternion.copy(this.camera.quaternion);
-			});
-		}
-
-		renderActors() {
-			const npcs = this.getNpcs();
-			npcs.forEach((block) => this.updateBlockPosition(block));
-			const p = this.getMainPlayer();
-			this.updateBlockPosition(p);
-		}
-
 		animate() {
 			if (this.isStopped) return;
-			this.renderScene();
-			this.updateCamera();
-			this.renderActors();
+			const mainBlob = this.getMainPlayer();
+			const focus = mainBlob.getCoords();
+			const { facing } = mainBlob;
+			const blocks = [ // Blocks to update the position of
+				...this.getNpcs(),
+				mainBlob,
+			];
+			this.dungeonScene.render({ focus, facing, blocks });
 			requestAnimationFrame(() => this.animate());
 		}
 
 		/** Render everything */
 		render() {
-			this.updateCamera();
-			this.renderScene();
+			const focus = this.getMainPlayer().getCoords();
+			const { facing } = this.getMainPlayer();
+			this.dungeonScene.render({ focus, facing });
 			this.renderUI();
-			// Update camera
-			// const { x, y, z } = this.convertMapToRenderingVector3(this.getMainPlayer().getCoords());
-			// this.camera.position.x = x;
-			// this.camera.position.y = y;
-			// blocksToUpdate.forEach((block) => this.updateBlockPosition(block));
-		}
-
-		makeCamera() { // eslint-disable-line class-methods-use-this
-			// const FOV = 75;
-			const FOV = 105;
-			const camera = new PerspectiveCamera(FOV, window.innerWidth / window.innerHeight, 0.1, 1000);
-			camera.position.z = 300;
-			camera.position.x = 200;
-			camera.position.y = 200;
-			return camera;
-		}
-
-		makeLight() {
-			// const color = 0xFFFFFF;
-			// const intensity = .005;
-			// const light = new THREE.DirectionalLight(color, intensity);
-			// light.position.set(-1, 2, 4);
-			// grid.scene.add(light);
-			this.eyeLight = new PointLight(0xffffff, 0.9, VISUAL_BLOCK_SIZE * 6);
-			this.scene.add(this.eyeLight);
-
-			// const pointLight = new THREE.PointLight(0xffffff, 0.15, 1000);
-			// pointLight.position.set(-100, -100, -100);
-			// this.scene.add(pointLight);
-
-			const ambientLight = new AmbientLight(0x404040, 0.25);
-			this.scene.add(ambientLight);
-
-			// const sphereSize = 1;
-			// const pointLightHelper = new THREE.PointLightHelper(pointLight, sphereSize);
-			// this.scene.add(pointLightHelper);
 		}
 
 		// ----------------------------------- Gameplay
@@ -53144,19 +53089,21 @@
 				return;
 			}
 			if (firstCommandWord === 'option') {
+				/* eslint-disable no-param-reassign */
 				if (this.interface.optionsView === 'combat') command = `attack ${commandWords[1]}`;
 				if (this.interface.optionsView === 'talk') command = `dialog ${commandWords[1]}`;
 				if (this.interface.optionsView === 'inventory') command = `inventory ${commandWords[1]}`;
+				/* eslint-enable no-param-reassign */
 			}
 			if (command === 'map') {
-				this.mapView = !this.mapView;
-				const playerSceneObject = this.blockSceneObjectMapping[p.blockId];
-				playerSceneObject.visible = this.mapView;
+				this.dungeonScene.mapView = !this.dungeonScene.mapView;
+				const playerSceneObject = this.dungeonScene.blockSceneObjectMapping[p.blockId];
+				playerSceneObject.visible = this.dungeonScene.mapView;
 				this.render();
 				return;
 			}
 			this.render();
-			this.mapView = false;
+			this.dungeonScene.mapView = false;
 			this.getMainPlayer().queueCommand(command);
 		}
 
@@ -53181,8 +53128,8 @@
 			if (blob.dead) return;
 			// ----- Below here are all things that can only be done by living blobs
 			if (firstCommandWord === 'attack') {
-				const abils = blob.getKnownAbilities().map((key) => abilities$1[key]);
-				const attackAbility = abils[commandIndex] || abilities$1.hack;
+				const abils = blob.getKnownAbilities().map((key) => this.abilities[key]);
+				const attackAbility = abils[commandIndex] || this.abilities[DEFAULT_ABILITY_KEY];
 				if (target) {
 					const effectiveness = blob.useAbility(attackAbility);
 					target.applyAbility(attackAbility, effectiveness, blob.damageScale);
@@ -53337,7 +53284,7 @@
 				a.checkDeath();
 				if (a.redraw) {
 					redraws += 1;
-					a.redraw = false;
+					a.redraw = false; // eslint-disable-line no-param-reassign
 				}
 			});
 			if (redraws > 0) this.setupScene();
@@ -53373,7 +53320,8 @@
 				}
 			});
 			if (this.titleHtml) this.interface.view('title');
-			this.setupRendering();
+			this.setupScene();
+			// this.dungeonScene.setup();
 			this.render();
 			this.tick();
 			this.animate();
@@ -57674,11 +57622,6 @@
 
 	const NOOP = () => {};
 
-	const pickRandom = (arr = []) => {
-		const i = Math.floor(Math.random() * arr.length);
-		return arr[i];
-	};
-
 	class SoundController {
 		/**
 		 * @param {*} soundsListing - an object containing keys of sound names and values of
@@ -57726,7 +57669,7 @@
 				return soundThing(soundName);
 			}
 			if (soundThing instanceof Array) {
-				const chosenSoundThing = pickRandom(soundThing);
+				const chosenSoundThing = Random.pick(soundThing);
 				return this.playThing(chosenSoundThing, soundName);
 			}
 			if (typeOfSound === 'object') {
@@ -57754,9 +57697,9 @@
 			if (options.delay) {
 				await SoundController.wait(options.delay);
 			}
-			if (options.random) { // Random change that the sound doesn't play
+			if (options.random) { // Random chance that the sound doesn't play
 				// 1 = always play, 0 = never play, 0.5 = half chance of playing
-				if (Math.random() > options.random) return;
+				if (Random.chance(options.random)) return;
 			}
 			this.playThing(soundThing, soundName);
 		}
@@ -57881,11 +57824,155 @@
 
 	const sounds = new SoundController(soundsListing, musicListing);
 
-	const customEvents = {
-		switch() {
-			console.log('DO CHARACTER SWITCH');
+	const abilities = {
+		// --- Non-Spells ---
+		hack: {
+			name: 'Hack',
+			combat: true,
+			cost: { stamina: 2 },
+			damage: { hp: [4, 8] },
+		},
+		slash: {
+			name: 'Slash',
+			combat: true,
+			cost: { stamina: 2, balance: 4 },
+			damage: { hp: [8, 10] },
+		},
+		bash: {
+			name: 'Bash',
+			combat: true,
+			cost: { stamina: 2, hp: 2 },
+			damage: { hp: [4, 14] },
+		},
+		rally: {
+			name: 'Rally',
+			combat: true,
+			cost: { willpower: 10 },
+			replenish: { hp: [2, 8], stamina: [2, 10] },
+		},
+		// rally: {
+		// 	name: 'Rally',
+		// 	combat: true,
+		// 	replenish: { willpower: [1, 5], stamina: [1, 5] },
+		// },
+		// dodge: {
+		// 	name: 'Dodge',
+		// 	combat: true,
+		// 	cost: { balance: 2 },
+		// 	effect: { evasion: 0.75, rounds: 1 },
+		// },
+		tactics: {
+			name: 'Tactics',
+			combat: true,
+			cost: { willpower: 4 },
+			replenish: { health: [1, 2], stamina: [1, 5], balance: [2, 6] },
+		},
+		lunge: {
+			name: 'Lunge',
+			combat: true,
+			cost: { balance: 2, stamina: 1 },
+			damage: { hp: [4, 8] },
+		},
+		swift: {
+			name: 'Swift Attack',
+			combat: true,
+			cost: { balance: 3 },
+			damage: { hp: [5, 7] },
+		},
+		spin: {
+			name: 'Spin Attack',
+			combat: true,
+			cost: { balance: 4 },
+			damage: { hp: [5, 12] },
+		},
+		// feint: {
+		// 	name: 'Feint',
+		// 	combat: true,
+		// 	cost: { balance: 5 },
+		// 	damage: { balance: [1, 5] },
+		// 	replenish: { balance: [0, 4] },
+		// 	effect: { evasion: 0.25, rounds: 1 },
+		// },
+		// parry: {
+		// 	name: 'Parry',
+		// 	combat: true,
+		// 	cost: { stamina: 1, balance: 1 },
+		// 	effect: { evasion: 0.5, rounds: 1 },
+		// },
+		reprise: {
+			name: 'Reprise',
+			combat: true,
+			damage: { hp: [1, 4] },
+			cost: { stamina: 1 },
+			replenish: { balance: [1, 5] },
+		},
+		push: {
+			name: 'Push',
+			combat: true,
+			cost: { stamina: 1 },
+			damage: { hp: 1, balance: [4, 8] },
+		},
+		insistence: {
+			name: 'Insistence',
+			cost: { willpower: 2 },
+			replenish: { stamina: [5, 8] },
+		},
+		sweep: {
+			name: 'Sweep',
+			cost: { stamina: 3 },
+			damage: { hp: [2, 6] },
+		},
+		berserk: {
+			name: 'Berserk',
+			cost: { willpower: 10, stamina: 8 },
+			damage: { hp: [4, 12], stamina: [1, 4] },
+			replenish: { hp: [2, 6] },
+		},
+		rage: {
+			name: 'Rage',
+			cost: { willpower: 4, stamina: 4, hp: 1 },
+			replenish: { willpower: [1, 4], stamina: [1, 4] },
+		},
+		counterStrike: {
+			name: 'Counter-strike',
+			cost: { willpower: 1, stamina: 1, balance: 1 },
+			damage: { hp: [4, 5] },
+		},
+		endure: {
+			name: 'Endure',
+			cost: { willpower: 1 },
+			replenish: { stamina: 1, hp: 1 },
+		},
+		// --- Spells ---
+		// light: {
+		// 	name: 'Light',
+		// 	spell: true,
+		// 	cost: { willpower: 1 },
+		// 	effect: { brightness: 10, rounds: 20 },
+		// },
+		focus: {
+			name: 'Mental Focus',
+			spell: true,
+			cost: { stamina: 1 },
+			replenish: { willpower: 5 },
+		},
+		heal: {
+			name: 'Heal I',
+			spell: true,
+			cost: { willpower: 2 },
+			replenish: { hp: [5, 10] },
+		},
+		heal2: {
+			name: 'Heal II',
+			spell: true,
+			cost: { willpower: 5 },
+			replenish: { hp: [10, 16] },
 		},
 	};
+	Object.keys(abilities).forEach((key) => {
+		abilities[key].key = key;
+	});
+	var abilities$1 = Object.freeze(abilities);
 
 	const potionBelt = {
 		key: 'potionBelt',
@@ -57895,12 +57982,15 @@
 
 	const game = new DungeonCrawlerGame({
 		worldMaps,
-		customEvents,
+		abilities: abilities$1,
 		sounds,
 		startAt: ['town', 1, 1, 1],
 		clearColor: '#161013',
 		titleHtml: `
-		<h1 class="title-text" style="color: #363033">The Clearing of Wretchhold</h1>
+		<h1 class="title-text" style="color: #363033">
+			The Clearing of Wretchhold
+			<span style="font-size: 1rem">v1.0.1</span>
+		</h1>
 		<div class="title-credits">
 			<p>
 				Created by:<br/>

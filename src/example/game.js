@@ -1,12 +1,7 @@
 import DungeonCrawlerGame from '../DungeonCrawlerGame.js';
 import worldMaps from './worldMaps.js';
 import sounds from './sounds.js';
-
-const customEvents = {
-	switch() {
-		console.log('DO CHARACTER SWITCH');
-	},
-};
+import abilities from './abilities.js';
 
 const potionBelt = {
 	key: 'potionBelt',
@@ -16,12 +11,15 @@ const potionBelt = {
 
 const game = new DungeonCrawlerGame({
 	worldMaps,
-	customEvents,
+	abilities,
 	sounds,
 	startAt: ['town', 1, 1, 1],
 	clearColor: '#161013',
 	titleHtml: `
-		<h1 class="title-text" style="color: #363033">The Clearing of Wretchhold</h1>
+		<h1 class="title-text" style="color: #363033">
+			The Clearing of Wretchhold
+			<span style="font-size: 1rem">v1.0.1</span>
+		</h1>
 		<div class="title-credits">
 			<p>
 				Created by:<br/>

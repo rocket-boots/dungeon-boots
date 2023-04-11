@@ -1,6 +1,7 @@
 import ArrayCoords from './ArrayCoords.js';
 import Actor from './Actor.js';
 import BlockEntity from './BlockEntity.js';
+import Random from './Random.js';
 
 const MAX_COMMAND_QUEUE_SIZE = 3;
 const BASE_INV_ITEM = {
@@ -12,7 +13,7 @@ const BASE_INV_ITEM = {
 
 /** A blob of characters that can interact with the world */
 class ActorBlob extends BlockEntity {
-	constructor(ActorClass, startAt = [], blockLegend = {}) {
+	constructor(startAt = [], blockLegend = {}) {
 		super(startAt, blockLegend);
 		this.isActorBlob = true;
 		this.damageScale = (typeof this.damageScale !== 'number') ? 1 : this.damageScale;
@@ -20,7 +21,7 @@ class ActorBlob extends BlockEntity {
 		this.active = true; // Inactive characters don't need to be ready
 		this.ready = false; // Ready for next turn?
 		this.commandQueue = [];
-		this.blobId = Number(new Date()).toString(36) + Math.round(Math.random() * 99999).toString(36);
+		this.blobId = Random.uniqueString();
 		this.inventory = [null, null, null, null, null, null];
 		if (blockLegend.inventory) this.setInventory(blockLegend.inventory);
 		// Update defaults for some actor-specific legend properties
@@ -29,7 +30,7 @@ class ActorBlob extends BlockEntity {
 		this.interactions = {};
 		this.lastSpoken = '';
 		this.blob = [
-			new (ActorClass || Actor)(this),
+			new Actor(this),
 		];
 	}
 
@@ -84,8 +85,7 @@ class ActorBlob extends BlockEntity {
 	}
 
 	getRandomMember() {
-		const i = Math.floor(this.blob.length * Math.random());
-		return this.blob[i];
+		return Random.pick(this.blob);
 	}
 
 	checkReady() {

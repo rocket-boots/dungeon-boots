@@ -1,15 +1,23 @@
+import Actor from './Actor.js';
+import ActorBlob from './ActorBlob.js';
+import BlockEntity from './BlockEntity.js';
 import DungeonCrawlerGame from './DungeonCrawlerGame.js';
-import ArrayCoords from './ArrayCoords.js';
+import Interface from './Interface.js';
+import NpcBlob from './NpcBlob.js';
 import PlayerBlob from './PlayerBlob.js';
-import PlayerCharacter from './PlayerCharacter.js';
-import PseudoRandomizer from './PseudoRandomizer.js';
+import SoundController from './SoundController.js';
 import VoxelWorld from './VoxelWorld.js';
+import VoxelWorldMap from './VoxelWorldMap.js';
 
 export {
+	Actor,
+	ActorBlob,
+	BlockEntity,
 	DungeonCrawlerGame,
-	ArrayCoords,
+	Interface,
+	NpcBlob,
 	PlayerBlob,
-	PlayerCharacter,
-	PseudoRandomizer,
+	SoundController,
 	VoxelWorld,
+	VoxelWorldMap,
 };

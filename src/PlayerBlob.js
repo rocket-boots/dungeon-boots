@@ -1,5 +1,4 @@
 import ActorBlob from './ActorBlob.js';
-import PlayerCharacter from './PlayerCharacter.js';
 
 /** A Player and the blob of characters they control */
 class PlayerBlob extends ActorBlob {
@@ -9,7 +8,7 @@ class PlayerBlob extends ActorBlob {
 			blocked: 1,
 			//
 		};
-		super(PlayerCharacter, startAt, playerBlockLegend);
+		super(startAt, playerBlockLegend);
 		this.isPlayerBlob = true;
 		this.blocked = 1;
 		this.color = [1, 1, 1];

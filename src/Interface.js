@@ -1,5 +1,4 @@
 /* eslint-disable class-methods-use-this */
-import abilities from './abilities.js';
 import ArrayCoords from './ArrayCoords.js';
 
 const POOL_ABBREV = {
@@ -22,7 +21,8 @@ function capitalizeFirstLetter(string) {
 }
 
 class Interface {
-	constructor({ titleHtml }) {
+	constructor({ titleHtml, abilities }) {
+		this.abilities = abilities;
 		this.titleHtml = titleHtml || '';
 		this.OPTIONS_VIEWS = ['combat', 'talk', 'inventory'];
 		this.optionsView = 'closed'; // 'closed', 'combat', 'talk', 'inventory'
@@ -36,6 +36,7 @@ class Interface {
 	}
 
 	view(what) {
+		// this.reset();
 		if (what === 'title') {
 			this.closeAll();
 			this.viewTitleScreen = true;
@@ -44,8 +45,10 @@ class Interface {
 		if (this.FULL_VIEWS.includes(what)) {
 			this.optionsView = 'closed';
 			this.fullView = (this.fullView === what) ? 'closed' : what;
+			this.dungeoneerView = 'explore';
 		} else if (this.OPTIONS_VIEWS.includes(what)) {
 			this.fullView = 'closed';
+			this.dungeoneerView = 'explore';
 			this.optionsView = (this.optionsView === what) ? 'closed' : what;
 		} else if (this.DUNGEONEER_VIEWS.includes(what)) {
 			this.fullView = 'closed';
@@ -130,7 +133,7 @@ class Interface {
 		uiOptionsRow.classList.add(`ui-options-row--${this.optionsView}`);
 		let html = '';
 		if (this.optionsView === 'combat') {
-			const abils = blob.getKnownAbilities().map((key) => abilities[key]);
+			const abils = blob.getKnownAbilities().map((key) => this.abilities[key]);
 			html = abils.map((ability, i) => (
 				`<li>
 					<button type="button" data-command="attack ${i + 1}">
@@ -182,15 +185,15 @@ class Interface {
 		// const knownAbilities = p.getKnownAbilities();
 		let html = '';
 		if (this.fullView === 'abilities') {
-			html = Object.keys(abilities)
-				.map((abilityKey) => abilities[abilityKey])
+			html = Object.keys(this.abilities)
+				.map((abilityKey) => this.abilities[abilityKey])
 				.filter((ability) => !ability.spell)
 				.map((ability) => Interface.getAbilityItemHtml(blob, ability))
 				.join('');
 			html = `<h1>Abilities</h1>${html}`;
 		} else if (this.fullView === 'spells') {
-			html = Object.keys(abilities)
-				.map((abilityKey) => abilities[abilityKey])
+			html = Object.keys(this.abilities)
+				.map((abilityKey) => this.abilities[abilityKey])
 				.filter((ability) => ability.spell)
 				.map((ability) => Interface.getAbilityItemHtml(blob, ability))
 				.join('');

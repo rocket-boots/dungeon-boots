@@ -109,6 +109,7 @@ class VoxelWorld {
 		return [Math.floor(maxX / 2), Math.floor(maxY / 2)];
 	}
 
+	/*
 	getFloorBlocks(mapKey, z = 0) {
 		const floor = this.getFloor(mapKey, z);
 		if (!floor) return [];
@@ -150,6 +151,7 @@ class VoxelWorld {
 		}
 		return block;
 	}
+	*/
 
 	getBeyondBlock(mapKey, isBelow, coords) {
 		const block = this.getBlockByType(

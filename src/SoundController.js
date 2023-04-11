@@ -1,11 +1,7 @@
 import { Howl, Howler } from 'howler';
+import Random from './Random.js';
 
 const NOOP = () => {};
-
-const pickRandom = (arr = []) => {
-	const i = Math.floor(Math.random() * arr.length);
-	return arr[i];
-};
 
 class SoundController {
 	/**
@@ -54,7 +50,7 @@ class SoundController {
 			return soundThing(soundName);
 		}
 		if (soundThing instanceof Array) {
-			const chosenSoundThing = pickRandom(soundThing);
+			const chosenSoundThing = Random.pick(soundThing);
 			return this.playThing(chosenSoundThing, soundName);
 		}
 		if (typeOfSound === 'object') {
@@ -82,9 +78,9 @@ class SoundController {
 		if (options.delay) {
 			await SoundController.wait(options.delay);
 		}
-		if (options.random) { // Random change that the sound doesn't play
+		if (options.random) { // Random chance that the sound doesn't play
 			// 1 = always play, 0 = never play, 0.5 = half chance of playing
-			if (Math.random() > options.random) return;
+			if (Random.chance(options.random)) return;
 		}
 		this.playThing(soundThing, soundName);
 	}

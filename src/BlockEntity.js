@@ -1,5 +1,6 @@
 import clamp from 'rocket-boots-three-toolbox/src/clamp.js';
 import PseudoRandomizer from './PseudoRandomizer.js';
+import Random from './Random.js';
 
 const clone = (value) => JSON.parse(JSON.stringify(value));
 const objEqual = (o1, o2) => {
@@ -15,7 +16,7 @@ class BlockEntity {
 		this.mapKey = mapKey;
 		this.coords = [x, y, z];
 		this.tags = [];
-		this.blockId = Number(new Date()).toString(36) + Math.round(Math.random() * 99999).toString(36);
+		this.blockId = Random.uniqueString();
 		// Add all properties from legend
 		Object.keys(blockLegend).forEach((key) => {
 			if (typeof blockLegend[key] === 'object') {
@@ -33,34 +34,25 @@ class BlockEntity {
 		this.blocked = blockLegend.blocked || 0;
 
 		// Procedural (seed-based) randomness
-		this.seed = parseInt(this.name || 'dude', 32) + this.coords[0] + this.coords[1] + this.coords[2];
-		if (Number.isNaN(this.seed)) {
-			console.warn('seed is NaN', this); // TODO: There is a bug that's setting this wrong for the hero
-			this.seed = Math.round(Math.random() * 99999);
-		}
+		this.pRand = new PseudoRandomizer([this.name || 'dude', ...this.coords]);
 		// Modify color
 		if (this.color) {
-			const i = Math.floor(this.getBlockRand() * 3);
-			const alterColor = (this.getBlockRand() / 15) - (this.getBlockRand() / 15);
+			const i = this.pRand.random(3);
+			const alterColor = (this.pRand.random() / 15) - (this.pRand.random() / 15);
 			this.color[i] = clamp(this.color[i] + alterColor, 0, 1);
 			this.originalColor = [...this.color];
 		}
 		// Modify texture for texture range
 		if (this.texture && this.textureRange) {
 			const n = this.textureRange[1] - this.textureRange[0];
-			const textureNum = this.textureRange[0] + Math.floor(this.getBlockRand() * n);
+			const textureNum = this.textureRange[0] + this.pRand.random(n);
 			this.texture = this.texture.replace('.', `${textureNum}.`);
 			// this.color = '#ffffff';
 		}
-		this.dna = Object.freeze([this.getBlockRand(), this.getBlockRand(), this.getBlockRand()]);
+		this.dna = Object.freeze([this.pRand.random(), this.pRand.random(), this.pRand.random()]);
 		// We want a small offset amount to stop overlaps when two blocks are on the same location
-		this.wiggle = [this.getBlockRand(), this.getBlockRand(), 0];
+		this.wiggle = [this.pRand.random(), this.pRand.random(), 0];
 		this.redraw = false; // Do we need to redraw the thing (likely due to a texture change)
-	}
-
-	getBlockRand() {
-		this.seed += 1;
-		return PseudoRandomizer.getPseudoRand(this.seed);
 	}
 
 	switchMap(mapKey) {

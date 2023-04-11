@@ -1,5 +1,4 @@
 import ActorBlob from './ActorBlob.js';
-import NonPlayerCharacter from './NonPlayerCharacter.js';
 import ArrayCoords from './ArrayCoords.js';
 
 const BRAINS = {
@@ -25,7 +24,7 @@ const BRAINS = {
 /** A blob of NPCs */
 class NpcBlob extends ActorBlob {
 	constructor(startAt = [], blockLegend = {}) {
-		super(NonPlayerCharacter, startAt, blockLegend);
+		super(startAt, blockLegend);
 		this.isNpcBlob = true;
 		this.brain = null;
 		if (blockLegend.npc && BRAINS[blockLegend.npc]) {

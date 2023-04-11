@@ -17,7 +17,7 @@ class Actor {
 		// this.stamina = new Pool(10, 10);
 		// this.balance = new Pool(10, 10);
 		this.xp = 0;
-		this.knownAbilities = ['hack'];
+		this.knownAbilities = ['hack', 'slash', 'bash'];
 	}
 
 	clearLastRound() {
