@@ -20,6 +20,18 @@ const game = new DungeonCrawlerGame({
 	sounds,
 	startAt: ['town', 1, 1, 1],
 	clearColor: '#161013',
+	titleHtml: `
+		<h1 class="title-text" style="color: #363033">The Clearing of Wretchhold</h1>
+		<div class="title-credits">
+			<p>
+				Created by:<br/>
+				Bann (Sound Design), Charley Rand (Writing), Frankee (Level design) Griffin d'Audiffret (Music), Langi Tuifua (Voice acting), and Luke (Programming, UI, Level design)
+			</p>
+			<p>
+				...in a week for Dungeon Crawler Jam 2023
+			</p>
+		</div>
+	`,
 });
 
 window.document.addEventListener('DOMContentLoaded', () => {

@@ -266,6 +266,10 @@ class ActorBlob extends BlockEntity {
 	}
 
 	speakDialog(dialogOption) {
+		if (!dialogOption) {
+			console.error(this.name, 'cannot speak blank dialog option', dialogOption);
+			return;
+		}
 		this.lastSpoken = dialogOption.answer;
 		if (typeof dialogOption.aggro === 'number') this.aggro = dialogOption.aggro;
 	}

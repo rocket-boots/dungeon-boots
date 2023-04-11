@@ -22,18 +22,25 @@ function capitalizeFirstLetter(string) {
 }
 
 class Interface {
-	constructor() {
+	constructor({ titleHtml }) {
+		this.titleHtml = titleHtml || '';
 		this.OPTIONS_VIEWS = ['combat', 'talk', 'inventory'];
 		this.optionsView = 'closed'; // 'closed', 'combat', 'talk', 'inventory'
 		this.FULL_VIEWS = ['character', 'abilities', 'spells', 'menu', 'dead'];
 		this.fullView = 'closed'; // 'closed', 'character', 'abilities', 'spells', 'menu'
 		this.DUNGEONEER_VIEWS = ['engage', 'explore']; // or 'closed'
 		this.dungeoneerView = 'explore';
+		this.staticRow = 'open'; // or 'closed'
 		this.miniMapOn = false;
 		this.talkOptions = [];
 	}
 
 	view(what) {
+		if (what === 'title') {
+			this.closeAll();
+			this.viewTitleScreen = true;
+			return this;
+		}
 		if (this.FULL_VIEWS.includes(what)) {
 			this.optionsView = 'closed';
 			this.fullView = (this.fullView === what) ? 'closed' : what;
@@ -44,6 +51,8 @@ class Interface {
 			this.fullView = 'closed';
 			this.dungeoneerView = what;
 		}
+		this.staticRow = 'open';
+		this.viewTitleScreen = false;
 		if (what === 'closed') {
 			this.fullView = 'closed';
 			this.optionsView = 'closed';
@@ -60,10 +69,21 @@ class Interface {
 		return this;
 	}
 
+	closeAll() {
+		this.optionsView = 'closed';
+		this.dungeoneerView = 'closed';
+		this.fullView = 'closed';
+		this.staticRow = 'closed';
+		this.viewTitleScreen = false;
+		return this;
+	}
+
 	reset() {
 		this.optionsView = 'closed';
 		this.dungeoneerView = 'explore';
 		this.fullView = 'closed';
+		this.staticRow = 'open';
+		this.viewTitleScreen = false;
 		return this;
 	}
 
@@ -311,10 +331,31 @@ class Interface {
 			? `<div class="dialog-bubble">${facingActorBlob.lastSpoken}</div>` : '';
 	}
 
+	renderStaticRow() {
+		const view = $('#ui-static-row');
+		view.classList.remove(...view.classList);
+		view.classList.add(`ui-view--${this.staticRow}`);
+	}
+
+	renderTitle() {
+		const view = $('#title-screen');
+		view.classList.remove(...view.classList);
+		view.classList.add(`ui-view--${this.viewTitleScreen ? 'open' : 'closed'}`);
+		view.innerHTML = `${this.titleHtml}
+			<div class="title-next">
+				<button type="button" data-command="view character">
+					Begin Game 
+					<span class="key">Enter</span>
+				</button>
+			</div>`;
+	}
+
 	render(blob, facingActorBlob) {
+		this.renderTitle();
 		if (blob.dead) {
 			this.view('dead');
 		}
+		this.renderStaticRow();
 		this.renderInteract(blob, facingActorBlob);
 		this.renderDungeoneerRow(blob, facingActorBlob);
 		this.renderOptions(blob);

@@ -51623,6 +51623,10 @@
 		}
 
 		speakDialog(dialogOption) {
+			if (!dialogOption) {
+				console.error(this.name, 'cannot speak blank dialog option', dialogOption);
+				return;
+			}
 			this.lastSpoken = dialogOption.answer;
 			if (typeof dialogOption.aggro === 'number') this.aggro = dialogOption.aggro;
 		}
@@ -52295,18 +52299,25 @@
 	}
 
 	class Interface {
-		constructor() {
+		constructor({ titleHtml }) {
+			this.titleHtml = titleHtml || '';
 			this.OPTIONS_VIEWS = ['combat', 'talk', 'inventory'];
 			this.optionsView = 'closed'; // 'closed', 'combat', 'talk', 'inventory'
 			this.FULL_VIEWS = ['character', 'abilities', 'spells', 'menu', 'dead'];
 			this.fullView = 'closed'; // 'closed', 'character', 'abilities', 'spells', 'menu'
 			this.DUNGEONEER_VIEWS = ['engage', 'explore']; // or 'closed'
 			this.dungeoneerView = 'explore';
+			this.staticRow = 'open'; // or 'closed'
 			this.miniMapOn = false;
 			this.talkOptions = [];
 		}
 
 		view(what) {
+			if (what === 'title') {
+				this.closeAll();
+				this.viewTitleScreen = true;
+				return this;
+			}
 			if (this.FULL_VIEWS.includes(what)) {
 				this.optionsView = 'closed';
 				this.fullView = (this.fullView === what) ? 'closed' : what;
@@ -52317,6 +52328,8 @@
 				this.fullView = 'closed';
 				this.dungeoneerView = what;
 			}
+			this.staticRow = 'open';
+			this.viewTitleScreen = false;
 			if (what === 'closed') {
 				this.fullView = 'closed';
 				this.optionsView = 'closed';
@@ -52331,10 +52344,21 @@
 			return this;
 		}
 
+		closeAll() {
+			this.optionsView = 'closed';
+			this.dungeoneerView = 'closed';
+			this.fullView = 'closed';
+			this.staticRow = 'closed';
+			this.viewTitleScreen = false;
+			return this;
+		}
+
 		reset() {
 			this.optionsView = 'closed';
 			this.dungeoneerView = 'explore';
 			this.fullView = 'closed';
+			this.staticRow = 'open';
+			this.viewTitleScreen = false;
 			return this;
 		}
 
@@ -52582,10 +52606,31 @@
 				? `<div class="dialog-bubble">${facingActorBlob.lastSpoken}</div>` : '';
 		}
 
+		renderStaticRow() {
+			const view = $$1('#ui-static-row');
+			view.classList.remove(...view.classList);
+			view.classList.add(`ui-view--${this.staticRow}`);
+		}
+
+		renderTitle() {
+			const view = $$1('#title-screen');
+			view.classList.remove(...view.classList);
+			view.classList.add(`ui-view--${this.viewTitleScreen ? 'open' : 'closed'}`);
+			view.innerHTML = `${this.titleHtml}
+			<div class="title-next">
+				<button type="button" data-command="view character">
+					Begin Game 
+					<span class="key">Enter</span>
+				</button>
+			</div>`;
+		}
+
 		render(blob, facingActorBlob) {
+			this.renderTitle();
 			if (blob.dead) {
 				this.view('dead');
 			}
+			this.renderStaticRow();
 			this.renderInteract(blob, facingActorBlob);
 			this.renderDungeoneerRow(blob, facingActorBlob);
 			this.renderOptions(blob);
@@ -52638,6 +52683,7 @@
 		9: 'option 9',
 		Esc: 'menu back',
 		Backspace: 'menu back',
+		Enter: 'view character',
 	};
 
 	const BACKGROUND_COLOR = '#77bbff';
@@ -52657,6 +52703,7 @@
 	class DungeonCrawlerGame {
 		constructor(options = {}) {
 			this.worldSourceMaps = options.worldMaps;
+			this.titleHtml = options.titleHtml;
 			this.startAt = options.startAt;
 			this.customEvents = options.customEvents || {};
 			this.sounds = options.sounds || DEFAULT_SOUNDS;
@@ -52668,7 +52715,7 @@
 			this.isStopped = true;
 			this.mapView = false;
 			// Rendering properties
-			this.interface = new Interface();
+			this.interface = new Interface({ titleHtml: this.titleHtml });
 			this.clearColor = options.clearColor || BACKGROUND_COLOR;
 			this.renderer = null;
 			this.scene = null;
@@ -53300,10 +53347,14 @@
 		/** Tick fires periodically to see if it's time to advance the round */
 		tick() {
 			if (this.isStopped) return;
-			const readyPlayers = this.players.reduce((sum, p) => sum + (p.checkReady() ? 1 : 0), 0);
-			// console.log(readyPlayers, this.players.length);
-			if (readyPlayers >= this.players.length) {
-				this.doRound();
+			try {
+				const readyPlayers = this.players.reduce((sum, p) => sum + (p.checkReady() ? 1 : 0), 0);
+				// console.log(readyPlayers, this.players.length);
+				if (readyPlayers >= this.players.length) {
+					this.doRound();
+				}
+			} catch (err) { // We want to catch errors so that we don't stop the next tick from happening
+				console.error(err);
 			}
 			// console.log(readyPlayers);
 			window.setTimeout(() => this.tick(), 200);
@@ -53321,6 +53372,7 @@
 					event.preventDefault();
 				}
 			});
+			if (this.titleHtml) this.interface.view('title');
 			this.setupRendering();
 			this.render();
 			this.tick();
@@ -57847,6 +57899,18 @@
 		sounds,
 		startAt: ['town', 1, 1, 1],
 		clearColor: '#161013',
+		titleHtml: `
+		<h1 class="title-text" style="color: #363033">The Clearing of Wretchhold</h1>
+		<div class="title-credits">
+			<p>
+				Created by:<br/>
+				Bann (Sound Design), Charley Rand (Writing), Frankee (Level design) Griffin d'Audiffret (Music), Langi Tuifua (Voice acting), and Luke (Programming, UI, Level design)
+			</p>
+			<p>
+				...in a week for Dungeon Crawler Jam 2023
+			</p>
+		</div>
+	`,
 	});
 
 	window.document.addEventListener('DOMContentLoaded', () => {

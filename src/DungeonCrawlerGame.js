@@ -56,6 +56,7 @@ const KB_MAPPING = {
 	9: 'option 9',
 	Esc: 'menu back',
 	Backspace: 'menu back',
+	Enter: 'view character',
 };
 
 const BACKGROUND_COLOR = '#77bbff';
@@ -75,6 +76,7 @@ window.$ = $;
 class DungeonCrawlerGame {
 	constructor(options = {}) {
 		this.worldSourceMaps = options.worldMaps;
+		this.titleHtml = options.titleHtml;
 		this.startAt = options.startAt;
 		this.customEvents = options.customEvents || {};
 		this.sounds = options.sounds || DEFAULT_SOUNDS;
@@ -86,7 +88,7 @@ class DungeonCrawlerGame {
 		this.isStopped = true;
 		this.mapView = false;
 		// Rendering properties
-		this.interface = new Interface();
+		this.interface = new Interface({ titleHtml: this.titleHtml });
 		this.clearColor = options.clearColor || BACKGROUND_COLOR;
 		this.renderer = null;
 		this.scene = null;
@@ -718,10 +720,14 @@ class DungeonCrawlerGame {
 	/** Tick fires periodically to see if it's time to advance the round */
 	tick() {
 		if (this.isStopped) return;
-		const readyPlayers = this.players.reduce((sum, p) => sum + (p.checkReady() ? 1 : 0), 0);
-		// console.log(readyPlayers, this.players.length);
-		if (readyPlayers >= this.players.length) {
-			this.doRound();
+		try {
+			const readyPlayers = this.players.reduce((sum, p) => sum + (p.checkReady() ? 1 : 0), 0);
+			// console.log(readyPlayers, this.players.length);
+			if (readyPlayers >= this.players.length) {
+				this.doRound();
+			}
+		} catch (err) { // We want to catch errors so that we don't stop the next tick from happening
+			console.error(err);
 		}
 		// console.log(readyPlayers);
 		window.setTimeout(() => this.tick(), 200);
@@ -739,6 +745,7 @@ class DungeonCrawlerGame {
 				event.preventDefault();
 			}
 		});
+		if (this.titleHtml) this.interface.view('title');
 		this.setupRendering();
 		this.render();
 		this.tick();

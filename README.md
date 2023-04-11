@@ -20,7 +20,11 @@
 
 ### Online
 
-Example: https://rocket-boots.github.io/dungeon-boots/
+The example game is called "The Clearing of Wretchhold", and the most current code can be played here: https://rocket-boots.github.io/dungeon-boots/
+
+For the Dungeon Jam 2023 entry, see https://deathray.itch.io/the-clearing-of-wretchhold
+
+![Screenshot of The Clearing of Wretchhhold](https://rocket-boots.github.io/dungeon-boots/images/screenshot2.PNG)
 
 ### Locally
 
@@ -32,4 +36,18 @@ Example: https://rocket-boots.github.io/dungeon-boots/
 
 ## Credits
 
-Graphics from https://opengameart.org/content/dungeon-crawl-32x32-tiles-supplemental (https://github.com/crawl/tiles)
+The Clearing of Wretchhold:
+
+* Sound Design - Bann
+* Writing, Game Design - Charley Rand
+* Music - Griffin d'Audiffret
+* Level Design - Frankee
+* Voice Acting - Langi Tuifua
+* Programming, UI, Level Design - Luke
+* Art - Dungeon Crawl Stone Soup (https://opengameart.org/content/dungeon-crawl-32x32-tiles-supplemental (https://github.com/crawl/tiles))
+* Sound Effects - NEXTALE Sound Effects Library
+
+The Dungeon Boots engine:
+
+* Luke
+* Uses Three js and Howler js

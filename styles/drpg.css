@@ -100,12 +100,15 @@ button:active {
 	padding: 2em 1em;
 }
 
-.ui-static-row {
+#ui-static-row {
 	display: flex;
 	flex-direction: row;
 	flex-wrap: wrap;
 	justify-content: space-around;
 	align-items: center;
+}
+#ui-static-row.ui-view--closed {
+	display: none;
 }
 
 .ui-button-row {
@@ -336,4 +339,32 @@ button:active {
 }
 .ui-close-button .key {
 	display: inline-block;
+}
+
+#title-screen {
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	align-items: center;
+	align-content: center;
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	padding: 10vmin;
+	box-sizing: border-box;
+	width: 100%;
+	font-size: 120%;
+	background: rgba(0, 0, 0, 0.9);
+	box-shadow: inset 0 0 40vmin #000;
+}
+#title-screen.ui-view--closed {
+	display: none;
+}
+#title-screen h1 {
+	font-size: 8vmin;
+	margin: 0;
+	padding: 0;
+}
+.title-next {
+	margin: 1em 0;
 }
