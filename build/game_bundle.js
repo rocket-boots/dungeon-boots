@@ -1,6 +1,273 @@
 (function () {
 	'use strict';
 
+	// Constants
+	const NORTH = 0;
+	const EAST = 1;
+	const SOUTH = 2;
+	const WEST = 3;
+	const X$1 = 0;
+	const Y$1 = 1;
+	const Z$1 = 2;
+	const DIRECTION_NAMES = Object.freeze(['North', 'East', 'South', 'West']);
+	const DIRECTIONS = Object.freeze([NORTH, EAST, SOUTH, WEST]);
+	const RADIANS = Object.freeze([0, Math.PI * 0.5, Math.PI, Math.PI * 1.5]);
+
+	//       /^\ -y North
+	// West   |
+	// -x <---o---> +x East
+	//        |
+	//       \./ +y South
+
+	class ArrayCoords {
+		static getRelativeCoordsInDirection(coords, facing, forward = 0, strafe = 0, up = 0) {
+			const newCoords = [...coords];
+			const facingEastWest = (facing % 2);
+			const forwardAxis = facingEastWest ? X$1 : Y$1;
+			const strafeAxis = facingEastWest ? Y$1 : X$1;
+			const forwardDirection = (facing === NORTH || facing === WEST) ? -1 : 1;
+			const strafeDirection = (facing === NORTH || facing === EAST) ? 1 : -1;
+			newCoords[forwardAxis] += (forward * forwardDirection);
+			newCoords[strafeAxis] += (strafe * strafeDirection);
+			newCoords[Z$1] += up;
+			return newCoords;
+		}
+
+		static normalizeDirection(facing) {
+			const fixedFacing = facing % DIRECTIONS.length;
+			return (fixedFacing < 0) ? (DIRECTIONS.length + fixedFacing) : fixedFacing;
+		}
+
+		static getDirectionName(facingParam) {
+			const facing = ArrayCoords.normalizeDirection(facingParam);
+			return DIRECTION_NAMES[facing];
+		}
+
+		static getDirectionRadians(facingParam) {
+			const facing = ArrayCoords.normalizeDirection(facingParam);
+			return RADIANS[facing];
+		}
+
+		static getDistance(coords1, coords2) {
+			return Math.sqrt(
+				(coords2[X$1] - coords1[X$1]) ** 2
+				+ (coords2[Y$1] - coords1[Y$1]) ** 2
+				+ (coords2[Z$1] - coords1[Z$1]) ** 2,
+			);
+		}
+
+		static checkEqual(coords1, coords2) {
+			return (coords1[X$1] === coords2[X$1] && coords1[Y$1] === coords2[Y$1] && coords1[Z$1] === coords2[Z$1]);
+		}
+
+		static subtract(coords1, coords2) {
+			return [coords1[X$1] - coords2[X$1], coords1[Y$1] - coords2[Y$1], coords1[Z$1] - coords2[Z$1]];
+		}
+
+		static add(coords1, coords2) {
+			return [coords1[X$1] + coords2[X$1], coords1[Y$1] + coords2[Y$1], coords1[Z$1] + coords2[Z$1]];
+		}
+	}
+
+	// Indices
+	ArrayCoords.X = X$1;
+	ArrayCoords.Y = Y$1;
+	ArrayCoords.Z = Z$1;
+	ArrayCoords.NORTH = NORTH;
+	ArrayCoords.EAST = EAST;
+	ArrayCoords.SOUTH = SOUTH;
+	ArrayCoords.WEST = WEST;
+	ArrayCoords.DIRECTIONS = DIRECTIONS;
+
+	// eslint-disable-next-line no-nested-ternary
+	const clamp$1 = (v, min = 0, max = 1) => (v < min ? min : v > max ? max : v);
+
+	class Pool {
+		constructor(max = 0, value = undefined) {
+			this.max = max;
+			this.min = 0;
+			this.value = (typeof value === 'undefined') ? max : value;
+			if (typeof this.max !== 'number' || typeof this.value !== 'number') {
+				throw new Error('Need numbers for max and value');
+			}
+			this.lastDelta = 0; // track the last change for display purposes
+		}
+
+		get() {
+			return this.value;
+		}
+
+		set(v) {
+			if (typeof v !== 'number') throw new Error('Cannot set to a non-number');
+			const ogValue = this.value;
+			this.value = Math.max(Math.min(this.max, v), this.min);
+			this.lastDelta = this.value - ogValue;
+			return this.value;
+		}
+
+		getText() {
+			return `${this.value} / ${this.max}`;
+		}
+
+		add(n = 0) {
+			if (n < 0) return -1 * this.subtract(-n);
+			const maxToAdd = Math.min(this.max - this.value, n);
+			this.set(this.value + maxToAdd);
+			return maxToAdd;
+		}
+
+		subtract(n = 0) {
+			if (n < 0) return -1 * this.add(-n);
+			const maxToSubtract = Math.min(this.value, n);
+			this.set(this.value - maxToSubtract);
+			return maxToSubtract;
+		}
+
+		belowMax() { return this.value < this.max; }
+
+		atMax() { return this.value === this.max; }
+
+		atMin() { return this.value === this.min; }
+
+		aboveMin() { return this.value > this.min; }
+
+		clearLastDelta() {
+			this.lastDelta = 0;
+		}
+	}
+
+	const MAGIC_NUMBER = 10000;
+	const SEED_MAGIC_INT = 9999999;
+	const SEED_MAGIC_BOOL_TRUE = 93759;
+	const SEED_MAGIC_BOOL_FALSE = 1012638;
+	const RADIX$1 = 36;
+
+	class PseudoRandomizer {
+		constructor(seed) {
+			if (typeof seed === 'number') {
+				this.seed = seed;
+			} else if (seed instanceof Array) {
+				this.seed = PseudoRandomizer.makeSeed(seed);
+			} else {
+				this.seed = Math.round(Math.random() * SEED_MAGIC_INT);
+			}
+			if (Number.isNaN(this.seed)) {
+				this.seed = Math.round(Math.random() * SEED_MAGIC_INT);
+			}
+			this.initialSeed = this.seed;
+		}
+
+		static convertStringToRadixSafeString(str = '') {
+			return String(str).split('').map((char) => {
+				const int = parseInt(char, RADIX$1);
+				return (Number.isNaN(int)) ? char.charCodeAt(0).toString(RADIX$1) : char;
+			}).join('');
+		}
+
+		static convertStringToNumber(str = '') {
+			return parseInt(PseudoRandomizer.convertStringToRadixSafeString(str), RADIX$1);
+		}
+
+		static makeSeed(arr = []) {
+			const seed = arr.reduce((sum, value) => {
+				const typeOfValue = typeof value;
+				let num = 1;
+				if (typeOfValue === 'number') {
+					num = value;
+				} else if (typeOfValue === 'object') {
+					num = parseInt(JSON.stringify(value), RADIX$1);
+				} else if (typeOfValue === 'string') {
+					num = parseInt(value, RADIX$1);
+				} else if (typeOfValue === 'boolean') {
+					num = (value ? SEED_MAGIC_BOOL_TRUE : SEED_MAGIC_BOOL_FALSE);
+				}
+				return PseudoRandomizer.getPseudoRandInt(sum, SEED_MAGIC_INT) + num;
+			}, 0);
+			return seed;
+		}
+
+		static getPseudoRand(seed) {
+			// http://stackoverflow.com/a/19303725/1766230
+			const x = Math.sin(seed) * MAGIC_NUMBER;
+			return x - Math.floor(x);
+		}
+
+		static getPseudoRandInt(seed, n) {
+			const r = PseudoRandomizer.getPseudoRand(seed);
+			return Math.floor(r * n);
+		}
+
+		makeArray(length = 1) {
+			const arr = [];
+			for (let i = 0; i < length; i += 1) {
+				arr.push(this.random());
+			}
+			return arr;
+		}
+
+		random(n) {
+			this.seed += 1;
+			const r = PseudoRandomizer.getPseudoRand(this.seed);
+			if (typeof n === 'number') return Math.floor(r * n);
+			return r;
+		}
+
+		getSeedString() {
+			return this.seed.toString(RADIX$1);
+		}
+
+		reset() {
+			this.seed = this.initialSeed;
+		}
+	}
+
+	const MAGIC = 999999;
+	const RADIX = 36;
+
+	class Random {
+		constructor(n = 1) {
+			this.n = Math.random() * n;
+		}
+
+		get() {
+			return this.n;
+		}
+
+		static get() {
+			return Math.random();
+		}
+
+		static randomInt(n = 0) {
+			return Math.floor(Math.random() * n);
+		}
+
+		static pickRandom(arr = []) {
+			return arr[Random.randomInt(arr.length)];
+		}
+
+		static randomString(n = MAGIC) {
+			return Math.round(Math.random() * n).toString(RADIX);
+		}
+
+		static uniqueString() {
+			return Number(new Date()).toString(RADIX) + Random.randomString();
+		}
+
+		// alias
+		static pick(arr = []) {
+			return arr[Random.randomInt(arr.length)];
+		}
+
+		/**
+		 * Chance of random event based on 0-1 odds
+		 * @param {Number} odds - float 0-1 for chance of true
+		 * @returns Boolean
+		 */
+		static chance(odds = 0) {
+			return Math.random() > odds;
+		}
+	}
+
 	class Observer {
 		constructor() {
 			this.eventListeners = {};
@@ -145,139 +412,6 @@
 		}
 	}
 
-	// Constants
-	const NORTH = 0;
-	const EAST = 1;
-	const SOUTH = 2;
-	const WEST = 3;
-	const X$1 = 0;
-	const Y$1 = 1;
-	const Z$1 = 2;
-	const DIRECTION_NAMES = Object.freeze(['North', 'East', 'South', 'West']);
-	const DIRECTIONS = Object.freeze([NORTH, EAST, SOUTH, WEST]);
-	const RADIANS = Object.freeze([0, Math.PI * 0.5, Math.PI, Math.PI * 1.5]);
-
-	//       /^\ -y North
-	// West   |
-	// -x <---o---> +x East
-	//        |
-	//       \./ +y South
-
-	class ArrayCoords {
-		static getRelativeCoordsInDirection(coords, facing, forward = 0, strafe = 0, up = 0) {
-			const newCoords = [...coords];
-			const facingEastWest = (facing % 2);
-			const forwardAxis = facingEastWest ? X$1 : Y$1;
-			const strafeAxis = facingEastWest ? Y$1 : X$1;
-			const forwardDirection = (facing === NORTH || facing === WEST) ? -1 : 1;
-			const strafeDirection = (facing === NORTH || facing === EAST) ? 1 : -1;
-			newCoords[forwardAxis] += (forward * forwardDirection);
-			newCoords[strafeAxis] += (strafe * strafeDirection);
-			newCoords[Z$1] += up;
-			return newCoords;
-		}
-
-		static normalizeDirection(facing) {
-			const fixedFacing = facing % DIRECTIONS.length;
-			return (fixedFacing < 0) ? (DIRECTIONS.length + fixedFacing) : fixedFacing;
-		}
-
-		static getDirectionName(facingParam) {
-			const facing = ArrayCoords.normalizeDirection(facingParam);
-			return DIRECTION_NAMES[facing];
-		}
-
-		static getDirectionRadians(facingParam) {
-			const facing = ArrayCoords.normalizeDirection(facingParam);
-			return RADIANS[facing];
-		}
-
-		static getDistance(coords1, coords2) {
-			return Math.sqrt(
-				(coords2[X$1] - coords1[X$1]) ** 2
-				+ (coords2[Y$1] - coords1[Y$1]) ** 2
-				+ (coords2[Z$1] - coords1[Z$1]) ** 2,
-			);
-		}
-
-		static checkEqual(coords1, coords2) {
-			return (coords1[X$1] === coords2[X$1] && coords1[Y$1] === coords2[Y$1] && coords1[Z$1] === coords2[Z$1]);
-		}
-
-		static subtract(coords1, coords2) {
-			return [coords1[X$1] - coords2[X$1], coords1[Y$1] - coords2[Y$1], coords1[Z$1] - coords2[Z$1]];
-		}
-
-		static add(coords1, coords2) {
-			return [coords1[X$1] + coords2[X$1], coords1[Y$1] + coords2[Y$1], coords1[Z$1] + coords2[Z$1]];
-		}
-	}
-
-	// Indices
-	ArrayCoords.X = X$1;
-	ArrayCoords.Y = Y$1;
-	ArrayCoords.Z = Z$1;
-	ArrayCoords.NORTH = NORTH;
-	ArrayCoords.EAST = EAST;
-	ArrayCoords.SOUTH = SOUTH;
-	ArrayCoords.WEST = WEST;
-	ArrayCoords.DIRECTIONS = DIRECTIONS;
-	window.ArrayCoords = ArrayCoords;
-
-	class Pool {
-		constructor(max = 0, value = undefined) {
-			this.max = max;
-			this.min = 0;
-			this.value = (typeof value === 'undefined') ? max : value;
-			if (typeof this.max !== 'number' || typeof this.value !== 'number') {
-				throw new Error('Need numbers for max and value');
-			}
-			this.lastDelta = 0; // track the last change for display purposes
-		}
-
-		get() {
-			return this.value;
-		}
-
-		set(v) {
-			if (typeof v !== 'number') throw new Error('Cannot set to a non-number');
-			const ogValue = this.value;
-			this.value = Math.max(Math.min(this.max, v), this.min);
-			this.lastDelta = this.value - ogValue;
-			return this.value;
-		}
-
-		getText() {
-			return `${this.value} / ${this.max}`;
-		}
-
-		add(n = 0) {
-			if (n < 0) return -1 * this.subtract(-n);
-			const maxToAdd = Math.min(this.max - this.value, n);
-			this.set(this.value + maxToAdd);
-			return maxToAdd;
-		}
-
-		subtract(n = 0) {
-			if (n < 0) return -1 * this.add(-n);
-			const maxToSubtract = Math.min(this.value, n);
-			this.set(this.value - maxToSubtract);
-			return maxToSubtract;
-		}
-
-		belowMax() { return this.value < this.max; }
-
-		atMax() { return this.value === this.max; }
-
-		atMin() { return this.value === this.min; }
-
-		aboveMin() { return this.value > this.min; }
-
-		clearLastDelta() {
-			this.lastDelta = 0;
-		}
-	}
-
 	const DEFAULT_POOL_MAX = 10;
 
 	class Actor {
@@ -325,140 +459,8 @@
 		}
 	}
 
-	// import { clamp } from 'three/src/math/mathutils.js';
-	const clamp$1 = (v, min = 0, max = 1) => v < min ? min : v > max ? max : v;
-
-	const MAGIC_NUMBER = 10000;
-	const SEED_MAGIC_INT = 9999999;
-	const SEED_MAGIC_BOOL_TRUE = 93759;
-	const SEED_MAGIC_BOOL_FALSE = 1012638;
-	const RADIX$1 = 36;
-
-	class PseudoRandomizer {
-		constructor(seed) {
-			if (typeof seed === 'number') {
-				this.seed = seed;
-			} else if (seed instanceof Array) {
-				this.seed = PseudoRandomizer.makeSeed(seed);
-			} else {
-				this.seed = Math.round(Math.random() * SEED_MAGIC_INT);
-			}
-			if (Number.isNaN(this.seed)) {
-				this.seed = Math.round(Math.random() * SEED_MAGIC_INT);
-			}
-			this.initialSeed = this.seed;
-		}
-
-		static convertStringToRadixSafeString(str = '') {
-			return String(str).split('').map((char) => {
-				const int = parseInt(char, RADIX$1);
-				return (Number.isNaN(int)) ? char.charCodeAt(0).toString(RADIX$1) : char;
-			}).join('');
-		}
-
-		static convertStringToNumber(str = '') {
-			return parseInt(PseudoRandomizer.convertStringToRadixSafeString(str), RADIX$1);
-		}
-
-		static makeSeed(arr = []) {
-			const seed = arr.reduce((sum, value) => {
-				const typeOfValue = typeof value;
-				let num = 1;
-				if (typeOfValue === 'number') {
-					num = value;
-				} else if (typeOfValue === 'object') {
-					num = parseInt(JSON.stringify(value), RADIX$1);
-				} else if (typeOfValue === 'string') {
-					num = parseInt(value, RADIX$1);
-				} else if (typeOfValue === 'boolean') {
-					num = (value ? SEED_MAGIC_BOOL_TRUE : SEED_MAGIC_BOOL_FALSE);
-				}
-				return PseudoRandomizer.getPseudoRandInt(sum, SEED_MAGIC_INT) + num;
-			}, 0);
-			return seed;
-		}
-
-		static getPseudoRand(seed) {
-			// http://stackoverflow.com/a/19303725/1766230
-			const x = Math.sin(seed) * MAGIC_NUMBER;
-			return x - Math.floor(x);
-		}
-
-		static getPseudoRandInt(seed, n) {
-			const r = PseudoRandomizer.getPseudoRand(seed);
-			return Math.floor(r * n);
-		}
-
-		makeArray(length = 1) {
-			const arr = [];
-			for (let i = 0; i < length; i += 1) {
-				arr.push(this.random());
-			}
-			return arr;
-		}
-
-		random(n) {
-			this.seed += 1;
-			const r = PseudoRandomizer.getPseudoRand(this.seed);
-			if (typeof n === 'number') return Math.floor(r * n);
-			return r;
-		}
-
-		getSeedString() {
-			return this.seed.toString(RADIX$1);
-		}
-
-		reset() {
-			this.seed = this.initialSeed;
-		}
-	}
-
-	const MAGIC = 999999;
-	const RADIX = 36;
-
-	class Random {
-		constructor(n = 1) {
-			this.n = Math.random() * n;
-		}
-
-		get() {
-			return this.n;
-		}
-
-		static get() {
-			return Math.random();
-		}
-
-		static randomInt(n = 0) {
-			return Math.floor(Math.random() * n);
-		}
-
-		static pickRandom(arr = []) {
-			return arr[Random.randomInt(arr.length)];
-		}
-
-		static randomString(n = MAGIC) {
-			return Math.round(Math.random() * n).toString(RADIX);
-		}
-
-		static uniqueString() {
-			return Number(new Date()).toString(RADIX) + Random.randomString();
-		}
-
-		// alias
-		static pick(arr = []) {
-			return arr[Random.randomInt(arr.length)];
-		}
-
-		/**
-		 * Chance of random event based on 0-1 odds
-		 * @param {Number} odds - float 0-1 for chance of true
-		 * @returns Boolean
-		 */
-		static chance(odds = 0) {
-			return Math.random() > odds;
-		}
-	}
+	// import PseudoRandomizer from './PseudoRandomizer.js';
+	// import Random from './Random.js';
 
 	const clone = (value) => JSON.parse(JSON.stringify(value));
 	const objEqual = (o1, o2) => {
@@ -1144,6 +1146,9 @@
 		}
 	}
 
+	// import clamp from 'rocket-boots-three-toolbox/src/clamp.js';
+	// import BlockEntity from './BlockEntity.js';
+	// import NpcBlob from './NpcBlob.js';
 	// import ArrayCoords from './ArrayCoords.js';
 
 	// const DEFAULT_BLOCK_TYPES = {
@@ -1531,19 +1536,19 @@
 				</div>
 				<ul class="stats-list">
 					<li>
-						(HP) Health
+						<span style="background: var(--hp-color)">(HP)</span> Health
 						<span id="hp-value"></span>
 					</li>
 					<li>
-						(W) Willpower
-						<span id="willpower-value"></span>
-					</li>
-					<li>
-						(S) Stamina
+						<span style="background: var(--st-color)">(S)</span> Stamina
 						<span id="stamina-value"></span>
 					</li>
 					<li>
-						(B) Balance
+						<span style="background: var(--wp-color)">(W)</span> Willpower
+						<span id="willpower-value"></span>
+					</li>
+					<li>
+						<span style="background: var(--ba-color)">(B)</span> Balance
 						<span id="balance-value"></span>
 					</li>
 				</ul>

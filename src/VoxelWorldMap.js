@@ -1,4 +1,5 @@
-import ArrayCoords from './ArrayCoords.js';
+import { ArrayCoords } from 'rocket-utility-belt';
+
 import BlockEntity from './BlockEntity.js';
 import NpcBlob from './NpcBlob.js';
 

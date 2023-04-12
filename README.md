@@ -50,4 +50,8 @@ The Clearing of Wretchhold:
 The Dungeon Boots engine:
 
 * Luke
-* Uses Three js and Howler js
+* Dependencies:
+	- Three js
+	- Howler js
+	- Rocket Utility Belt (https://github.com/rocket-boots/rocket-utility-belt)
+	- rocket-boots-three-toolbox (https://github.com/rocket-boots/rocket-boots-three-toolbox)

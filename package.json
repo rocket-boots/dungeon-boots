@@ -17,6 +17,7 @@
     "howler": "^2.2.3",
     "keyboard-commander": "github:rocket-boots/keyboard-commander",
     "rocket-boots-three-toolbox": "github:rocket-boots/rocket-boots-three-toolbox",
+    "rocket-utility-belt": "github:rocket-boots/rocket-utility-belt#v0.1.0",
     "three": "^0.150.1"
   },
   "devDependencies": {

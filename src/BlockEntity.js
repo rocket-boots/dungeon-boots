@@ -1,6 +1,6 @@
-import clamp from 'rocket-boots-three-toolbox/src/clamp.js';
-import PseudoRandomizer from './PseudoRandomizer.js';
-import Random from './Random.js';
+import { PseudoRandomizer, Random, clamp } from 'rocket-utility-belt';
+// import PseudoRandomizer from './PseudoRandomizer.js';
+// import Random from './Random.js';
 
 const clone = (value) => JSON.parse(JSON.stringify(value));
 const objEqual = (o1, o2) => {

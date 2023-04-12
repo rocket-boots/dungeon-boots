@@ -1,7 +1,7 @@
 // External modules
+import { ArrayCoords } from 'rocket-utility-belt';
 import { KeyboardCommander } from 'keyboard-commander';
 // Local modules
-import ArrayCoords from './ArrayCoords.js';
 import PlayerBlob from './PlayerBlob.js';
 import VoxelWorld from './VoxelWorld.js';
 import NpcBlob from './NpcBlob.js';

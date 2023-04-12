@@ -1,5 +1,5 @@
 import { Howl, Howler } from 'howler';
-import Random from './Random.js';
+import { Random } from 'rocket-utility-belt';
 
 const NOOP = () => {};
 

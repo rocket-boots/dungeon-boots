@@ -1,5 +1,6 @@
+import { ArrayCoords } from 'rocket-utility-belt';
+
 import ActorBlob from './ActorBlob.js';
-import ArrayCoords from './ArrayCoords.js';
 
 const BRAINS = {
 	monster: {

@@ -1,4 +1,4 @@
-import Pool from './Pool.js';
+import { Pool } from 'rocket-utility-belt';
 
 const DEFAULT_POOL_MAX = 10;
 

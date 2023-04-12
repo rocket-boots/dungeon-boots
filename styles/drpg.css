@@ -5,6 +5,10 @@ body {
 	background: #333;
 	color: white;
 	font-size: calc(8px + 0.75vmin);
+	--hp-color: #920;
+	--st-color: #092;
+	--wp-color: #049;
+	--ba-color: #40c;
 }
 
 main {
@@ -226,10 +230,6 @@ button:active {
 }
 .bar-container,
 .bar-list {
-	--hp-color: #920;
-	--st-color: #092;
-	--wp-color: #049;
-	--ba-color: #40c;
 	--bar-size: 1vmin;
 	--thin-bar-size: 0.5vmin;
 }

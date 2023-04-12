@@ -2,8 +2,7 @@
 import * as THREE from 'three';
 import { Object3D, Vector3, Group, Scene, PerspectiveCamera } from 'three';
 import Renderer from 'rocket-boots-three-toolbox/src/Renderer.js';
-// Local modules
-import ArrayCoords from './ArrayCoords.js';
+import { ArrayCoords } from 'rocket-utility-belt';
 
 const { X, Y, Z } = ArrayCoords;
 const { PI } = Math;

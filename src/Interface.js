@@ -1,5 +1,5 @@
 /* eslint-disable class-methods-use-this */
-import ArrayCoords from './ArrayCoords.js';
+import { ArrayCoords } from 'rocket-utility-belt';
 
 const POOL_ABBREV = {
 	hp: 'HP', willpower: 'W', balance: 'B', stamina: 'S',
@@ -206,19 +206,19 @@ class Interface {
 				</div>
 				<ul class="stats-list">
 					<li>
-						(HP) Health
+						<span style="background: var(--hp-color)">(HP)</span> Health
 						<span id="hp-value"></span>
 					</li>
 					<li>
-						(W) Willpower
-						<span id="willpower-value"></span>
-					</li>
-					<li>
-						(S) Stamina
+						<span style="background: var(--st-color)">(S)</span> Stamina
 						<span id="stamina-value"></span>
 					</li>
 					<li>
-						(B) Balance
+						<span style="background: var(--wp-color)">(W)</span> Willpower
+						<span id="willpower-value"></span>
+					</li>
+					<li>
+						<span style="background: var(--ba-color)">(B)</span> Balance
 						<span id="balance-value"></span>
 					</li>
 				</ul>
