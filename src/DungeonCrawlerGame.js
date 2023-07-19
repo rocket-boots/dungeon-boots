@@ -228,15 +228,20 @@ class DungeonCrawlerGame {
 			/* eslint-enable no-param-reassign */
 		}
 		if (command === 'map') {
-			this.dungeonScene.mapView = !this.dungeonScene.mapView;
-			const playerSceneObject = this.dungeonScene.blockSceneObjectMapping[p.blockId];
-			playerSceneObject.visible = this.dungeonScene.mapView;
-			this.render();
+			this.toggleMap();
 			return;
 		}
 		this.render();
-		this.dungeonScene.mapView = false;
+		// this.dungeonScene.mapView = false;
 		this.getMainPlayer().queueCommand(command);
+	}
+
+	toggleMap(force) {
+		this.dungeonScene.mapView = (typeof force === 'boolean') ? force : !this.dungeonScene.mapView;
+		const p = this.getMainPlayer();
+		const playerSceneObject = this.dungeonScene.blockSceneObjectMapping[p.blockId];
+		playerSceneObject.visible = this.dungeonScene.mapView;
+		this.render();
 	}
 
 	doActorCommand(blob, command) {

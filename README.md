@@ -20,9 +20,11 @@
 
 ### Online
 
-The example game is called "The Clearing of Wretchhold", and the most current code can be played here: https://rocket-boots.github.io/dungeon-boots/
+The example game is called "The Clearing of Wretchhold". 
 
-For the Dungeon Jam 2023 entry, see https://deathray.itch.io/the-clearing-of-wretchhold
+* For the Dungeon Jam 2023 entry, see https://deathray.itch.io/the-clearing-of-wretchhold
+* The repo: https://github.com/deathraygames/the-clearing-of-wretchhold
+* The most current code can be played here: https://deathraygames.github.io/the-clearing-of-wretchhold/
 
 ![Screenshot of The Clearing of Wretchhhold](https://rocket-boots.github.io/dungeon-boots/images/screenshot2.PNG)
 

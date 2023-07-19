@@ -3,7 +3,7 @@ import { ArrayCoords, Random } from 'rocket-utility-belt';
 import Actor from './Actor.js';
 import BlockEntity from './BlockEntity.js';
 
-const MAX_COMMAND_QUEUE_SIZE = 3;
+const MAX_COMMAND_QUEUE_SIZE = 2;
 const BASE_INV_ITEM = {
 	key: '?unknown_item?',
 	name: '?unknown_item?',

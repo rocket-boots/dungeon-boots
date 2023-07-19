@@ -7,7 +7,6 @@ import commonjs from '@rollup/plugin-commonjs';
 
 // import copy from 'rollup-plugin-copy';
 
-const input = './src/example/game.js';
 // External can avoid some warnings but later builds will need to either have these
 // dependencies, or pull them in somehow.
 const external = [];
@@ -29,10 +28,10 @@ const watch = {
 
 export default [
 	{
-		input,
+		input: './src/index.js',
 		output: {
-			file: './build/game_bundle.js',
-			format: 'iife',
+			file: './build/dungeon-boots.esm.js',
+			format: 'esm',
 		},
 		plugins,
 		external,
