@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>DRPG</title>
+	<meta charset="utf-8">
+	<meta name="description" content="">
+	<meta name="author" content="Luke Nickerson">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+	<link href="../styles/drpg.css" rel="stylesheet" />
+	<link rel="icon" type="image/png" sizes="32x32" href="../images/favicon-32x32.png">
+	<link rel="icon" type="image/png" sizes="16x16" href="../images/favicon-16x16.png">
+</head>
+<body scroll="no">
+	<main id="main">
+		<section id="map">
+			<div id="direction"></div>
+			<div id="mini-map"></div>
+		</section>
+		<div id="ui">
+			<div id="ui-dungeoneer-row">
+				<div>
+					<!-- space left for something in the future -->
+				</div>
+				<div id="ui-target-info">
+					<div id="ui-target-name-mood">
+						<div id="ui-target-name"></div>
+						<div id="ui-target-mood"></div>
+					</div>
+					<div id="ui-target-stats" class="bar-container">
+						<div class="bar-numbers"></div>
+						<ul class="bar-list">
+							<li class="bar-list-item bar-list-item-hp">
+								<div class="bar bar-spacer"></div>
+								<div class="bar bar-delta-down"></div>
+								<div class="bar bar-delta-up"></div>
+								<div class="bar bar-value"></div>
+							</li>
+							<li class="bar-list-item bar-list-item-st">
+								<div class="bar bar-spacer"></div>
+								<div class="bar bar-delta-down"></div>
+								<div class="bar bar-delta-up"></div>
+								<div class="bar bar-value"></div>
+							</li>
+							<li class="bar-list-item bar-list-item-wp">
+								<div class="bar bar-spacer"></div>
+								<div class="bar bar-delta-down"></div>
+								<div class="bar bar-delta-up"></div>
+								<div class="bar bar-value"></div>
+							</li>
+							<li class="bar-list-item bar-list-item-ba">
+								<div class="bar bar-spacer"></div>
+								<div class="bar bar-delta-down"></div>
+								<div class="bar bar-delta-up"></div>
+								<div class="bar bar-value"></div>
+							</li>
+						</ul>
+					</div>
+				</div>
+				<div id="ui-direction">Direction: <span id="ui-direction-value"></span></div>
+			</div>
+			<div id="ui-interact-view">
+				<!-- populate with js -->
+			</div>
+			<div id="ui-full-view" class="ui-full-view--closed">
+				<!-- populate with js -->
+			</div>
+			<div id="ui-options-row" class="ui-options-row--closed">
+				<ol id="ui-options-list">
+					<!-- populate with js -->
+				</ol>
+			</div>
+			<div id="ui-static-row">
+				<div class="ui-movement">
+					<div class="ui-button-row">
+						<button type="button" data-command="turnLeft">Turn Left <i class="key">q</i></button>
+						<button type="button" data-command="forward">Forward <i class="key">w</i></button>
+						<button type="button" data-command="turnRight">Turn Right <i class="key">e</i></button>
+						
+					</div>
+					<div class="ui-button-row">
+						<button type="button" data-command="strafeLeft">Strafe Left <i class="key">a</i></button>
+						<button type="button" data-command="back">Back <i class="key">s</i></button>
+						<button type="button" data-command="strafeRight">Strafe Right <i class="key">d</i></button>
+					</div>
+				</div>
+				<div>
+					<button type="button" data-command="view character">Character <i class="key">v</i></button>
+				</div>
+				<div>
+					<!-- <button type="button">Character <i class="key">v</i></button> -->
+					<div id="ui-player-stats" class="bar-container">
+						<div class="bar-numbers"></div>
+						<ul class="bar-list">
+							<li class="bar-list-item bar-list-item-hp">
+								<div class="bar bar-spacer"></div>
+								<div class="bar bar-delta-down"></div>
+								<div class="bar bar-delta-up"></div>
+								<div class="bar bar-value"></div>
+							</li>
+							<li class="bar-list-item bar-list-item-st">
+								<div class="bar bar-spacer"></div>
+								<div class="bar bar-delta-down"></div>
+								<div class="bar bar-delta-up"></div>
+								<div class="bar bar-value"></div>
+							</li>
+							<li class="bar-list-item bar-list-item-wp">
+								<div class="bar bar-spacer"></div>
+								<div class="bar bar-delta-down"></div>
+								<div class="bar bar-delta-up"></div>
+								<div class="bar bar-value"></div>
+							</li>
+							<li class="bar-list-item bar-list-item-ba">
+								<div class="bar bar-spacer"></div>
+								<div class="bar bar-delta-down"></div>
+								<div class="bar bar-delta-up"></div>
+								<div class="bar bar-value"></div>
+							</li>
+						</ul>
+					</div>
+				</div>
+				<section class="ui-actions">
+					<div class="ui-button-row">
+						<button type="button" data-command="combat">Fight <i class="key">f</i></button>
+						<!-- <button type="button" data-command="attack">Fight <i class="key">f</i></button> -->
+						<button type="button" data-command="talk">Talk <i class="key">t</i></button>
+						<!-- <button type="button" data-command="cast">Cast <i class="key">c</i></button> -->
+						<button type="button" data-command="wait">Wait <i class="key">Space</i></button>
+					</div>
+					<div class="ui-button-row">
+						<button type="button" data-command="inventory">Inventory <i class="key">i</i></button>
+						<button type="button" data-command="map">Map <i class="key">m</i></button>
+						<button type="button" data-command="switch next-player">Switch <i class="key">\</i></button>
+					</div>
+					<!-- <div class="ui-button-row"> -->
+						<!-- <button type="button" data-command="view abilities">Abilities <i class="key">b</i></button> -->
+						<!-- <button type="button" data-command="view spells">Grimoire <i class="key">g</i></button> -->
+						<!-- <button type="button" data-command="menu">Back/Menu <i class="key">Esc</i></button> -->
+					<!-- </div> -->
+				</section>
+			</div>
+		</div>
+		<div id="title-screen">
+			LOADING...
+		</div>
+	</main>
+	<script type="module" src="./game.js"></script>
+</body>
+</html>
