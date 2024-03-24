@@ -37,6 +37,7 @@ class BlockScene {
 		this.blocksAtOrBelowGroup = new Group();
 		this.blockSceneObjectMapping = {};
 		this.mapView = false;
+		this.imageUrlRoot = options.imageUrlRoot || './images';
 	}
 
 	convertMapToRenderingVector3(mapCoords) {
@@ -111,7 +112,7 @@ class BlockScene {
 		let sceneObj; // mesh, plane, sprite, etc.
 		let color;
 		if (block.texture) {
-			const imageUrl = `./images/${block.texture || 'zero.png'}`;
+			const imageUrl = [this.imageUrlRoot, (block.texture || 'zero.png')].join('/');
 			texture = new THREE.TextureLoader().load(imageUrl);
 			texture.magFilter = THREE.NearestFilter;
 			texture.minFilter = THREE.LinearMipMapLinearFilter;

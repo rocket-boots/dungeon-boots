@@ -1039,9 +1039,14 @@ class VoxelWorldMap {
 		this.sourceMap = sourceMap || world.sourceMaps[mapKey];
 		this.music = this.sourceMap.music || null;
 		// console.log('Making', mapKey, 'from', this.sourceMap);
-		const { map, legend } = this.sourceMap;
+		const {
+			map = [],
+			legend = {},
+			ambientLightIntensity = 0.25,
+		} = this.sourceMap;
 		this.originalMap = map;
 		this.legend = legend;
+		this.ambientLightIntensity = ambientLightIntensity;
 		this.blocks = VoxelWorldMap.parseWorldMapToBlocks(mapKey, map, legend);
 		this.npcBlobs = this.blocks.filter((block) => block instanceof NpcBlob);
 	}
@@ -52592,8 +52597,10 @@ const { X, Y, Z } = ArrayCoords;
 const { PI } = Math;
 const TAU = PI * 2;
 const EYE_LIGHT_BLOCK_DISTANCE = 6;
+const EYE_LIGHT_INTENSITY = 0;
 const BACKGROUND_COLOR = '#77bbff';
 const DEFAULT_BLOCK_SIZE = 20;
+const LIGHT_OFFSET = DEFAULT_BLOCK_SIZE / 4;
 
 window.THREE = THREE; // expose for testing in console
 
@@ -52619,6 +52626,7 @@ class BlockScene {
 		this.blocksAtOrBelowGroup = new Group();
 		this.blockSceneObjectMapping = {};
 		this.mapView = false;
+		this.imageUrlRoot = options.imageUrlRoot || './images';
 	}
 
 	convertMapToRenderingVector3(mapCoords) {
@@ -52642,11 +52650,12 @@ class BlockScene {
 		);
 	}
 
-	setup(blocks = [], viewingBlob = null) {
+	setup(blocks = [], viewingBlob = null, mapSceneOptions = {}) {
 		if (!this.renderer) this.setupRenderer();
 		this.scene = new Scene();
 		this.camera = this.makeCamera();
-		this.makeLight();
+		const { ambientLightIntensity } = mapSceneOptions;
+		this.makeLight(ambientLightIntensity);
 
 		// Test code
 		// const geometry = new THREE.BoxGeometry(
@@ -52668,6 +52677,11 @@ class BlockScene {
 		this.renderer.setClearColor(this.clearColor);
 	}
 
+	setPlayerVisibility(sceneObj) {
+		// sceneObj.visible = this.mapView;
+		sceneObj.material.opacity = this.mapView ? 1 : 0;
+	}
+
 	addMapBlocks(blocks = [], viewingBlob = null) {
 		this.blocksAboveGroup = new Group();
 		this.blocksAtOrBelowGroup = new Group();
@@ -52687,7 +52701,7 @@ class BlockScene {
 		let sceneObj; // mesh, plane, sprite, etc.
 		let color;
 		if (block.texture) {
-			const imageUrl = `./images/${block.texture || 'zero.png'}`;
+			const imageUrl = [this.imageUrlRoot, (block.texture || 'zero.png')].join('/');
 			texture = new TextureLoader().load(imageUrl);
 			texture.magFilter = NearestFilter;
 			texture.minFilter = LinearMipMapLinearFilter;
@@ -52743,12 +52757,13 @@ class BlockScene {
 			sceneObj = plane;
 		}
 		if (sceneObj) {
+			sceneObj.name = block.name || block.texture || block.renderAs;
 			this.blockSceneObjectMapping[block.blockId] = sceneObj;
 			sceneObj.position.copy(this.getBlockGoalPosition(block));
 			// Hide the current main character
 			// const viewingBlob = this.getMainPlayer();
 			if (block.isPlayerBlob && viewingBlob.blockId === block.blockId) {
-				sceneObj.visible = this.mapView;
+				this.setPlayerVisibility(sceneObj);
 			}
 			// Check for block invisibility
 			if (block.invisible) {
@@ -52757,6 +52772,7 @@ class BlockScene {
 			if (block.light) {
 				const [intensity, distance] = block.light;
 				const pointLight = new PointLight(0xb4b0dd, intensity, distance * blockSize);
+				pointLight.translateZ(LIGHT_OFFSET);
 				sceneObj.add(pointLight);
 				window.torch = sceneObj;
 			}
@@ -52777,20 +52793,21 @@ class BlockScene {
 		return camera;
 	}
 
-	makeLight() {
+	makeLight(ambientLightIntensity = 0.25) {
 		// const color = 0xFFFFFF;
 		// const intensity = .005;
 		// const light = new THREE.DirectionalLight(color, intensity);
 		// light.position.set(-1, 2, 4);
 		// grid.scene.add(light);
-		this.eyeLight = new PointLight(0xffffff, 0.9, this.blockSize * EYE_LIGHT_BLOCK_DISTANCE);
+
+		this.eyeLight = new PointLight(0xffffff, EYE_LIGHT_INTENSITY, this.blockSize * EYE_LIGHT_BLOCK_DISTANCE);
 		this.scene.add(this.eyeLight);
 
 		// const pointLight = new THREE.PointLight(0xffffff, 0.15, 1000);
 		// pointLight.position.set(-100, -100, -100);
 		// this.scene.add(pointLight);
 
-		const ambientLight = new AmbientLight(0x404040, 0.25);
+		const ambientLight = new AmbientLight(0x404040, ambientLightIntensity);
 		this.scene.add(ambientLight);
 
 		// const sphereSize = 1;
@@ -52828,8 +52845,6 @@ class BlockScene {
 		this.cameraGoal.rotation.setFromVector3(new Vector3(rotX, rotY, rotZ), 'YZX');
 		// this.cameraGoal.rotation.copy(new Euler(PI, PI, PI));
 
-		// this.eyeLight.position.copy(playerVec3);
-
 		// Set the looking goal
 		// const rad = ArrayCoords.getDirectionRadians(this.getMainPlayer().facing);
 		// const look = new Vector3(0, 20, 0);
@@ -52852,9 +52867,9 @@ class BlockScene {
 		// Set the current camera position and look
 		this.camera.position.copy(this.cameraCurrent.position);
 		this.camera.quaternion.copy(this.cameraCurrent.quaternion);
-		if (!this.mapView) {
-			this.eyeLight.position.copy(this.cameraCurrent.position);
-		}
+		// TODO: Fix -- When moving in map view the eyelight does not update
+		const eyeLightPos = (this.mapView) ? this.eyeLight.position : this.cameraCurrent.position;
+		this.eyeLight.position.copy(eyeLightPos);
 		// this.camera.lookAt(this.lookCurrent);
 	}
 
@@ -52944,6 +52959,7 @@ class DungeonCrawlerGame {
 		});
 		this.dungeonScene = new BlockScene({
 			clearColor: options.clearColor,
+			imageUrlRoot: options.imageUrlRoot,
 		});
 	}
 
@@ -52974,9 +52990,12 @@ class DungeonCrawlerGame {
 	setupScene() {
 		const p = this.getMainPlayer();
 		const coords = p.getCoords();
-		const mapBlocks = this.getMainPlayerMap().getNearbyBlocks(coords, WORLD_VOXEL_LIMITS);
+		const map = this.getMainPlayerMap();
+		const mapBlocks = map.getNearbyBlocks(coords, WORLD_VOXEL_LIMITS);
 		// TODO: Fix this ^ - bigger range? until we load/unload blocks dynamically
-		this.dungeonScene.setup(mapBlocks, p);
+		const { ambientLightIntensity } = map;
+		const options = { ambientLightIntensity };
+		this.dungeonScene.setup(mapBlocks, p, options);
 	}
 
 	renderUI() {
@@ -53098,15 +53117,20 @@ class DungeonCrawlerGame {
 			/* eslint-enable no-param-reassign */
 		}
 		if (command === 'map') {
-			this.dungeonScene.mapView = !this.dungeonScene.mapView;
-			const playerSceneObject = this.dungeonScene.blockSceneObjectMapping[p.blockId];
-			playerSceneObject.visible = this.dungeonScene.mapView;
-			this.render();
+			this.toggleMap();
 			return;
 		}
 		this.render();
 		// this.dungeonScene.mapView = false;
 		this.getMainPlayer().queueCommand(command);
+	}
+
+	toggleMap(force) {
+		this.dungeonScene.mapView = (typeof force === 'boolean') ? force : !this.dungeonScene.mapView;
+		const p = this.getMainPlayer();
+		const playerSceneObject = this.dungeonScene.blockSceneObjectMapping[p.blockId];
+		this.dungeonScene.setPlayerVisibility(playerSceneObject);
+		this.render();
 	}
 
 	doActorCommand(blob, command) {

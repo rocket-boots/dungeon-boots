@@ -74,6 +74,7 @@ class DungeonCrawlerGame {
 		});
 		this.dungeonScene = new BlockScene({
 			clearColor: options.clearColor,
+			imageUrlRoot: options.imageUrlRoot,
 		});
 	}
 
