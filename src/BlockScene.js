@@ -8,8 +8,10 @@ const { X, Y, Z } = ArrayCoords;
 const { PI } = Math;
 const TAU = PI * 2;
 const EYE_LIGHT_BLOCK_DISTANCE = 6;
+const EYE_LIGHT_INTENSITY = 0;
 const BACKGROUND_COLOR = '#77bbff';
 const DEFAULT_BLOCK_SIZE = 20;
+const LIGHT_OFFSET = DEFAULT_BLOCK_SIZE / 4;
 
 window.THREE = THREE; // expose for testing in console
 
@@ -58,11 +60,12 @@ class BlockScene {
 		);
 	}
 
-	setup(blocks = [], viewingBlob = null) {
+	setup(blocks = [], viewingBlob = null, mapSceneOptions = {}) {
 		if (!this.renderer) this.setupRenderer();
 		this.scene = new Scene();
 		this.camera = this.makeCamera();
-		this.makeLight();
+		const { ambientLightIntensity } = mapSceneOptions;
+		this.makeLight(ambientLightIntensity);
 
 		// Test code
 		// const geometry = new THREE.BoxGeometry(
@@ -82,6 +85,11 @@ class BlockScene {
 	setupRenderer() {
 		this.renderer = new Renderer();
 		this.renderer.setClearColor(this.clearColor);
+	}
+
+	setPlayerVisibility(sceneObj) {
+		// sceneObj.visible = this.mapView;
+		sceneObj.material.opacity = this.mapView ? 1 : 0;
 	}
 
 	addMapBlocks(blocks = [], viewingBlob = null) {
@@ -151,7 +159,7 @@ class BlockScene {
 					rotateY += 0;
 					rotateZ += 0;
 				}
-				plane.rotation.setFromVector3(new THREE.Vector3(0, 0, 0), 'YZX');
+				plane.rotation.setFromVector3(new Vector3(0, 0, 0), 'YZX');
 				plane.rotateY(rotateY * TAU);
 				plane.rotateZ(rotateZ * TAU);
 				plane.rotateX(rotateX * TAU);
@@ -159,12 +167,13 @@ class BlockScene {
 			sceneObj = plane;
 		}
 		if (sceneObj) {
+			sceneObj.name = block.name || block.texture || block.renderAs;
 			this.blockSceneObjectMapping[block.blockId] = sceneObj;
 			sceneObj.position.copy(this.getBlockGoalPosition(block));
 			// Hide the current main character
 			// const viewingBlob = this.getMainPlayer();
 			if (block.isPlayerBlob && viewingBlob.blockId === block.blockId) {
-				sceneObj.visible = this.mapView;
+				this.setPlayerVisibility(sceneObj);
 			}
 			// Check for block invisibility
 			if (block.invisible) {
@@ -173,6 +182,7 @@ class BlockScene {
 			if (block.light) {
 				const [intensity, distance] = block.light;
 				const pointLight = new THREE.PointLight(0xb4b0dd, intensity, distance * blockSize);
+				pointLight.translateZ(LIGHT_OFFSET);
 				sceneObj.add(pointLight);
 				window.torch = sceneObj;
 			}
@@ -193,20 +203,21 @@ class BlockScene {
 		return camera;
 	}
 
-	makeLight() {
+	makeLight(ambientLightIntensity = 0.25) {
 		// const color = 0xFFFFFF;
 		// const intensity = .005;
 		// const light = new THREE.DirectionalLight(color, intensity);
 		// light.position.set(-1, 2, 4);
 		// grid.scene.add(light);
-		this.eyeLight = new THREE.PointLight(0xffffff, 0.9, this.blockSize * EYE_LIGHT_BLOCK_DISTANCE);
+
+		this.eyeLight = new THREE.PointLight(0xffffff, EYE_LIGHT_INTENSITY, this.blockSize * EYE_LIGHT_BLOCK_DISTANCE);
 		this.scene.add(this.eyeLight);
 
 		// const pointLight = new THREE.PointLight(0xffffff, 0.15, 1000);
 		// pointLight.position.set(-100, -100, -100);
 		// this.scene.add(pointLight);
 
-		const ambientLight = new THREE.AmbientLight(0x404040, 0.25);
+		const ambientLight = new THREE.AmbientLight(0x404040, ambientLightIntensity);
 		this.scene.add(ambientLight);
 
 		// const sphereSize = 1;
@@ -244,8 +255,6 @@ class BlockScene {
 		this.cameraGoal.rotation.setFromVector3(new THREE.Vector3(rotX, rotY, rotZ), 'YZX');
 		// this.cameraGoal.rotation.copy(new Euler(PI, PI, PI));
 
-		// this.eyeLight.position.copy(playerVec3);
-
 		// Set the looking goal
 		// const rad = ArrayCoords.getDirectionRadians(this.getMainPlayer().facing);
 		// const look = new Vector3(0, 20, 0);
@@ -268,9 +277,9 @@ class BlockScene {
 		// Set the current camera position and look
 		this.camera.position.copy(this.cameraCurrent.position);
 		this.camera.quaternion.copy(this.cameraCurrent.quaternion);
-		if (!this.mapView) {
-			this.eyeLight.position.copy(this.cameraCurrent.position);
-		}
+		// TODO: Fix -- When moving in map view the eyelight does not update
+		const eyeLightPos = (this.mapView) ? this.eyeLight.position : this.cameraCurrent.position;
+		this.eyeLight.position.copy(eyeLightPos);
 		// this.camera.lookAt(this.lookCurrent);
 	}
 

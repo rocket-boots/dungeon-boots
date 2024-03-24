@@ -10,9 +10,14 @@ class VoxelWorldMap {
 		this.sourceMap = sourceMap || world.sourceMaps[mapKey];
 		this.music = this.sourceMap.music || null;
 		// console.log('Making', mapKey, 'from', this.sourceMap);
-		const { map, legend } = this.sourceMap;
+		const {
+			map = [],
+			legend = {},
+			ambientLightIntensity = 0.25,
+		} = this.sourceMap;
 		this.originalMap = map;
 		this.legend = legend;
+		this.ambientLightIntensity = ambientLightIntensity;
 		this.blocks = VoxelWorldMap.parseWorldMapToBlocks(mapKey, map, legend);
 		this.npcBlobs = this.blocks.filter((block) => block instanceof NpcBlob);
 	}

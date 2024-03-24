@@ -104,9 +104,12 @@ class DungeonCrawlerGame {
 	setupScene() {
 		const p = this.getMainPlayer();
 		const coords = p.getCoords();
-		const mapBlocks = this.getMainPlayerMap().getNearbyBlocks(coords, WORLD_VOXEL_LIMITS);
+		const map = this.getMainPlayerMap();
+		const mapBlocks = map.getNearbyBlocks(coords, WORLD_VOXEL_LIMITS);
 		// TODO: Fix this ^ - bigger range? until we load/unload blocks dynamically
-		this.dungeonScene.setup(mapBlocks, p);
+		const { ambientLightIntensity } = map;
+		const options = { ambientLightIntensity };
+		this.dungeonScene.setup(mapBlocks, p, options);
 	}
 
 	renderUI() {
@@ -240,7 +243,7 @@ class DungeonCrawlerGame {
 		this.dungeonScene.mapView = (typeof force === 'boolean') ? force : !this.dungeonScene.mapView;
 		const p = this.getMainPlayer();
 		const playerSceneObject = this.dungeonScene.blockSceneObjectMapping[p.blockId];
-		playerSceneObject.visible = this.dungeonScene.mapView;
+		this.dungeonScene.setPlayerVisibility(playerSceneObject);
 		this.render();
 	}
 
