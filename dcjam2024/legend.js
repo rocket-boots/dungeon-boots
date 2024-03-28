@@ -102,8 +102,8 @@ const legend = {
 		blocked: 1,
 		renderAs: 'box',
 		color: [0.8, 0.8, 0.7],
-		texture: 'catacombs_.png',
-		textureRange: [1, 11],
+		texture: 'cosmic/wall-test.png',
+		// textureRange: [1, 11],
 	},
 	'&': {
 		name: 'cave',
@@ -172,7 +172,7 @@ const legend = {
 	'b': {
 		...townFolk,
 		name: 'Townfolk',
-		texture: 'human_old.png',
+		texture: 'cosmic/chomper.png',
 		dialog: {
 			goblins: 'Goblins are ruining this neighbourhood!',
 			taxes: 'The Mayor said the goblins are why taxes are so high.',

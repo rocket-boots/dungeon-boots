@@ -1,0 +1,24 @@
+button {
+	border: solid 1px;
+	border-color: #444;
+	margin: 0.5vmin;
+	transition: 0.1s all ease-in-out;
+}
+button:active {
+	border: solid 1px;
+	border-color: #f33;
+	transform: scale(0.98);
+}
+.key {
+	display: block;
+	font-style: normal;
+	color: #499;
+}
+.key::before {
+	content: "[";
+	opacity: 0.4;
+}
+.key::after {
+	content: "]";
+	opacity: 0.4;
+}
