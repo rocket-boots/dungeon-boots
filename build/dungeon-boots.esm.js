@@ -456,6 +456,7 @@ class ActorBlob extends BlockEntity {
 		this.blob = [
 			new Actor(this),
 		];
+		this.maxCombatRange = 5;
 	}
 
 	clearLastRound() {
@@ -517,12 +518,12 @@ class ActorBlob extends BlockEntity {
 		return (this.commandQueue.length > 0);
 	}
 
-	getAheadCoords() {
-		return ArrayCoords.getRelativeCoordsInDirection(this.coords, this.facing, 1, 0, 0);
+	getAheadCoords(forward = 1) {
+		return ArrayCoords.getRelativeCoordsInDirection(this.coords, this.facing, forward, 0, 0);
 	}
 
-	getFacingBlocks(worldMap) {
-		const aheadCoords = this.getAheadCoords();
+	getFacingBlocks(worldMap, forward = 1) {
+		const aheadCoords = this.getAheadCoords(forward);
 		return worldMap.getBlocksAtCoords(aheadCoords);
 	}
 
@@ -531,19 +532,24 @@ class ActorBlob extends BlockEntity {
 		return worldMap.isBlockedAtCoords(aheadCoords);
 	}
 
-	getFacingActor(worldMap) {
-		const blocksAhead = this.getFacingBlocks(worldMap);
-		const actorsAhead = blocksAhead
-			.filter((block) => (
-				block.isActorBlob && block.getVisibilityTo(this)
-			))
-			// put living actors at the front of the list
-			// otherwise we can end up attacking corpses
-			.sort((a, b) => ((a.dead && !b.dead) ? 1 : -1));
-		// if (actorsAhead.length > 1)
-		// console.warn('More than 1 actor ahead of', this.name,
-		// '. that probably should not happen', actorsAhead);
-		if (actorsAhead.length) return actorsAhead[0];
+	getFacingActor(worldMap, range = 1) {
+		for (let i = 1; i <= range; i += 1) {
+			const blocksAhead = this.getFacingBlocks(worldMap, i);
+			const actorsAhead = blocksAhead
+				.filter((block) => (
+					block.isActorBlob && block.getVisibilityTo(this)
+				))
+				// put living actors at the front of the list
+				// otherwise we can end up attacking corpses
+				.sort((a, b) => ((a.dead && !b.dead) ? 1 : -1));
+			// if (actorsAhead.length > 1)
+			// console.warn('More than 1 actor ahead of', this.name,
+			// '. that probably should not happen', actorsAhead);
+			if (actorsAhead.length) return actorsAhead[0];
+			// If we ran into a blocked block, then don't look further
+			const blockedBlock = blocksAhead.find((b) => b.blocked);
+			if (blockedBlock) return null;
+		}
 		return null;
 	}
 
@@ -1378,7 +1384,7 @@ class Interface {
 	view(what) {
 		// this.reset();
 		if (what === 'title') {
-			this.closeAll();
+			this.reset();
 			this.viewTitleScreen = true;
 			return this;
 		}
@@ -1458,6 +1464,9 @@ class Interface {
 	static getAbilityStatsHtml(abil, canAfford = true) {
 		return (
 			`<div class="ability-details ${(canAfford) ? '' : 'ability-cannot-afford'}">
+				<div class="ability-range">
+					${(abil.range && abil.range > 1) ? `Range: ${abil.range}` : 'Melee'}
+				</div>
 				<div class="ability-cost">Use: ${Interface.getPoolObjHtml(abil.cost)}</div>
 				<div class="ability-replenish">Gain: ${Interface.getPoolObjHtml(abil.replenish)}</div>
 				<div class="ability-damage">Damage: ${Interface.getPoolObjHtml(abil.damage)}</div>
@@ -53010,7 +53019,7 @@ class DungeonCrawlerGame {
 		const blob = this.getMainPlayer();
 		const mapKey = blob.getMapKey();
 		const worldMap = this.world.getMap(mapKey);
-		const facingActorBlob = blob.getFacingActor(worldMap);
+		const facingActorBlob = blob.getFacingActor(worldMap, 3);
 		this.interface.render(blob, facingActorBlob);
 	}
 
@@ -53151,7 +53160,6 @@ class DungeonCrawlerGame {
 		const remainderCommandWords = [...commandWords];
 		const firstCommandWord = remainderCommandWords.shift(); // remove the first word
 		const commandIndex = (Number(commandWords[1]) || 0) - 1;
-		const target = blob.getFacingActor(worldMap);
 		if (firstCommandWord === 'spawn') {
 			const blockLegendStr = remainderCommandWords.join(' ');
 			const blockLegend = JSON.parse(blockLegendStr);
@@ -53164,6 +53172,8 @@ class DungeonCrawlerGame {
 		if (firstCommandWord === 'attack') {
 			const abils = blob.getKnownAbilities().map((key) => this.abilities[key]);
 			const attackAbility = abils[commandIndex] || this.abilities[DEFAULT_ABILITY_KEY];
+			const range = Math.min(attackAbility.range || 0, blob.maxCombatRange);
+			const target = blob.getFacingActor(worldMap, range);
 			if (target) {
 				const effectiveness = blob.useAbility(attackAbility);
 				target.applyAbility(attackAbility, effectiveness, blob.damageScale);
@@ -53204,6 +53214,7 @@ class DungeonCrawlerGame {
 				this.sounds.play('dud');
 				return;
 			}
+			const target = blob.getFacingActor(worldMap);
 			// const { answer = '...' } = dialogOptions[index];
 			target.speakDialog(dialogOptions[commandIndex]);
 			blob.listenToDialog(dialogOptions[commandIndex], target);
@@ -53303,7 +53314,7 @@ class DungeonCrawlerGame {
 
 	doRound() {
 		this.round += 1;
-		console.log('Round', this.round);
+		// console.log('Round', this.round);
 		const npcs = this.getNpcs();
 		[...this.players, ...npcs].forEach((blob) => {
 			blob.clearLastRound();
@@ -53354,6 +53365,7 @@ class DungeonCrawlerGame {
 			}
 		});
 		if (this.titleHtml) this.interface.view('title');
+		// else this.interface.view('explore');
 		this.setupScene();
 		// this.dungeonScene.setup();
 		this.render();

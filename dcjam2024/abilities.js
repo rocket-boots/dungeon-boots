@@ -1,5 +1,31 @@
 const abilities = {
 	// --- Non-Spells ---
+	// --- Ranged ---
+	aim: {
+		name: 'Aimed Shot',
+		combat: true,
+		range: 5,
+		cost: { willpower: 5 },
+		chance: 100,
+		damage: { hp: [6, 10] },
+	},
+	wildShot: {
+		name: 'Wild Shot',
+		combat: true,
+		range: 4,
+		cost: { balance: 5 },
+		chance: 50,
+		damage: { hp: [6, 10] },
+	},
+	overload: {
+		name: 'Overloaded Shot',
+		combat: true,
+		range: 3,
+		cost: { stamina: 2, hp: [1, 4] },
+		chance: 90,
+		damage: { hp: [10, 12] },
+	},
+	// --- Melee ---
 	hack: {
 		name: 'Hack',
 		combat: true,
@@ -144,6 +170,8 @@ const abilities = {
 	},
 };
 Object.keys(abilities).forEach((key) => {
-	abilities[key].key = key;
+	const ability = abilities[key];
+	ability.key = key;
+	if (ability.combat && ability.range === undefined) ability.range = 1; // Melee range is default
 });
 export default Object.freeze(abilities);

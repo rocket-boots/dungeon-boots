@@ -38,7 +38,7 @@ class Interface {
 	view(what) {
 		// this.reset();
 		if (what === 'title') {
-			this.closeAll();
+			this.reset();
 			this.viewTitleScreen = true;
 			return this;
 		}
@@ -120,6 +120,9 @@ class Interface {
 	static getAbilityStatsHtml(abil, canAfford = true) {
 		return (
 			`<div class="ability-details ${(canAfford) ? '' : 'ability-cannot-afford'}">
+				<div class="ability-range">
+					${(abil.range && abil.range > 1) ? `Range: ${abil.range}` : 'Melee'}
+				</div>
 				<div class="ability-cost">Use: ${Interface.getPoolObjHtml(abil.cost)}</div>
 				<div class="ability-replenish">Gain: ${Interface.getPoolObjHtml(abil.replenish)}</div>
 				<div class="ability-damage">Damage: ${Interface.getPoolObjHtml(abil.damage)}</div>

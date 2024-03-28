@@ -1,6 +1,14 @@
 /* eslint-disable quote-props */
 const shipColor = [0.97, 0.98, 1];
 
+const monster = {
+	blocked: 1,
+	renderAs: 'billboard',
+	npc: 'monster',
+	faction: 'monsters',
+	aggro: 1,
+};
+
 export default {
 	// music: 'forest',
 	// ambience: 'darkForest',
@@ -99,18 +107,16 @@ export default {
 			// textureRange: [0, 3],
 		},
 		'C': {
+			...monster,
 			name: 'chomper',
-			blocked: 1,
-			renderAs: 'billboard',
-			faction: 'monsters',
 			texture: 'chomper.png',
 			// textureRange: [0, 3],
 		},
 		'B': {
+			...monster,
 			name: 'monstrosity',
-			blocked: 1,
-			renderAs: 'billboard',
-			faction: 'monsters',
+			npc: 'still',
+			aggro: 0,
 			texture: 'skull_blob.png',
 			textureRange: [0, 1],
 		},

@@ -119,7 +119,7 @@ class DungeonCrawlerGame {
 		const blob = this.getMainPlayer();
 		const mapKey = blob.getMapKey();
 		const worldMap = this.world.getMap(mapKey);
-		const facingActorBlob = blob.getFacingActor(worldMap);
+		const facingActorBlob = blob.getFacingActor(worldMap, 3);
 		this.interface.render(blob, facingActorBlob);
 	}
 
@@ -260,7 +260,6 @@ class DungeonCrawlerGame {
 		const remainderCommandWords = [...commandWords];
 		const firstCommandWord = remainderCommandWords.shift(); // remove the first word
 		const commandIndex = (Number(commandWords[1]) || 0) - 1;
-		const target = blob.getFacingActor(worldMap);
 		if (firstCommandWord === 'spawn') {
 			const blockLegendStr = remainderCommandWords.join(' ');
 			const blockLegend = JSON.parse(blockLegendStr);
@@ -273,6 +272,8 @@ class DungeonCrawlerGame {
 		if (firstCommandWord === 'attack') {
 			const abils = blob.getKnownAbilities().map((key) => this.abilities[key]);
 			const attackAbility = abils[commandIndex] || this.abilities[DEFAULT_ABILITY_KEY];
+			const range = Math.min(attackAbility.range || 0, blob.maxCombatRange);
+			const target = blob.getFacingActor(worldMap, range);
 			if (target) {
 				const effectiveness = blob.useAbility(attackAbility);
 				target.applyAbility(attackAbility, effectiveness, blob.damageScale);
@@ -313,6 +314,7 @@ class DungeonCrawlerGame {
 				this.sounds.play('dud');
 				return;
 			}
+			const target = blob.getFacingActor(worldMap);
 			// const { answer = '...' } = dialogOptions[index];
 			target.speakDialog(dialogOptions[commandIndex]);
 			blob.listenToDialog(dialogOptions[commandIndex], target);
@@ -412,7 +414,7 @@ class DungeonCrawlerGame {
 
 	doRound() {
 		this.round += 1;
-		console.log('Round', this.round);
+		// console.log('Round', this.round);
 		const npcs = this.getNpcs();
 		[...this.players, ...npcs].forEach((blob) => {
 			blob.clearLastRound();
@@ -463,6 +465,7 @@ class DungeonCrawlerGame {
 			}
 		});
 		if (this.titleHtml) this.interface.view('title');
+		// else this.interface.view('explore');
 		this.setupScene();
 		// this.dungeonScene.setup();
 		this.render();

@@ -47,9 +47,9 @@ window.document.addEventListener('DOMContentLoaded', () => {
 				// hi: 'Stay out of my way while I crush all these vile vermin!',
 			},
 			inventory: [{
-				key: 'giantAxe',
-				name: 'Giant Battleaxe',
-				description: 'It is well-balanced, sharp, and good for beheading.',
+				key: 'plasmaRifle',
+				name: 'Cosmoplasma mining rifle',
+				description: 'A versatile tool for mining and combat.',
 			}],
 			characterSheetIntroHtml: (
 				`Barret Boulderfist is the bane of all monsters, an axe-wielding one man army who
@@ -67,7 +67,9 @@ window.document.addEventListener('DOMContentLoaded', () => {
 				// 	},
 				// },
 			},
-			abilities: ['hack', 'slash', 'bash', 'rally', 'berserk'],
+			abilities: [
+				'aim', 'wildShot', 'overload', 'bash',
+			],
 		},
 	);
 	// window.pc = game.makeNewPlayer(
