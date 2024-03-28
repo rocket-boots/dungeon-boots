@@ -35,10 +35,16 @@ class Actor {
 	}
 
 	waitHeal(rounds = 1) {
-		this.hp.add(1 * rounds);
+		// this.hp.add(1 * rounds);
 		this.willpower.add(1 * rounds);
 		this.stamina.add(2 * rounds);
 		this.balance.add(3 * rounds);
+	}
+
+	passiveHeal(rounds = 1) {
+		this.willpower.add(1 * rounds);
+		this.stamina.add(1 * rounds);
+		this.balance.add(1 * rounds);
 	}
 
 	damage(dmg = 0, poolType = 'hp') {

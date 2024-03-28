@@ -319,14 +319,16 @@ class DungeonCrawlerGame {
 			target.speakDialog(dialogOptions[commandIndex]);
 			blob.listenToDialog(dialogOptions[commandIndex], target);
 			this.interface.talkOptions = this.calculateTalkOptions(blob);
+			blob.passiveHeal(1);
 			return;
 		}
 		if (command === 'wait') {
 			if (blob.isPlayerBlob && isMain(blob)) {
 				if (blob.getLeader().hp.belowMax()) {
-					this.sounds.play('drink');
+					this.sounds.play('heal');
 				}
-				blob.waitHeal(2);
+				// TODO: If no enemy nearby then heal many rounds (up to max)
+				blob.waitHeal(1);
 			} else {
 				blob.waitHeal(1);
 			}
@@ -334,9 +336,11 @@ class DungeonCrawlerGame {
 		}
 		if (TURN_COMMANDS.includes(command)) {
 			blob.turn((command === 'turnLeft') ? -1 : 1);
+			blob.passiveHeal(1);
 			return;
 		}
 		if (MOVE_COMMANDS.includes(command)) {
+			blob.passiveHeal(1);
 			let forward = 0;
 			let strafe = 0;
 			let up = 0;

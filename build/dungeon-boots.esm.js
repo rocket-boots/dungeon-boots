@@ -300,10 +300,16 @@ class Actor {
 	}
 
 	waitHeal(rounds = 1) {
-		this.hp.add(1 * rounds);
+		// this.hp.add(1 * rounds);
 		this.willpower.add(1 * rounds);
 		this.stamina.add(2 * rounds);
 		this.balance.add(3 * rounds);
+	}
+
+	passiveHeal(rounds = 1) {
+		this.willpower.add(1 * rounds);
+		this.stamina.add(1 * rounds);
+		this.balance.add(1 * rounds);
 	}
 
 	damage(dmg = 0, poolType = 'hp') {
@@ -712,6 +718,12 @@ class ActorBlob extends BlockEntity {
 	waitHeal(rounds = 1) {
 		this.blob.forEach((character) => {
 			character.waitHeal(rounds);
+		});
+	}
+
+	passiveHeal(rounds = 1) {
+		this.blob.forEach((character) => {
+			character.passiveHeal(rounds);
 		});
 	}
 
@@ -53219,14 +53231,16 @@ class DungeonCrawlerGame {
 			target.speakDialog(dialogOptions[commandIndex]);
 			blob.listenToDialog(dialogOptions[commandIndex], target);
 			this.interface.talkOptions = this.calculateTalkOptions(blob);
+			blob.passiveHeal(1);
 			return;
 		}
 		if (command === 'wait') {
 			if (blob.isPlayerBlob && isMain(blob)) {
 				if (blob.getLeader().hp.belowMax()) {
-					this.sounds.play('drink');
+					this.sounds.play('heal');
 				}
-				blob.waitHeal(2);
+				// TODO: If no enemy nearby then heal up to max?
+				blob.waitHeal(1);
 			} else {
 				blob.waitHeal(1);
 			}
@@ -53234,9 +53248,11 @@ class DungeonCrawlerGame {
 		}
 		if (TURN_COMMANDS.includes(command)) {
 			blob.turn((command === 'turnLeft') ? -1 : 1);
+			blob.passiveHeal(1);
 			return;
 		}
 		if (MOVE_COMMANDS.includes(command)) {
+			blob.passiveHeal(1);
 			let forward = 0;
 			let strafe = 0;
 			let up = 0;

@@ -291,6 +291,12 @@ class ActorBlob extends BlockEntity {
 		});
 	}
 
+	passiveHeal(rounds = 1) {
+		this.blob.forEach((character) => {
+			character.passiveHeal(rounds);
+		});
+	}
+
 	getDamage() {
 		const baseDmg = (this.isPlayerBlob) ? 8 : 2;
 		const dmg = Math.floor(Math.random() * baseDmg * this.damageScale) + 1;
