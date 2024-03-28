@@ -10,6 +10,7 @@ import BlockScene from './BlockScene.js';
 
 const DEFAULT_ABILITY_KEY = 'hack';
 const WORLD_VOXEL_LIMITS = [64, 64, 12];
+const DEFAULT_RENDER_TIME = 0.15; // Higher: faster, lower: slower
 
 const KB_MAPPING = {
 	w: 'forward',
@@ -62,6 +63,7 @@ class DungeonCrawlerGame {
 		this.titleHtml = options.titleHtml;
 		this.startAt = options.startAt;
 		this.sounds = options.sounds || DEFAULT_SOUNDS;
+		this.renderTime = options.renderTime || DEFAULT_RENDER_TIME;
 		this.world = new VoxelWorld(this.worldSourceMaps);
 		this.players = [];
 		this.mainPlayerIndex = 0;
@@ -130,7 +132,7 @@ class DungeonCrawlerGame {
 			...this.getNpcs(),
 			mainBlob,
 		];
-		this.dungeonScene.render({ focus, facing, blocks });
+		this.dungeonScene.render({ focus, facing, blocks, t: this.renderTime });
 		requestAnimationFrame(() => this.animate());
 	}
 

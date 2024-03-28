@@ -1,5 +1,6 @@
 body {
 	font-family: 'Courier New', Courier, monospace;
+	font-family:'Trebuchet MS', 'Lucida Sans Unicode', 'Lucida Grande', 'Lucida Sans', Arial, sans-serif;
 	padding: 0;
 	margin: 0;
 	background: #333;
@@ -16,7 +17,7 @@ main {
 	z-index: 1;
 	width: 100vw;
 	height: 100vh;
-	border: solid 0.5vmin black;
+	border: solid 2vmin black;
 	box-sizing: border-box;
 	/* box-shadow: inset 0 0 10vmin red; */
 }
@@ -89,6 +90,7 @@ button:active {
 	margin: 2vmax 0;
 	padding: 0;
 	list-style: inside;
+	flex-wrap: wrap;
 }
 #ui-options-list > li {
 	display: block;
@@ -96,6 +98,13 @@ button:active {
 #ui-options-list > button {
 	min-width: 6vmin;
 	min-height: 4vmin;
+}
+
+.dialog-heard {
+	opacity: 0.4;
+}
+.dialog-heard button {
+	border-color: transparent;
 }
 
 .inventory-item--empty {
@@ -291,7 +300,9 @@ button:active {
 	flex-wrap: wrap;
 	align-content: center;
 	border: solid 2px var(--dialog-border-color);
-	background: rgba(255, 255, 255, 0.1);
+	background: rgba(255, 255, 255, 0.6);
+	color: black;
+	font-weight: bold;
 	border-radius: 1em;
 	margin: 4vmin 4vmin 4vmin 8vmin;
 	padding: 2vmin;
@@ -367,4 +378,16 @@ button:active {
 }
 .title-next {
 	margin: 1em 0;
+}
+
+.first-person-overlay {
+	width: 95vmin;
+	height: 95vmin;
+	position: absolute;
+	bottom: 0;
+	left: calc(50vw - 50vmin);
+}
+.first-person-overlay > img {
+	width: 100%;
+	height: 100%;
 }

@@ -18,7 +18,7 @@ window.THREE = THREE; // expose for testing in console
 class BlockScene {
 	constructor(options = {}) {
 		this.blockSize = DEFAULT_BLOCK_SIZE;
-		this.planeSize = this.blockSize - 1;
+		this.planeSize = this.blockSize; // - 1; // Slightly smaller is good for some characters
 		this.clearColor = options.clearColor || BACKGROUND_COLOR;
 		this.renderer = null;
 		this.scene = null;
@@ -123,9 +123,9 @@ class BlockScene {
 		}
 		if (block.renderAs === 'box') {
 			const geometry = new THREE.BoxGeometry(
-				blockSize,
-				blockSize,
-				blockSize,
+				blockSize * block.size[0],
+				blockSize * block.size[1],
+				blockSize * block.size[2],
 			);
 			const materialOptions = {};
 			if (color) materialOptions.color = color;
@@ -211,7 +211,8 @@ class BlockScene {
 		// light.position.set(-1, 2, 4);
 		// grid.scene.add(light);
 
-		this.eyeLight = new THREE.PointLight(0xffffff, EYE_LIGHT_INTENSITY, this.blockSize * EYE_LIGHT_BLOCK_DISTANCE);
+		const eyeLightDecay = this.blockSize * EYE_LIGHT_BLOCK_DISTANCE;
+		this.eyeLight = new THREE.PointLight(0xffffff, EYE_LIGHT_INTENSITY, eyeLightDecay);
 		this.scene.add(this.eyeLight);
 
 		// const pointLight = new THREE.PointLight(0xffffff, 0.15, 1000);
@@ -278,7 +279,6 @@ class BlockScene {
 		// Set the current camera position and look
 		this.camera.position.copy(this.cameraCurrent.position);
 		this.camera.quaternion.copy(this.cameraCurrent.quaternion);
-		// TODO: Fix -- When moving in map view the eyelight does not update
 		const eyeLightPos = (this.mapView) ? this.eyeLight.position : this.cameraCurrent.position;
 		this.eyeLight.position.copy(eyeLightPos);
 		// this.camera.lookAt(this.lookCurrent);

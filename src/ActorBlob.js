@@ -3,7 +3,7 @@ import { ArrayCoords, Random } from 'rocket-utility-belt';
 import Actor from './Actor.js';
 import BlockEntity from './BlockEntity.js';
 
-const MAX_COMMAND_QUEUE_SIZE = 2;
+const MAX_COMMAND_QUEUE_SIZE = 1;
 const BASE_INV_ITEM = {
 	key: '?unknown_item?',
 	name: '?unknown_item?',
@@ -213,7 +213,7 @@ class ActorBlob extends BlockEntity {
 		if (!actor || !actor.dialog) return [];
 		const dialogKeys = Object.keys(actor.dialog);
 		const actorInteractions = this.interactions[actor.blobId] || {};
-		const { unlockedDialogKeys = [] } = actorInteractions;
+		const { unlockedDialogKeys = [], heardDialogKeys } = actorInteractions;
 		const pickAnswer = (dialogOption) => {
 			const dialogOptObj = (typeof dialogOption === 'object') ? dialogOption : {};
 			const answer = (
@@ -239,6 +239,7 @@ class ActorBlob extends BlockEntity {
 			if (typeof locks === 'string') locks = [locks];
 			const answer = pickAnswer(dialogOption);
 			const { questionAudio, answerAudio, cost, requires, aggro } = dialogOptObj;
+			const heard = (heardDialogKeys && heardDialogKeys.has(key));
 			return {
 				// ...dialogOptObj,
 				key,
@@ -251,6 +252,7 @@ class ActorBlob extends BlockEntity {
 				cost,
 				requires,
 				aggro,
+				heard,
 			};
 		});
 		return talkableDialogOptions;
@@ -262,7 +264,10 @@ class ActorBlob extends BlockEntity {
 		const actorInteractions = this.interactions[actor.blobId];
 		actorInteractions.unlockedDialogKeys = (actorInteractions.unlockedDialogKeys || [])
 			.concat(dialogOption.unlocks || []);
-		// console.log(actorInteractions.unlockedDialogKeys);
+		if (!actorInteractions.heardDialogKeys) {
+			actorInteractions.heardDialogKeys = new Set();
+		}
+		actorInteractions.heardDialogKeys.add(dialogOption.key);
 	}
 
 	speakDialog(dialogOption) {

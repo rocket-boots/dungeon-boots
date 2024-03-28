@@ -90,7 +90,7 @@ class Interface {
 		return this;
 	}
 
-	flashBorder(color = '#f00', duration = 1000) {
+	flashBorder(color = '#f00', duration = 1500) {
 		const elt = $('#main');
 		const keyFrames = [ // Keyframes
 			{ borderColor: color },
@@ -145,7 +145,7 @@ class Interface {
 			)).join('');
 		} else if (this.optionsView === 'talk') {
 			html = this.talkOptions.map((dialogItem, i) => (
-				`<li>
+				`<li ${dialogItem.heard ? 'class="dialog-heard"' : ''}>
 					<button type="button" data-command="dialog ${i + 1}">
 						${capitalizeFirstLetter(dialogItem.question)}
 						<i class="key">${i + 1}</i>
@@ -346,7 +346,7 @@ class Interface {
 		view.classList.add(`ui-view--${this.viewTitleScreen ? 'open' : 'closed'}`);
 		view.innerHTML = `${this.titleHtml}
 			<div class="title-next">
-				<button type="button" data-command="view character">
+				<button type="button" data-command="talk">
 					Begin Game 
 					<span class="key">Enter</span>
 				</button>

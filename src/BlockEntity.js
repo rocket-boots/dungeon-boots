@@ -16,6 +16,7 @@ class BlockEntity {
 		this.mapKey = mapKey;
 		this.coords = [x, y, z];
 		this.tags = [];
+		this.size = [1, 1, 1];
 		this.blockId = Random.uniqueString();
 		// Add all properties from legend
 		Object.keys(blockLegend).forEach((key) => {
@@ -44,7 +45,7 @@ class BlockEntity {
 		}
 		// Modify texture for texture range
 		if (this.texture && this.textureRange) {
-			const n = this.textureRange[1] - this.textureRange[0];
+			const n = this.textureRange[1] - this.textureRange[0] + 1;
 			const textureNum = this.textureRange[0] + this.pRand.random(n);
 			this.texture = this.texture.replace('.', `${textureNum}.`);
 			// this.color = '#ffffff';

@@ -329,6 +329,7 @@ class BlockEntity {
 		this.mapKey = mapKey;
 		this.coords = [x, y, z];
 		this.tags = [];
+		this.size = [1, 1, 1];
 		this.blockId = Random.uniqueString();
 		// Add all properties from legend
 		Object.keys(blockLegend).forEach((key) => {
@@ -357,7 +358,7 @@ class BlockEntity {
 		}
 		// Modify texture for texture range
 		if (this.texture && this.textureRange) {
-			const n = this.textureRange[1] - this.textureRange[0];
+			const n = this.textureRange[1] - this.textureRange[0] + 1;
 			const textureNum = this.textureRange[0] + this.pRand.random(n);
 			this.texture = this.texture.replace('.', `${textureNum}.`);
 			// this.color = '#ffffff';
@@ -426,7 +427,7 @@ class BlockEntity {
 	}
 }
 
-const MAX_COMMAND_QUEUE_SIZE = 2;
+const MAX_COMMAND_QUEUE_SIZE = 1;
 const BASE_INV_ITEM = {
 	key: '?unknown_item?',
 	name: '?unknown_item?',
@@ -636,7 +637,7 @@ class ActorBlob extends BlockEntity {
 		if (!actor || !actor.dialog) return [];
 		const dialogKeys = Object.keys(actor.dialog);
 		const actorInteractions = this.interactions[actor.blobId] || {};
-		const { unlockedDialogKeys = [] } = actorInteractions;
+		const { unlockedDialogKeys = [], heardDialogKeys } = actorInteractions;
 		const pickAnswer = (dialogOption) => {
 			const dialogOptObj = (typeof dialogOption === 'object') ? dialogOption : {};
 			const answer = (
@@ -662,6 +663,7 @@ class ActorBlob extends BlockEntity {
 			if (typeof locks === 'string') locks = [locks];
 			const answer = pickAnswer(dialogOption);
 			const { questionAudio, answerAudio, cost, requires, aggro } = dialogOptObj;
+			const heard = (heardDialogKeys && heardDialogKeys.has(key));
 			return {
 				// ...dialogOptObj,
 				key,
@@ -674,6 +676,7 @@ class ActorBlob extends BlockEntity {
 				cost,
 				requires,
 				aggro,
+				heard,
 			};
 		});
 		return talkableDialogOptions;
@@ -685,7 +688,10 @@ class ActorBlob extends BlockEntity {
 		const actorInteractions = this.interactions[actor.blobId];
 		actorInteractions.unlockedDialogKeys = (actorInteractions.unlockedDialogKeys || [])
 			.concat(dialogOption.unlocks || []);
-		// console.log(actorInteractions.unlockedDialogKeys);
+		if (!actorInteractions.heardDialogKeys) {
+			actorInteractions.heardDialogKeys = new Set();
+		}
+		actorInteractions.heardDialogKeys.add(dialogOption.key);
 	}
 
 	speakDialog(dialogOption) {
@@ -1422,7 +1428,7 @@ class Interface {
 		return this;
 	}
 
-	flashBorder(color = '#f00', duration = 1000) {
+	flashBorder(color = '#f00', duration = 1500) {
 		const elt = $$1('#main');
 		const keyFrames = [ // Keyframes
 			{ borderColor: color },
@@ -1477,7 +1483,7 @@ class Interface {
 			)).join('');
 		} else if (this.optionsView === 'talk') {
 			html = this.talkOptions.map((dialogItem, i) => (
-				`<li>
+				`<li ${dialogItem.heard ? 'class="dialog-heard"' : ''}>
 					<button type="button" data-command="dialog ${i + 1}">
 						${capitalizeFirstLetter(dialogItem.question)}
 						<i class="key">${i + 1}</i>
@@ -1678,7 +1684,7 @@ class Interface {
 		view.classList.add(`ui-view--${this.viewTitleScreen ? 'open' : 'closed'}`);
 		view.innerHTML = `${this.titleHtml}
 			<div class="title-next">
-				<button type="button" data-command="view character">
+				<button type="button" data-command="talk">
 					Begin Game 
 					<span class="key">Enter</span>
 				</button>
@@ -52607,7 +52613,7 @@ window.THREE = THREE; // expose for testing in console
 class BlockScene {
 	constructor(options = {}) {
 		this.blockSize = DEFAULT_BLOCK_SIZE;
-		this.planeSize = this.blockSize - 1;
+		this.planeSize = this.blockSize; // - 1; // Slightly smaller is good for some characters
 		this.clearColor = options.clearColor || BACKGROUND_COLOR;
 		this.renderer = null;
 		this.scene = null;
@@ -52712,9 +52718,9 @@ class BlockScene {
 		}
 		if (block.renderAs === 'box') {
 			const geometry = new BoxGeometry(
-				blockSize,
-				blockSize,
-				blockSize,
+				blockSize * block.size[0],
+				blockSize * block.size[1],
+				blockSize * block.size[2],
 			);
 			const materialOptions = {};
 			if (color) materialOptions.color = color;
@@ -52800,7 +52806,8 @@ class BlockScene {
 		// light.position.set(-1, 2, 4);
 		// grid.scene.add(light);
 
-		this.eyeLight = new PointLight(0xffffff, EYE_LIGHT_INTENSITY, this.blockSize * EYE_LIGHT_BLOCK_DISTANCE);
+		const eyeLightDecay = this.blockSize * EYE_LIGHT_BLOCK_DISTANCE;
+		this.eyeLight = new PointLight(0xffffff, EYE_LIGHT_INTENSITY, eyeLightDecay);
 		this.scene.add(this.eyeLight);
 
 		// const pointLight = new THREE.PointLight(0xffffff, 0.15, 1000);
@@ -52867,7 +52874,6 @@ class BlockScene {
 		// Set the current camera position and look
 		this.camera.position.copy(this.cameraCurrent.position);
 		this.camera.quaternion.copy(this.cameraCurrent.quaternion);
-		// TODO: Fix -- When moving in map view the eyelight does not update
 		const eyeLightPos = (this.mapView) ? this.eyeLight.position : this.cameraCurrent.position;
 		this.eyeLight.position.copy(eyeLightPos);
 		// this.camera.lookAt(this.lookCurrent);
@@ -52895,6 +52901,7 @@ class BlockScene {
 
 const DEFAULT_ABILITY_KEY = 'hack';
 const WORLD_VOXEL_LIMITS = [64, 64, 12];
+const DEFAULT_RENDER_TIME = 0.15; // Higher: faster, lower: slower
 
 const KB_MAPPING = {
 	w: 'forward',
@@ -52947,6 +52954,7 @@ class DungeonCrawlerGame {
 		this.titleHtml = options.titleHtml;
 		this.startAt = options.startAt;
 		this.sounds = options.sounds || DEFAULT_SOUNDS;
+		this.renderTime = options.renderTime || DEFAULT_RENDER_TIME;
 		this.world = new VoxelWorld(this.worldSourceMaps);
 		this.players = [];
 		this.mainPlayerIndex = 0;
@@ -53015,7 +53023,7 @@ class DungeonCrawlerGame {
 			...this.getNpcs(),
 			mainBlob,
 		];
-		this.dungeonScene.render({ focus, facing, blocks });
+		this.dungeonScene.render({ focus, facing, blocks, t: this.renderTime });
 		requestAnimationFrame(() => this.animate());
 	}
 
