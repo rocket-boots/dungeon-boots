@@ -1,5 +1,5 @@
 import { DungeonCrawlerGame } from '../build/dungeon-boots.esm.js';
-import worldMaps from './worldMaps.js';
+import worldMaps from './maps/worldMaps.js';
 import sounds from './sounds.js';
 import abilities from './abilities.js';
 
@@ -39,7 +39,9 @@ window.document.addEventListener('DOMContentLoaded', () => {
 			battleYell: 'warriorBattleYell',
 			hurtSound: 'hurt',
 			hp: 30,
-			stamina: 20,
+			stamina: 10,
+			willpower: 10,
+			balance: 10,
 			facing: 0,
 			faction: 'explorers',
 			light: [1, 4],
@@ -52,11 +54,10 @@ window.document.addEventListener('DOMContentLoaded', () => {
 				description: 'A versatile tool for mining and combat.',
 			}],
 			characterSheetIntroHtml: (
-				`Barret Boulderfist is the bane of all monsters, an axe-wielding one man army who
-				fights without mercy. He's purged a hundred dungeons full of vile horrors, and has no fear that
-				any enemy can match his brutal prowess in combat. A consummate professional, he takes great
-				pride in his work, and he enjoys it too - after all, these dungeons need to be cleared,
-				and nobody can do it better than him.
+				`You awake on a strange ship with your memory clouded.
+				You hear a familiar Voice, who tells of an Endless Kingdom, and a mission
+				you've been given. Apparently you are a miner. The cosmoplasma mining rifle feels
+				familiar in your grasp. Maybe you were a miner.
 				<hr style="margin: 1em 0" />`
 			),
 			death: { // TODO: This is not making it onto the character's blob
@@ -68,7 +69,7 @@ window.document.addEventListener('DOMContentLoaded', () => {
 				// },
 			},
 			abilities: [
-				'aim', 'wildShot', 'overload', 'bash',
+				'steadyShot', 'wildShot', 'aim', 'overload', 'bash', 'op',
 			],
 		},
 	);

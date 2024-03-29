@@ -1,29 +1,44 @@
 const abilities = {
 	// --- Non-Spells ---
 	// --- Ranged ---
+	steadyShot: {
+		name: 'Steady Shot',
+		combat: true,
+		range: 3,
+		cost: { stamina: 6 },
+		chance: 100,
+		damage: { hp: [6, 8] },
+	},
 	aim: {
 		name: 'Aimed Shot',
 		combat: true,
 		range: 5,
-		cost: { willpower: 5 },
+		cost: { willpower: 7 },
 		chance: 100,
-		damage: { hp: [6, 10] },
+		damage: { hp: [6, 8] },
 	},
 	wildShot: {
 		name: 'Wild Shot',
 		combat: true,
-		range: 4,
-		cost: { balance: 5 },
+		range: 3,
+		cost: { balance: 6 },
 		chance: 50,
-		damage: { hp: [6, 10] },
+		damage: { hp: [4, 12] },
 	},
 	overload: {
 		name: 'Overloaded Shot',
 		combat: true,
 		range: 3,
-		cost: { stamina: 2, hp: [1, 4] },
+		cost: { stamina: 4, hp: [1, 4] },
 		chance: 90,
 		damage: { hp: [10, 12] },
+	},
+	op: {
+		name: 'dev shot',
+		combat: true,
+		range: 5,
+		cost: { stamina: 0 },
+		damage: { hp: [20, 30] },
 	},
 	// --- Melee ---
 	hack: {

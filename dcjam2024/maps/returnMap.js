@@ -1,29 +1,12 @@
 /* eslint-disable quote-props */
-const shipColor = [0.97, 0.98, 1];
-
-const monster = {
-	blocked: 1,
-	renderAs: 'billboard',
-	npc: 'monster',
-	faction: 'monsters',
-	aggro: 1,
-};
+import { shipColor, caveColor, teleportDoor, monster, voice, baseLegend } from './baseLegend.js';
 
 export default {
 	// music: 'forest',
 	// ambience: 'darkForest',
 	ambientLightIntensity: 0.4,
 	legend: {
-		' ': {
-			name: 'empty',
-			blocked: 0,
-			renderAs: false,
-		},
-		'.': {
-			name: 'void',
-			blocked: 1,
-			renderAs: false,
-		},
+		...baseLegend,
 		'H': {
 			name: 'ship hull',
 			blocked: 1,
@@ -85,16 +68,15 @@ export default {
 			texture: 'ship_door.png',
 			// textureRange: [0, 3],
 			interact: {
-				outcome: {
-					text: 'The door is unlocked somewhere else.',
-				},
+				outcome: { text: 'The door is unlocked somewhere else.' },
+				//
 			},
 		},
 		'&': {
 			name: 'cave',
 			blocked: 1,
 			renderAs: 'box',
-			color: [0.9, 0.9, 0.9],
+			color: caveColor,
 			texture: 'cave.png',
 			// textureRange: [0, 3],
 		},
@@ -102,7 +84,16 @@ export default {
 			name: 'secret cave',
 			blocked: 1,
 			renderAs: 'box',
-			color: [1, 0.9, 0.9],
+			color: caveColor,
+			texture: 'cave_crack.png',
+			// textureRange: [0, 3],
+		},
+		'X': {
+			name: 'destrucible cave wall',
+			blocked: 1,
+			renderAs: 'box',
+			npc: 'mindless',
+			color: caveColor,
 			texture: 'cave_crack.png',
 			// textureRange: [0, 3],
 		},
@@ -122,17 +113,7 @@ export default {
 		},
 		// Event Triggers
 		'1': {
-			name: 'The Voice',
-			blocked: 0,
-			renderAs: 'billboard',
-			faction: 'loyalist',
-			texture: 'voice.png',
-			light: [1, 2],
-			npc: 'still',
-			aggro: 0,
-			trigger: {
-				talk: true,
-			},
+			...voice,
 			dialog: {
 				where: {
 					q: 'Where am I?',
@@ -185,6 +166,10 @@ export default {
 				},
 			},
 		},
+		'>': {
+			...teleportDoor,
+			teleport: ['revealMap', 1, 1, 1, 2],
+		},
 	},
 	map: [
 		[
@@ -204,14 +189,14 @@ export default {
 			'           &&&&&&&&',
 		],
 		[
-			'            &&  .  ',
-			' HWWWH    &&&&&& & ',
+			'            &&&&&& ',
+			' HWWWH    &&&  &&& ',
 			'HH   HH  &&&     & ',
 			'H  1  H&&&&&  &  & ',
 			'H|   IH&&&&&  &  & ',
-			'WB    +      C&  &&',
-			'H     H       &   +',
-			'H T T H&&&&&&S&&&&&',
+			'W     +       &  &&',
+			'H     H       &   &',
+			'H T T H&&&&&&S&&&>&',
 			'H H H H&& &&& && &&',
 			'H H|H H&&&&&& && &&',
 			'HHHHHHH &&&&& &&&&&',
