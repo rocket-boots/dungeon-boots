@@ -334,7 +334,10 @@ class Interface {
 		this.renderBars('target-stats', this.getBlobBars(facingActorBlob));
 		this.renderBars('player-stats', this.getBlobBars(blob));
 		$('#ui-target-name').innerText = (facingActorBlob) ? facingActorBlob.name : '';
-		$('#ui-target-mood').innerText = (facingActorBlob) ? facingActorBlob.getMoodEmoji() : '';
+		$('#ui-target-mood').innerHTML = (facingActorBlob) ? (
+			`<span class="mood-emoji">${facingActorBlob.getMoodEmoji()}</span>
+			<span class="mood-text">${facingActorBlob.getMoodText()}</span>`
+		) : '';
 	}
 
 	renderInteract(blob, facingActorBlob) {

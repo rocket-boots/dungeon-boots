@@ -480,6 +480,12 @@ class ActorBlob extends BlockEntity {
 		return '☮';
 	}
 
+	getMoodText() {
+		if (this.dead) return 'Dead';
+		if (this.aggro) return 'Hostile';
+		return 'Nonhostile';
+	}
+
 	turn(n = 0) {
 		this.facing = ArrayCoords.normalizeDirection(this.facing + n);
 	}
@@ -1697,7 +1703,10 @@ class Interface {
 		this.renderBars('target-stats', this.getBlobBars(facingActorBlob));
 		this.renderBars('player-stats', this.getBlobBars(blob));
 		$$1('#ui-target-name').innerText = (facingActorBlob) ? facingActorBlob.name : '';
-		$$1('#ui-target-mood').innerText = (facingActorBlob) ? facingActorBlob.getMoodEmoji() : '';
+		$$1('#ui-target-mood').innerHTML = (facingActorBlob) ? (
+			`<span class="mood-emoji">${facingActorBlob.getMoodEmoji()}</span>
+			<span class="mood-text">${facingActorBlob.getMoodText()}</span>`
+		) : '';
 	}
 
 	renderInteract(blob, facingActorBlob) {

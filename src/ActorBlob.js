@@ -48,6 +48,12 @@ class ActorBlob extends BlockEntity {
 		return '☮';
 	}
 
+	getMoodText() {
+		if (this.dead) return 'Dead';
+		if (this.aggro) return 'Hostile';
+		return 'Nonhostile';
+	}
+
 	turn(n = 0) {
 		this.facing = ArrayCoords.normalizeDirection(this.facing + n);
 	}

@@ -304,6 +304,17 @@ button:active {
 	gap: 1em;
 }
 
+.mood-emoji {
+	font-size: 110%;
+}
+
+.mood-text {
+	font-size: 80%;
+	opacity: 0.7;
+	display: inline-block;
+	margin-left: 0.75em;
+}
+
 #ui-interact-view {
 	height: 40vh;
 }
