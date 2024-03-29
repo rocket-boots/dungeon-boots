@@ -78,9 +78,12 @@ class BlockScene {
 		// this.scene.add(axesHelper);
 
 		this.blockSceneObjectMapping = {};
-		if (viewingBlob) {
-			this.addMapBlocks(blocks, viewingBlob);
-		}
+		if (!viewingBlob) throw new Error('Need viewingBlob');
+		this.blocksAboveGroup = new Group();
+		this.blocksAtOrBelowGroup = new Group();
+		this.scene.add(this.blocksAboveGroup);
+		this.scene.add(this.blocksAtOrBelowGroup);
+		this.addMapBlocks(blocks, viewingBlob);
 	}
 
 	setupRenderer() {
@@ -94,18 +97,31 @@ class BlockScene {
 	}
 
 	addMapBlocks(blocks = [], viewingBlob = null) {
-		this.blocksAboveGroup = new Group();
-		this.blocksAtOrBelowGroup = new Group();
-		this.scene.add(this.blocksAboveGroup);
-		this.scene.add(this.blocksAtOrBelowGroup);
 		const [,, viewZ] = viewingBlob.coords;
 		blocks.forEach((block) => {
-			const group = (block.coords[Z] > viewZ) ? this.blocksAboveGroup : this.blocksAtOrBelowGroup;
-			this.addMapBlock(block, group, viewingBlob);
+			this.addMapBlock(block, viewingBlob, viewZ);
 		});
 	}
 
-	addMapBlock(block, group, viewingBlob) {
+	getBlockGroup(block, viewZ) {
+		const group = (block.coords[Z] > viewZ) ? this.blocksAboveGroup : this.blocksAtOrBelowGroup;
+		return group || this.scene;
+	}
+
+	removeMapBlock(block, viewZ) {
+		if (!block.sceneUUID) {
+			// console.warn('Cannot remove block', block, 'because of missing uuid');
+			return; // This is probably ok
+		}
+		const group = this.getBlockGroup(block, viewZ);
+		const sceneObj = group.getObjectByProperty('uuid', block.sceneUUID);
+		// sceneObj.geometry.dispose();
+		// sceneObj.material.dispose();
+		group.remove(sceneObj);
+		block.sceneUUID = null;
+	}
+
+	addMapBlock(block, viewingBlob, viewZ) {
 		if (!block.renderAs) return;
 		const { blockSize } = this;
 		let texture;
@@ -167,31 +183,32 @@ class BlockScene {
 			}
 			sceneObj = plane;
 		}
-		if (sceneObj) {
-			sceneObj.name = block.name || block.texture || block.renderAs;
-			this.blockSceneObjectMapping[block.blockId] = sceneObj;
-			sceneObj.position.copy(this.getBlockGoalPosition(block));
-			// Hide the current main character
-			// const viewingBlob = this.getMainPlayer();
-			if (block.isPlayerBlob && viewingBlob.blockId === block.blockId) {
-				this.setPlayerVisibility(sceneObj);
-			}
-			// Check for block invisibility
-			if (block.invisible) {
-				sceneObj.visible = block.getVisibilityTo(viewingBlob);
-			}
-			if (block.light) {
-				const [intensity, distance] = block.light;
-				const pointLight = new THREE.PointLight(0xb4b0dd, intensity, distance * blockSize);
-				pointLight.translateZ(LIGHT_OFFSET);
-				sceneObj.add(pointLight);
-				window.torch = sceneObj;
-			}
-			if (group) group.add(sceneObj);
-			else this.scene.add(sceneObj);
-		} else {
-			console.warn('No scene object to render');
+		if (!sceneObj) {
+			console.warn('No scene object to add!');
+			return;
 		}
+		sceneObj.name = block.name || block.texture || block.renderAs;
+		this.blockSceneObjectMapping[block.blockId] = sceneObj;
+		sceneObj.position.copy(this.getBlockGoalPosition(block));
+		// Hide the current main character
+		// const viewingBlob = this.getMainPlayer();
+		if (block.isPlayerBlob && viewingBlob.blockId === block.blockId) {
+			this.setPlayerVisibility(sceneObj);
+		}
+		// Check for block invisibility
+		if (block.invisible) {
+			sceneObj.visible = block.getVisibilityTo(viewingBlob);
+		}
+		if (block.light) {
+			const [intensity, distance] = block.light;
+			const pointLight = new THREE.PointLight(0xb4b0dd, intensity, distance * blockSize);
+			pointLight.translateZ(LIGHT_OFFSET);
+			sceneObj.add(pointLight);
+			window.torch = sceneObj;
+		}
+		// Add the block to the scene (via a group)
+		block.sceneUUID = sceneObj.uuid;
+		this.getBlockGroup(block, viewZ).add(sceneObj);
 	}
 
 	makeCamera() { // eslint-disable-line class-methods-use-this
@@ -225,6 +242,18 @@ class BlockScene {
 		// const sphereSize = 1;
 		// const pointLightHelper = new THREE.PointLightHelper(pointLight, sphereSize);
 		// this.scene.add(pointLightHelper);
+	}
+
+	updateBlock(block, viewZ, t = 0.1) {
+		if (block.remove) {
+			this.removeMapBlock(block, viewZ);
+		}
+		if (block.redraw) {
+			this.removeMapBlock(block, viewZ);
+			this.addMapBlock(block, null, viewZ);
+			block.redraw = false; // eslint-disable-line no-param-reassign
+		}
+		this.updateBlockPosition(block, t);
 	}
 
 	updateBlockPosition(block, t = 0.1) {
@@ -284,7 +313,7 @@ class BlockScene {
 		// this.camera.lookAt(this.lookCurrent);
 	}
 
-	render({ focus, facing, t = 0.1, blocks }) { // Just render the three js scene
+	render({ focus, facing, t = 0.1, blocks, viewZ }) { // Just render the three js scene
 		if (focus instanceof Vector3) {
 			this.updateCamera(focus, facing, t);
 		} else if (focus instanceof Array) {
@@ -292,7 +321,7 @@ class BlockScene {
 			this.updateCamera(focusVec3, facing, t);
 		}
 		if (blocks) {
-			blocks.forEach((block) => this.updateBlockPosition(block));
+			blocks.forEach((block) => this.updateBlock(block, viewZ, t));
 		}
 		this.blocksAboveGroup.visible = !this.mapView;
 		this.renderer.render(this.scene, this.camera);

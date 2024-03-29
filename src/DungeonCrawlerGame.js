@@ -132,15 +132,18 @@ class DungeonCrawlerGame {
 			...this.getNpcs(),
 			mainBlob,
 		];
-		this.dungeonScene.render({ focus, facing, blocks, t: this.renderTime });
+		const [,, viewZ] = mainBlob.coords;
+		this.dungeonScene.render({ focus, facing, blocks, t: this.renderTime, viewZ });
 		requestAnimationFrame(() => this.animate());
 	}
 
 	/** Render everything */
 	render() {
 		const focus = this.getMainPlayer().getCoords();
-		const { facing } = this.getMainPlayer();
-		this.dungeonScene.render({ focus, facing });
+		const mainBlob = this.getMainPlayer();
+		const { facing } = mainBlob;
+		const [,, viewZ] = mainBlob.coords;
+		this.dungeonScene.render({ focus, facing, viewZ });
 		this.renderUI();
 	}
 
@@ -428,15 +431,9 @@ class DungeonCrawlerGame {
 		// ^ TODO: More efficient to do the planning while waiting for player input
 		this.doActorsCommands(npcs);
 		this.checkDeath();
-		let redraws = 0;
 		npcs.forEach((a) => {
 			a.checkDeath();
-			if (a.redraw) {
-				redraws += 1;
-				a.redraw = false; // eslint-disable-line no-param-reassign
-			}
 		});
-		if (redraws > 0) this.setupScene();
 		this.render();
 	}
 

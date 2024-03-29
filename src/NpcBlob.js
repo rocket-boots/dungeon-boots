@@ -27,7 +27,7 @@ class NpcBlob extends ActorBlob {
 	constructor(startAt = [], blockLegend = {}) {
 		super(startAt, blockLegend);
 		this.isNpcBlob = true;
-		this.brain = null;
+		this.brain = blockLegend.brain || null;
 		if (blockLegend.npc && BRAINS[blockLegend.npc]) {
 			this.brain = BRAINS[blockLegend.npc];
 		}
@@ -37,21 +37,23 @@ class NpcBlob extends ActorBlob {
 		const roll = Math.random();
 		// If facing a wall, do a free turn
 		if (this.checkFacingWall(worldMap)) {
-			console.log(this.name, 'facing wall so turning');
+			// console.log(this.name, 'facing wall so turning');
 			this.turn((roll < 0.2) ? 1 : -1); // turning is free for NPCs
 		}
-		if (this.brain && !this.dead) {
-			// Hunters
-			const huntingValue = this.brain.huntPlayers || this.aggro;
-			if (this.aggro && roll < huntingValue) {
-				const isHunting = this.planHunt(players, worldMap);
-				if (isHunting) return;
-			}
-			// Wanderers
-			if (this.brain.wander && roll < this.brain.wander) {
-				this.planWander();
-				return;
-			}
+		if (!this.brain || this.dead) {
+			this.queueCommand('wait');
+			return;
+		}
+		// Hunters
+		const huntingValue = this.brain.huntPlayers || this.aggro;
+		if (this.aggro && roll < huntingValue) {
+			const isHunting = this.planHunt(players, worldMap);
+			if (isHunting) return;
+		}
+		// Wanderers
+		if (this.brain.wander && roll < this.brain.wander) {
+			this.planWander();
+			return;
 		}
 		this.queueCommand('wait');
 	}
@@ -75,7 +77,7 @@ class NpcBlob extends ActorBlob {
 		// TODO: Do A-star path finding to get to nearestPrey
 		this.turnTowards(nearestPrey.coords);
 		if (nearestDist > 1) {
-			console.log(this.name, 'planning to hunt', nearPrey);
+			// console.log(this.name, 'planning to hunt', nearPrey);
 			this.queueCommand('forward');
 		} else if (nearestDist === 1) {
 			// TODO: Should we check getFacingActor?

@@ -113,7 +113,9 @@ class ActorBlob extends BlockEntity {
 			const blocksAhead = this.getFacingBlocks(worldMap, i);
 			const actorsAhead = blocksAhead
 				.filter((block) => (
-					block.isActorBlob && block.getVisibilityTo(this)
+					block.isActorBlob
+					&& block.getVisibilityTo(this)
+					&& !block.remove
 				))
 				// put living actors at the front of the list
 				// otherwise we can end up attacking corpses
@@ -325,6 +327,7 @@ class ActorBlob extends BlockEntity {
 			// TODO: set rotation based on facing value
 			opacity: 0.5,
 			color: [1, 0, 0],
+			remove: true, // TODO: Don't remove, instead provide a corpse for some blobs
 		});
 	}
 

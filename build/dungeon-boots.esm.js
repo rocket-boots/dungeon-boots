@@ -373,6 +373,8 @@ class BlockEntity {
 		// We want a small offset amount to stop overlaps when two blocks are on the same location
 		this.wiggle = [this.pRand.random(), this.pRand.random(), 0];
 		this.redraw = false; // Do we need to redraw the thing (likely due to a texture change)
+		this.sceneUUID = null; // Used to connect to the three.js mesh
+		this.remove = false; // a trigger to tell the renderer or game to remove this block
 	}
 
 	switchMap(mapKey) {
@@ -543,7 +545,9 @@ class ActorBlob extends BlockEntity {
 			const blocksAhead = this.getFacingBlocks(worldMap, i);
 			const actorsAhead = blocksAhead
 				.filter((block) => (
-					block.isActorBlob && block.getVisibilityTo(this)
+					block.isActorBlob
+					&& block.getVisibilityTo(this)
+					&& !block.remove
 				))
 				// put living actors at the front of the list
 				// otherwise we can end up attacking corpses
@@ -755,6 +759,7 @@ class ActorBlob extends BlockEntity {
 			// TODO: set rotation based on facing value
 			opacity: 0.5,
 			color: [1, 0, 0],
+			remove: true, // TODO: Don't remove, instead provide a corpse for some blobs
 		});
 	}
 
@@ -984,7 +989,7 @@ class NpcBlob extends ActorBlob {
 	constructor(startAt = [], blockLegend = {}) {
 		super(startAt, blockLegend);
 		this.isNpcBlob = true;
-		this.brain = null;
+		this.brain = blockLegend.brain || null;
 		if (blockLegend.npc && BRAINS[blockLegend.npc]) {
 			this.brain = BRAINS[blockLegend.npc];
 		}
@@ -994,21 +999,23 @@ class NpcBlob extends ActorBlob {
 		const roll = Math.random();
 		// If facing a wall, do a free turn
 		if (this.checkFacingWall(worldMap)) {
-			console.log(this.name, 'facing wall so turning');
+			// console.log(this.name, 'facing wall so turning');
 			this.turn((roll < 0.2) ? 1 : -1); // turning is free for NPCs
 		}
-		if (this.brain && !this.dead) {
-			// Hunters
-			const huntingValue = this.brain.huntPlayers || this.aggro;
-			if (this.aggro && roll < huntingValue) {
-				const isHunting = this.planHunt(players, worldMap);
-				if (isHunting) return;
-			}
-			// Wanderers
-			if (this.brain.wander && roll < this.brain.wander) {
-				this.planWander();
-				return;
-			}
+		if (!this.brain || this.dead) {
+			this.queueCommand('wait');
+			return;
+		}
+		// Hunters
+		const huntingValue = this.brain.huntPlayers || this.aggro;
+		if (this.aggro && roll < huntingValue) {
+			const isHunting = this.planHunt(players, worldMap);
+			if (isHunting) return;
+		}
+		// Wanderers
+		if (this.brain.wander && roll < this.brain.wander) {
+			this.planWander();
+			return;
 		}
 		this.queueCommand('wait');
 	}
@@ -1032,7 +1039,7 @@ class NpcBlob extends ActorBlob {
 		// TODO: Do A-star path finding to get to nearestPrey
 		this.turnTowards(nearestPrey.coords);
 		if (nearestDist > 1) {
-			console.log(this.name, 'planning to hunt', nearPrey);
+			// console.log(this.name, 'planning to hunt', nearPrey);
 			this.queueCommand('forward');
 		} else if (nearestDist === 1) {
 			// TODO: Should we check getFacingActor?
@@ -1360,7 +1367,10 @@ class VoxelWorld {
 /* eslint-disable class-methods-use-this */
 
 const POOL_ABBREV = {
-	hp: 'HP', willpower: 'W', balance: 'B', stamina: 'S',
+	hp: 'HP', willpower: 'WP', balance: 'Ba', stamina: 'St',
+};
+const POOL_CLASS = {
+	hp: 'hp', willpower: 'wp', balance: 'ba', stamina: 'st',
 };
 
 const $$1 = (selector, warn = true) => {
@@ -1469,7 +1479,10 @@ class Interface {
 		return Object.keys(poolObj).map((poolKey) => {
 			let value = poolObj[poolKey];
 			if (value instanceof Array) value = value.join('-');
-			return `${value} ${POOL_ABBREV[poolKey]}`;
+			return `${value}
+				<span class="pool-unit-${POOL_CLASS[poolKey]}">
+					${POOL_ABBREV[poolKey]}
+				</span>`;
 		}).join(', ');
 	}
 
@@ -52694,9 +52707,12 @@ class BlockScene {
 		// this.scene.add(axesHelper);
 
 		this.blockSceneObjectMapping = {};
-		if (viewingBlob) {
-			this.addMapBlocks(blocks, viewingBlob);
-		}
+		if (!viewingBlob) throw new Error('Need viewingBlob');
+		this.blocksAboveGroup = new Group();
+		this.blocksAtOrBelowGroup = new Group();
+		this.scene.add(this.blocksAboveGroup);
+		this.scene.add(this.blocksAtOrBelowGroup);
+		this.addMapBlocks(blocks, viewingBlob);
 	}
 
 	setupRenderer() {
@@ -52710,18 +52726,31 @@ class BlockScene {
 	}
 
 	addMapBlocks(blocks = [], viewingBlob = null) {
-		this.blocksAboveGroup = new Group();
-		this.blocksAtOrBelowGroup = new Group();
-		this.scene.add(this.blocksAboveGroup);
-		this.scene.add(this.blocksAtOrBelowGroup);
 		const [,, viewZ] = viewingBlob.coords;
 		blocks.forEach((block) => {
-			const group = (block.coords[Z] > viewZ) ? this.blocksAboveGroup : this.blocksAtOrBelowGroup;
-			this.addMapBlock(block, group, viewingBlob);
+			this.addMapBlock(block, viewingBlob, viewZ);
 		});
 	}
 
-	addMapBlock(block, group, viewingBlob) {
+	getBlockGroup(block, viewZ) {
+		const group = (block.coords[Z] > viewZ) ? this.blocksAboveGroup : this.blocksAtOrBelowGroup;
+		return group || this.scene;
+	}
+
+	removeMapBlock(block, viewZ) {
+		if (!block.sceneUUID) {
+			// console.warn('Cannot remove block', block, 'because of missing uuid');
+			return; // This is probably ok
+		}
+		const group = this.getBlockGroup(block, viewZ);
+		const sceneObj = group.getObjectByProperty('uuid', block.sceneUUID);
+		// sceneObj.geometry.dispose();
+		// sceneObj.material.dispose();
+		group.remove(sceneObj);
+		block.sceneUUID = null;
+	}
+
+	addMapBlock(block, viewingBlob, viewZ) {
 		if (!block.renderAs) return;
 		const { blockSize } = this;
 		let texture;
@@ -52783,31 +52812,32 @@ class BlockScene {
 			}
 			sceneObj = plane;
 		}
-		if (sceneObj) {
-			sceneObj.name = block.name || block.texture || block.renderAs;
-			this.blockSceneObjectMapping[block.blockId] = sceneObj;
-			sceneObj.position.copy(this.getBlockGoalPosition(block));
-			// Hide the current main character
-			// const viewingBlob = this.getMainPlayer();
-			if (block.isPlayerBlob && viewingBlob.blockId === block.blockId) {
-				this.setPlayerVisibility(sceneObj);
-			}
-			// Check for block invisibility
-			if (block.invisible) {
-				sceneObj.visible = block.getVisibilityTo(viewingBlob);
-			}
-			if (block.light) {
-				const [intensity, distance] = block.light;
-				const pointLight = new PointLight(0xb4b0dd, intensity, distance * blockSize);
-				pointLight.translateZ(LIGHT_OFFSET);
-				sceneObj.add(pointLight);
-				window.torch = sceneObj;
-			}
-			if (group) group.add(sceneObj);
-			else this.scene.add(sceneObj);
-		} else {
-			console.warn('No scene object to render');
+		if (!sceneObj) {
+			console.warn('No scene object to add!');
+			return;
 		}
+		sceneObj.name = block.name || block.texture || block.renderAs;
+		this.blockSceneObjectMapping[block.blockId] = sceneObj;
+		sceneObj.position.copy(this.getBlockGoalPosition(block));
+		// Hide the current main character
+		// const viewingBlob = this.getMainPlayer();
+		if (block.isPlayerBlob && viewingBlob.blockId === block.blockId) {
+			this.setPlayerVisibility(sceneObj);
+		}
+		// Check for block invisibility
+		if (block.invisible) {
+			sceneObj.visible = block.getVisibilityTo(viewingBlob);
+		}
+		if (block.light) {
+			const [intensity, distance] = block.light;
+			const pointLight = new PointLight(0xb4b0dd, intensity, distance * blockSize);
+			pointLight.translateZ(LIGHT_OFFSET);
+			sceneObj.add(pointLight);
+			window.torch = sceneObj;
+		}
+		// Add the block to the scene (via a group)
+		block.sceneUUID = sceneObj.uuid;
+		this.getBlockGroup(block, viewZ).add(sceneObj);
 	}
 
 	makeCamera() { // eslint-disable-line class-methods-use-this
@@ -52841,6 +52871,18 @@ class BlockScene {
 		// const sphereSize = 1;
 		// const pointLightHelper = new THREE.PointLightHelper(pointLight, sphereSize);
 		// this.scene.add(pointLightHelper);
+	}
+
+	updateBlock(block, viewZ, t = 0.1) {
+		if (block.remove) {
+			this.removeMapBlock(block, viewZ);
+		}
+		if (block.redraw) {
+			this.removeMapBlock(block, viewZ);
+			this.addMapBlock(block, null, viewZ);
+			block.redraw = false; // eslint-disable-line no-param-reassign
+		}
+		this.updateBlockPosition(block, t);
 	}
 
 	updateBlockPosition(block, t = 0.1) {
@@ -52900,7 +52942,7 @@ class BlockScene {
 		// this.camera.lookAt(this.lookCurrent);
 	}
 
-	render({ focus, facing, t = 0.1, blocks }) { // Just render the three js scene
+	render({ focus, facing, t = 0.1, blocks, viewZ }) { // Just render the three js scene
 		if (focus instanceof Vector3) {
 			this.updateCamera(focus, facing, t);
 		} else if (focus instanceof Array) {
@@ -52908,7 +52950,7 @@ class BlockScene {
 			this.updateCamera(focusVec3, facing, t);
 		}
 		if (blocks) {
-			blocks.forEach((block) => this.updateBlockPosition(block));
+			blocks.forEach((block) => this.updateBlock(block, viewZ, t));
 		}
 		this.blocksAboveGroup.visible = !this.mapView;
 		this.renderer.render(this.scene, this.camera);
@@ -53044,15 +53086,18 @@ class DungeonCrawlerGame {
 			...this.getNpcs(),
 			mainBlob,
 		];
-		this.dungeonScene.render({ focus, facing, blocks, t: this.renderTime });
+		const [,, viewZ] = mainBlob.coords;
+		this.dungeonScene.render({ focus, facing, blocks, t: this.renderTime, viewZ });
 		requestAnimationFrame(() => this.animate());
 	}
 
 	/** Render everything */
 	render() {
 		const focus = this.getMainPlayer().getCoords();
-		const { facing } = this.getMainPlayer();
-		this.dungeonScene.render({ focus, facing });
+		const mainBlob = this.getMainPlayer();
+		const { facing } = mainBlob;
+		const [,, viewZ] = mainBlob.coords;
+		this.dungeonScene.render({ focus, facing, viewZ });
 		this.renderUI();
 	}
 
@@ -53239,7 +53284,7 @@ class DungeonCrawlerGame {
 				if (blob.getLeader().hp.belowMax()) {
 					this.sounds.play('heal');
 				}
-				// TODO: If no enemy nearby then heal up to max?
+				// TODO: If no enemy nearby then heal many rounds (up to max)
 				blob.waitHeal(1);
 			} else {
 				blob.waitHeal(1);
@@ -53340,15 +53385,9 @@ class DungeonCrawlerGame {
 		// ^ TODO: More efficient to do the planning while waiting for player input
 		this.doActorsCommands(npcs);
 		this.checkDeath();
-		let redraws = 0;
 		npcs.forEach((a) => {
 			a.checkDeath();
-			if (a.redraw) {
-				redraws += 1;
-				a.redraw = false; // eslint-disable-line no-param-reassign
-			}
 		});
-		if (redraws > 0) this.setupScene();
 		this.render();
 	}
 

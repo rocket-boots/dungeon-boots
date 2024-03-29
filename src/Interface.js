@@ -2,7 +2,10 @@
 import { ArrayCoords } from 'rocket-utility-belt';
 
 const POOL_ABBREV = {
-	hp: 'HP', willpower: 'W', balance: 'B', stamina: 'S',
+	hp: 'HP', willpower: 'WP', balance: 'Ba', stamina: 'St',
+};
+const POOL_CLASS = {
+	hp: 'hp', willpower: 'wp', balance: 'ba', stamina: 'st',
 };
 
 const $ = (selector, warn = true) => {
@@ -113,7 +116,10 @@ class Interface {
 		return Object.keys(poolObj).map((poolKey) => {
 			let value = poolObj[poolKey];
 			if (value instanceof Array) value = value.join('-');
-			return `${value} ${POOL_ABBREV[poolKey]}`;
+			return `${value}
+				<span class="pool-unit-${POOL_CLASS[poolKey]}">
+					${POOL_ABBREV[poolKey]}
+				</span>`;
 		}).join(', ');
 	}
 

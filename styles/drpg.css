@@ -291,6 +291,11 @@ button:active {
 .bar-list-item-ba .bar-delta-down { background-color: #faf; }
 .bar-list-item-ba:after { content: "Ba"; }
 
+.pool-unit-hp { color: var(--hp-color); }
+.pool-unit-st { color: var(--st-color); }
+.pool-unit-wp { color: var(--wp-color); }
+.pool-unit-ba { color: var(--ba-color); }
+
 
 #ui-target-info {
 	display: flex;

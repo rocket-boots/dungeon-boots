@@ -54,6 +54,8 @@ class BlockEntity {
 		// We want a small offset amount to stop overlaps when two blocks are on the same location
 		this.wiggle = [this.pRand.random(), this.pRand.random(), 0];
 		this.redraw = false; // Do we need to redraw the thing (likely due to a texture change)
+		this.sceneUUID = null; // Used to connect to the three.js mesh
+		this.remove = false; // a trigger to tell the renderer or game to remove this block
 	}
 
 	switchMap(mapKey) {
