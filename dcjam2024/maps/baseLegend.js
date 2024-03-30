@@ -3,14 +3,59 @@
 export const shipColor = [0.97, 0.98, 1];
 export const caveColor = [0.9, 0.9, 0.9];
 
+export const teleportDoor = {
+	name: 'Door',
+	blocked: 0,
+	renderAs: 'box',
+	texture: 'ship_door.png',
+	// soundOn: 'door',
+};
+
+export const monster = {
+	blocked: 1,
+	renderAs: 'billboard',
+	npc: 'monster',
+	faction: 'monsters',
+	aggro: 1,
+	hurtSound: 'monsterHurt',
+	deathSound: 'monsterHurt',
+};
+
+export const voice = {
+	name: 'The Voice',
+	blocked: 0,
+	renderAs: 'billboard',
+	faction: 'loyalist',
+	texture: 'voice.png',
+	light: [1, 2],
+	npc: 'still',
+	aggro: 0,
+	hp: 100,
+	damageScale: 0.15,
+	// trigger: { talk: true },
+};
+
+export const obstacle = {
+	blocked: 1,
+	renderAs: 'billboard',
+	npc: 'mindless',
+	aggro: 0,
+	hp: 10,
+	stamina: 0,
+	willpower: 0,
+	balance: 0,
+};
+
 export const baseLegend = {
 	' ': {
 		name: 'empty',
+		air: 1,
 		blocked: 0,
 		renderAs: false,
 	},
 	'.': {
 		name: 'void',
+		air: 1,
 		blocked: 1,
 		renderAs: false,
 	},
@@ -38,44 +83,89 @@ export const baseLegend = {
 		texture: 'cave.png',
 		// textureRange: [0, 3],
 	},
+	'(': {
+		name: 'cave-in rubble',
+		blocked: 1,
+		renderAs: 'box',
+		color: caveColor,
+		texture: 'cave_crack.png',
+		// textureRange: [0, 3],
+	},
 	'X': {
-		name: 'destrucible cave wall',
+		name: 'destructible cave wall',
 		blocked: 1,
 		renderAs: 'box',
 		npc: 'mindless',
 		color: caveColor,
 		texture: 'cave_crack.png',
 		// textureRange: [0, 3],
+		hp: 14,
+		stamina: 0,
+		willpower: 0,
+		balance: 0,
 	},
-};
-
-export const teleportDoor = {
-	name: 'teleport door',
-	blocked: 0,
-	renderAs: 'box',
-	texture: 'ship_door.png',
-	soundOn: 'door',
-};
-
-export const monster = {
-	blocked: 1,
-	renderAs: 'billboard',
-	npc: 'monster',
-	faction: 'monsters',
-	aggro: 1,
-};
-
-export const voice = {
-	name: 'The Voice',
-	blocked: 0,
-	renderAs: 'billboard',
-	faction: 'loyalist',
-	texture: 'voice.png',
-	light: [1, 2],
-	npc: 'still',
-	aggro: 0,
-	hp: 1000,
-	trigger: {
-		talk: true,
+	'x': {
+		name: 'destructible rubble',
+		blocked: 1,
+		renderAs: 'box',
+		npc: 'mindless',
+		color: caveColor,
+		texture: 'cave_crack.png',
+		// textureRange: [0, 3],
+		hp: 10,
+		stamina: 0,
+		willpower: 0,
+		balance: 0,
+	},
+	'p': {
+		name: 'Empty Reliqaury',
+		blocked: 1,
+		renderAs: 'billboard',
+		texture: 'pillar.png',
+	},
+	'P': {
+		name: 'Reliqaury',
+		blocked: 1,
+		renderAs: 'billboard',
+		texture: 'pillar_relic.png',
+		light: [1, 4],
+	},
+	'v': {
+		...obstacle,
+		name: 'Tentacle Vines',
+		texture: 'vines.png',
+		textureRange: [0, 1],
+		light: [0.5, 2],
+		hp: 5,
+	},
+	'W': {
+		...monster,
+		name: 'Star Worm',
+		texture: 'worm.png',
+		textureRange: [0, 1],
+		hurtSound: 'wormHurt',
+		deathSound: 'wormDead',
+	},
+	'B': {
+		...monster,
+		name: 'Monstrosity',
+		texture: 'skull_blob.png',
+		npc: 'still',
+		aggro: 1,
+		textureRange: [0, 1],
+	},
+	'b': {
+		...monster,
+		name: 'Monstrosity',
+		texture: 'skull_blob.png',
+		npc: 'still',
+		aggro: 0,
+		textureRange: [0, 1],
+	},
+	'C': {
+		...monster,
+		name: 'Foul Chomper',
+		texture: 'chomper.png',
+		// textureRange: [0, 3],
 	},
 };

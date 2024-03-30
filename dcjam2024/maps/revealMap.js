@@ -7,36 +7,81 @@ export default {
 	ambientLightIntensity: 0.4,
 	legend: {
 		...baseLegend,
-		'W': {
-			...monster,
-			name: 'star worm',
-			texture: 'chomper.png',
-			// textureRange: [0, 3],
-		},
 		'm': {
 			...monster,
-			name: 'monstrosity',
+			name: 'Monstrosity',
 			npc: 'still',
 			aggro: 0,
 			texture: 'skull_blob.png',
 			textureRange: [0, 1],
 		},
-		// Event Triggers
 		'1': {
 			...voice,
-			dialog: {},
+			dialog: {
+				following: {
+					q: 'Are you following me?',
+					a: 'I am always with you. For now at least. If you don\'t remember what you are, you\'ll need my help.',
+					unlocks: ['help'],
+				},
+				help: {
+					locked: true,
+					q: 'Help',
+					a: 'Just follow the caves, and look for weak spots in the walls where you can mine. Blast away!',
+				},
+				safe: {
+					q: 'Are these caves safe?',
+					a: 'Wild star worms carved these caves out. There are likely some still here, and they\'re not fond of being disturbed.',
+					unlocks: ['worms'],
+				},
+				worms: {
+					locked: true,
+					q: 'What can I do about the worms?',
+					a: 'Just do same thing you do to the cave walls: vaporize them.',
+					unlocks: ['help'],
+				},
+			},
 		},
 		'2': {
 			...voice,
-			dialog: {},
+			dialog: {
+				stone: {
+					q: 'Carved stones?!',
+					a: 'Yes, these carved stone walls mean we\'ve found the ruins.',
+					unlocks: ['ruins'],
+				},
+				ruins: {
+					locked: true,
+					q: 'You knew ruins were here?',
+					a: 'You did too, once... The ruins are ancient, maybe millions of years old; built by an ancient civilization.',
+					unlocks: ['else', 'civilization'],
+				},
+				civilization: {
+					locked: true,
+					q: 'What have they left behind?',
+					a: 'Whatever is here - whether relics or knowledge - Our King, The Endless Intellect, will want it.',
+					unlocks: ['mission'],
+				},
+				mission: {
+					locked: true,
+					q: 'Is exploring the ruins our true mission?',
+					a: 'You ask a lot of questions for someone like yourself, alone on this asteroid. Keep moving.',
+				},
+				else: {
+					locked: true,
+					q: 'What else are you not telling me?',
+					a: 'Keep searching, but keep your mind closed. You may find things you cannot comprehend here.',
+				},
+			},
 		},
 		'<': {
 			...teleportDoor,
+			name: 'Cave (Previous Level)',
+			texture: 'cavehole.png',
 			teleport: ['shipMap', 17, 6, 1, 0],
 		},
 		'>': {
 			...teleportDoor,
-			teleport: ['shipMap', 17, 6, 1, 0],
+			teleport: ['mazeMap', 7, 12, 1, 0],
 		},
 	},
 	map: [
@@ -58,18 +103,18 @@ export default {
 		],
 		[
 			'&<&&&&&&&#>#&&&&',
-			'& &&  X&#   ####',
-			'&  & &X%  m XX #',
-			'&  &  X%m      %',
+			'& &&  x&#   ####',
+			'&  & &X%  b xx #',
+			'&  &  X%b      %',
 			'& 1& &X%##### ##',
-			'& && &W&W&&&%X##',
-			'& &X &&WX  &% 2#',
+			'& && &W&W&&&%x##',
+			'& &X &&Wx  &% 2#',
 			'&     &&&&X&&  %',
 			'&&&&& &&&&   & &',
 			'&     &    & & &',
 			'&   &&&W   &X& &',
 			'&W  &&&&&&X& & &',
-			'&X  W  X XW& W &',
+			'&X  W  X xW& W &',
 			'&&&&&&&&&&&&&&&&',
 		],
 		[

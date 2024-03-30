@@ -1,8 +1,8 @@
 /* eslint-disable quote-props */
-import { shipColor, caveColor, teleportDoor, monster, voice, baseLegend } from './baseLegend.js';
+import { shipColor, caveColor, teleportDoor, voice, baseLegend } from './baseLegend.js';
 
 export default {
-	// music: 'forest',
+	music: 'songA',
 	// ambience: 'darkForest',
 	ambientLightIntensity: 0.4,
 	legend: {
@@ -15,7 +15,7 @@ export default {
 			texture: 'shipwall.png',
 			textureRange: [8, 15],
 		},
-		'W': {
+		'[': {
 			name: 'ship window',
 			blocked: 1,
 			renderAs: 'box',
@@ -38,6 +38,7 @@ export default {
 			texture: 'shipwall.png',
 			textureRange: [8, 15],
 			size: [0.75, 0.75, 1],
+			light: [0.2, 2],
 		},
 		'|': {
 			name: 'pipes',
@@ -71,45 +72,15 @@ export default {
 				outcome: { text: 'The door is unlocked somewhere else.' },
 				//
 			},
+			soundOn: 'shipDoor',
 		},
-		'&': {
+		'S': {
 			name: 'cave',
 			blocked: 1,
 			renderAs: 'box',
 			color: caveColor,
-			texture: 'cave.png',
-			// textureRange: [0, 3],
-		},
-		'S': {
-			name: 'secret cave',
-			blocked: 1,
-			renderAs: 'box',
-			color: caveColor,
 			texture: 'cave_crack.png',
 			// textureRange: [0, 3],
-		},
-		'X': {
-			name: 'destrucible cave wall',
-			blocked: 1,
-			renderAs: 'box',
-			npc: 'mindless',
-			color: caveColor,
-			texture: 'cave_crack.png',
-			// textureRange: [0, 3],
-		},
-		'C': {
-			...monster,
-			name: 'chomper',
-			texture: 'chomper.png',
-			// textureRange: [0, 3],
-		},
-		'B': {
-			...monster,
-			name: 'monstrosity',
-			npc: 'still',
-			aggro: 0,
-			texture: 'skull_blob.png',
-			textureRange: [0, 1],
 		},
 		// Event Triggers
 		'1': {
@@ -161,14 +132,20 @@ export default {
 				},
 				asteroid: {
 					locked: true,
-					q: 'So we\'re on an asteroid?',
+					q: 'We\'re on an asteroid?',
 					a: 'I\'ve docked with the asteroid, right onto a small cave dug out by a star worm. You can head out the door as soon as you\'re ready.',
 				},
 			},
 		},
 		'>': {
 			...teleportDoor,
+			name: 'Cave (Next Level)',
+			texture: 'cavehole.png',
 			teleport: ['revealMap', 1, 1, 1, 2],
+		},
+		'Z': {
+			...teleportDoor,
+			teleport: ['templeMap', 7, 12, 1, 0],
 		},
 	},
 	map: [
@@ -190,18 +167,18 @@ export default {
 		],
 		[
 			'            &&&&&& ',
-			' HWWWH    &&&  &&& ',
+			' H[[[H    &&&  &&& ',
 			'HH   HH  &&&     & ',
-			'H  1  H&&&&&  &  & ',
-			'H|   IH&&&&&  &XX& ',
-			'WB    +       &  &&',
+			'H  1  H&&&&&  &  &&',
+			'H|   IH&&Z&&  &XXX&',
+			'[     +       &  X&',
 			'H     H       &   &',
 			'H T T H&&&&&&S&&&>&',
 			'H H H H&& &&& && &&',
 			'H H|H H&&&&&& && &&',
 			'HHHHHHH &&&&& &&&&&',
 			' H   H   &&&& &&&&&',
-			'          &&&     +',
+			'          &&&Xv   &',
 			'           &&&&&&&&',
 		],
 		[

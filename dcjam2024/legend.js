@@ -4,7 +4,6 @@ const teleportDoor = {
 	blocked: 0,
 	renderAs: 'box',
 	texture: 'runed_door.png',
-	soundOn: 'door',
 };
 const forestDoor = {
 	name: 'forest path (door)',
