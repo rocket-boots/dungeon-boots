@@ -1,9 +1,10 @@
 import { SoundController } from '../build/dungeon-boots.esm.js';
 
-const SOUNDS_ROOT = './audio/sounds';
-const DIALOGUE_ROOT = './audio/dialogue';
-const MUSIC_ROOT = './audio/music';
-const AMB_ROOT = './audio/ambience';
+const ROOT = './audio';
+const SOUNDS_ROOT = `${ROOT}/sounds`;
+const DIALOGUE_ROOT = `${ROOT}/dialogue`;
+// const MUSIC_ROOT = `${ROOT}/music`;
+// const AMB_ROOT = `${ROOT}/ambience`;
 
 let i;
 const warriorBattleYell = [];
@@ -11,9 +12,40 @@ for (i = 1; i <= 44; i += 1) {
 	warriorBattleYell.push(`${DIALOGUE_ROOT}/Warrior Dialogue-0${i < 10 ? '0' : ''}${i}.wav`);
 }
 
-const soundsListing = {};
-/*
+const soundsListing = {
+	shipDoor: [
+		`${SOUNDS_ROOT}/ship-door0.mp3`,
+		`${SOUNDS_ROOT}/ship-door1.mp3`,
+	],
 	hit: [
+		`${SOUNDS_ROOT}/plasma0.mp3`,
+		`${SOUNDS_ROOT}/plasma1.mp3`,
+		`${SOUNDS_ROOT}/plasma2.mp3`,
+	],
+	dud: [
+		`${SOUNDS_ROOT}/dud0.mp3`,
+		`${SOUNDS_ROOT}/dud1.mp3`,
+	],
+	walk: [
+		`${SOUNDS_ROOT}/step0.mp3`,
+		`${SOUNDS_ROOT}/step1.mp3`,
+		`${SOUNDS_ROOT}/step2.mp3`,
+		`${SOUNDS_ROOT}/step3.mp3`,
+	],
+	monsterHurt: [
+		`${SOUNDS_ROOT}/monster0.mp3`,
+		`${SOUNDS_ROOT}/monster1.mp3`,
+		`${SOUNDS_ROOT}/monster2.mp3`,
+	],
+	wormHurt: [
+		`${SOUNDS_ROOT}/worm0.mp3`,
+		`${SOUNDS_ROOT}/worm1.mp3`,
+	],
+	wormDead: [
+		`${SOUNDS_ROOT}/worm-dead0.mp3`,
+		`${SOUNDS_ROOT}/worm-dead1.mp3`,
+	],
+	/*
 		`${SOUNDS_ROOT}/Main Weapon impact (axe or sword).wav`,
 		`${SOUNDS_ROOT}/Main Weapon impact (axe or sword)-001.wav`,
 		`${SOUNDS_ROOT}/Main Weapon impact (axe or sword)-002.wav`,
@@ -79,10 +111,11 @@ const soundsListing = {};
 		`${SOUNDS_ROOT}/Goblin Death_02.mp3`,
 		`${SOUNDS_ROOT}/Goblin Death_03.mp3`,
 	],
+	*/
 };
-*/
 
 const musicListing = {
+	// songA: `${MUSIC_ROOT}/songA.wav`,
 	// death: `${MUSIC_ROOT}/Dungeon_Crawler_Player_Death_Music.wav`,
 	// forest: `${MUSIC_ROOT}/Dungeon_Crawler_Forest_Exploration(Done).wav`,
 	// dungeon: `${MUSIC_ROOT}/Dungeo_Crawler_Dungeon_Music(Done).wav`,
