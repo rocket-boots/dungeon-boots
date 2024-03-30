@@ -22,3 +22,38 @@ button:active {
 	content: "]";
 	opacity: 0.4;
 }
+
+#title-screen {
+	padding: 1vmin;
+}
+.splash {
+	background-image: url("./images/vitv-title.png");
+	background-size: contain;
+	background-repeat: no-repeat;
+	/* min-width: 630px;
+	min-height: 500px; */
+	/* height: 70vh; */
+	display: flex;
+	flex-direction: column;
+	justify-content: space-between;
+}
+.splash h1 {
+	visibility: hidden;
+	height: calc(20vmin + 10vh);
+}
+
+.credits {
+	padding: 4vmin;
+	display: flex;
+	flex-direction: row;
+	justify-content: space-between;
+	gap: 4min;
+}
+.human-stamp {
+	background-image: url("./images/made-by-humans.png");
+	background-size: cover;
+	height: 20vmin;
+	width: 20vmin;
+	color: transparent;
+	transform: rotate(10deg);
+}

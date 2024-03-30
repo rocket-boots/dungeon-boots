@@ -4,7 +4,7 @@ import sounds from './sounds.js';
 import abilities from './abilities.js';
 
 const game = new DungeonCrawlerGame({
-	imageUrlRoot: '../images/cosmic',
+	imageUrlRoot: './images',
 	worldMaps,
 	abilities,
 	sounds,
@@ -12,20 +12,27 @@ const game = new DungeonCrawlerGame({
 	clearColor: '#161013',
 	renderTime: 0.2,
 	titleHtml: `
-		<h1 class="title-text" style="color: #363033">
-			Cosmic Horror Placeholder Title
-			<span style="font-size: 1rem">v1.0.0</span>
-		</h1>
-		<div class="title-credits">
-			<p>
-				Created in a week for Dungeon Crawler Jam 2024
-			</p>
-			<p>
-				By Luke (programming, artwork, UI, level design, voice acting)
-			</p>
-			<p>
-				💯%✋ Made By Humans - No AI
-			</p>
+		<div class="splash">
+			<h1>Voice in the Void</h1>
+			<div class="credits">
+				<div>
+					<p>
+						Created in a week for Dungeon Crawler Jam 2024
+						<br/>
+						Using the Dungeon Boots web framework
+					</p>
+					<p>
+						Programming, artwork, UI, level design, sound effects...<br/>
+						By Morph (Luke)
+					</p>
+					<p>
+						v1.0.0
+					</p>
+				</div>
+				<div class="human-stamp">
+					💯%✋ Made By Humans - No AI
+				</div>
+			</div>
 		</div>
 	`,
 });
