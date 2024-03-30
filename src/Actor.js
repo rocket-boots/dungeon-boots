@@ -7,7 +7,7 @@ class Actor {
 		this.isActor = true;
 		this.statPools = ['hp', 'stamina', 'willpower', 'balance'];
 		const poolMaxes = this.statPools.map((poolName) => (
-			blob[poolName] || DEFAULT_POOL_MAX
+			(typeof blob[poolName] === 'number') ? blob[poolName] : DEFAULT_POOL_MAX
 		));
 		this.statPools.forEach((poolName, i) => {
 			this[poolName] = new Pool(poolMaxes[i]);

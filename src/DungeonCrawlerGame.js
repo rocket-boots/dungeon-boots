@@ -119,8 +119,8 @@ class DungeonCrawlerGame {
 		const blob = this.getMainPlayer();
 		const mapKey = blob.getMapKey();
 		const worldMap = this.world.getMap(mapKey);
-		const facingActorBlob = blob.getFacingActor(worldMap, 3);
-		this.interface.render(blob, facingActorBlob);
+		const [facingBlock, range] = blob.getFacingBlockWithRange(worldMap, 3);
+		this.interface.render(blob, facingBlock);
 	}
 
 	animate() {
@@ -133,7 +133,13 @@ class DungeonCrawlerGame {
 			mainBlob,
 		];
 		const [,, viewZ] = mainBlob.coords;
-		this.dungeonScene.render({ focus, facing, blocks, t: this.renderTime, viewZ });
+		this.dungeonScene.render({
+			focus,
+			facing,
+			blocks,
+			t: this.renderTime,
+			viewZ,
+		});
 		requestAnimationFrame(() => this.animate());
 	}
 
@@ -286,12 +292,12 @@ class DungeonCrawlerGame {
 				} else {
 					this.sounds.play('hit');
 				}
-				this.sounds.play(blob.battleYell, { delay: 500, random: 0.4 });
+				// this.sounds.play(blob.battleYell, { delay: 500, random: 0.4 });
 				// const dmg = blob.getDamage();
 				// target.damage(dmg, 'hp');
 
 				const died = target.checkDeath();
-				const hurtSoundChance = (isMainPlayerGettingHit) ? 1 : 0.2;
+				const hurtSoundChance = (isMainPlayerGettingHit) ? 1 : 0.5;
 				if (died) this.sounds.play(target.deathSound, { delay: 100 });
 				else {
 					this.sounds.play(
@@ -374,9 +380,11 @@ class DungeonCrawlerGame {
 				return;
 			}
 			let moveToCoords = newCoords;
+			const blockSound = (block) ? block.soundOn || block.sound : null;
+			if (blockSound) this.sounds.play(blockSound);
+			else if (blob.isPlayerBlob) this.sounds.play('walk');
 			if (block && block.teleport) {
 				const [destMapKey, x, y, z, turn] = block.teleport;
-				this.sounds.play(block.soundTeleport || block.soundOn || block.sound);
 				moveToCoords = [x, y, z];
 				blob.turnTo(turn);
 				if (destMapKey !== mapKey) {
@@ -385,7 +393,6 @@ class DungeonCrawlerGame {
 			}
 			console.log('\t', blob.name, 'moving to', JSON.stringify(moveToCoords), block);
 			blob.moveTo(moveToCoords);
-			if (blob.isPlayerBlob) this.sounds.play('walk');
 			return;
 		}
 		console.log('Unknown command', command, 'from', blob.name || blob.blockId);

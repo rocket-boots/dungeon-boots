@@ -272,7 +272,7 @@ class Actor {
 		this.isActor = true;
 		this.statPools = ['hp', 'stamina', 'willpower', 'balance'];
 		const poolMaxes = this.statPools.map((poolName) => (
-			blob[poolName] || DEFAULT_POOL_MAX
+			(typeof blob[poolName] === 'number') ? blob[poolName] : DEFAULT_POOL_MAX
 		));
 		this.statPools.forEach((poolName, i) => {
 			this[poolName] = new Pool(poolMaxes[i]);
@@ -542,7 +542,7 @@ class ActorBlob extends BlockEntity {
 	}
 
 	checkFacingWall(worldMap) {
-		const aheadCoords = this.getAheadCoords();
+		const aheadCoords = this.getAheadCoords(1);
 		return worldMap.isBlockedAtCoords(aheadCoords);
 	}
 
@@ -562,11 +562,31 @@ class ActorBlob extends BlockEntity {
 			// console.warn('More than 1 actor ahead of', this.name,
 			// '. that probably should not happen', actorsAhead);
 			if (actorsAhead.length) return actorsAhead[0];
-			// If we ran into a blocked block, then don't look further
-			const blockedBlock = blocksAhead.find((b) => b.blocked);
+			// If we ran into a blocked block that isn't air, then don't look further
+			const blockedBlock = blocksAhead.find((b) => b.blocked && !b.air);
 			if (blockedBlock) return null;
 		}
 		return null;
+	}
+
+	getFacingBlockWithRange(worldMap, range = 3) {
+		for (let i = 1; i <= range; i += 1) {
+			const blocksAhead = this.getFacingBlocks(worldMap, i)
+				.filter((block) => (
+					block.getVisibilityTo(this)
+					&& !block.remove
+				))
+				// put living actors at the front of the list
+				// otherwise we can end up attacking corpses
+				.sort((a, b) => ((a.dead && !b.dead) ? 1 : -1));
+			// if (actorsAhead.length > 1)
+			// console.warn('More than 1 actor ahead of', this.name,
+			// '. that probably should not happen', actorsAhead);
+			// If we ran into a blocked block, then don't look further
+			const blockedBlock = blocksAhead.find((b) => b.blocked && !b.air);
+			if (blocksAhead.length || blockedBlock) return [blocksAhead[0], i];
+		}
+		return [null, range];
 	}
 
 	getKnownAbilities() {
@@ -1612,9 +1632,9 @@ class Interface {
 			html = 'Menu - Not implemented yet';
 		} else if (this.fullView === 'dead') {
 			html = `<div class="you-died">YOU DIED</div><p>💀</p>
-				Switch characters to continue ... or refresh the page to start over.
+				Refresh the page to start over.
 				<div class="dead-options">
-					<button type="button" data-command="switch next-player">Switch</button>
+					<!-- <button type="button" data-command="switch next-player">Switch</button> -->
 					<button type="button" data-command="reload page">Restart</button>
 				</div>
 			`;
@@ -1640,7 +1660,7 @@ class Interface {
 	}
 
 	getBlobBars(blob) {
-		if (!blob) return [];
+		if (!blob || !blob.isActorBlob) return [];
 		const leader = blob.getLeader();
 		const STYLE_KEYS = {
 			hp: 'hp',
@@ -1684,6 +1704,8 @@ class Interface {
 		];
 		bars.forEach((bar) => {
 			container.querySelectorAll(`.bar-list-item-${bar.styleKey}`).forEach((li) => {
+				// eslint-disable-next-line no-param-reassign
+				li.style.visibility = (bar.max > 0) ? 'visible' : 'hidden';
 				barSections.forEach(([selector, barPropName]) => {
 					// eslint-disable-next-line no-param-reassign
 					li.querySelector(selector).style.height = `${bar[barPropName]}%`;
@@ -1692,7 +1714,7 @@ class Interface {
 		});
 	}
 
-	renderDungeoneerRow(blob, facingActorBlob) {
+	renderDungeoneerRow(blob, facingBlock) {
 		let { dungeoneerView } = this;
 		if (this.fullView !== 'closed') dungeoneerView = 'closed';
 		const view = $$1('#ui-dungeoneer-row');
@@ -1700,12 +1722,12 @@ class Interface {
 		view.classList.add(`ui-view--${dungeoneerView}`);
 		if (dungeoneerView === 'closed') return;
 		$$1('#ui-direction-value').innerText = ArrayCoords.getDirectionName(blob.facing);
-		this.renderBars('target-stats', this.getBlobBars(facingActorBlob));
+		this.renderBars('target-stats', this.getBlobBars(facingBlock));
 		this.renderBars('player-stats', this.getBlobBars(blob));
-		$$1('#ui-target-name').innerText = (facingActorBlob) ? facingActorBlob.name : '';
-		$$1('#ui-target-mood').innerHTML = (facingActorBlob) ? (
-			`<span class="mood-emoji">${facingActorBlob.getMoodEmoji()}</span>
-			<span class="mood-text">${facingActorBlob.getMoodText()}</span>`
+		$$1('#ui-target-name').innerText = (facingBlock) ? facingBlock.name : '';
+		$$1('#ui-target-mood').innerHTML = (facingBlock && facingBlock.isActorBlob) ? (
+			`<span class="mood-emoji">${facingBlock.getMoodEmoji()}</span>
+			<span class="mood-text">${facingBlock.getMoodText()}</span>`
 		) : '';
 	}
 
@@ -1734,14 +1756,14 @@ class Interface {
 			</div>`;
 	}
 
-	render(blob, facingActorBlob) {
+	render(blob, facingBlock) {
 		this.renderTitle();
 		if (blob.dead) {
 			this.view('dead');
 		}
 		this.renderStaticRow();
-		this.renderInteract(blob, facingActorBlob);
-		this.renderDungeoneerRow(blob, facingActorBlob);
+		this.renderInteract(blob, facingBlock);
+		this.renderDungeoneerRow(blob, facingBlock);
 		this.renderOptions(blob);
 		this.renderFullView(blob);
 		this.renderStats(blob);
@@ -53082,8 +53104,8 @@ class DungeonCrawlerGame {
 		const blob = this.getMainPlayer();
 		const mapKey = blob.getMapKey();
 		const worldMap = this.world.getMap(mapKey);
-		const facingActorBlob = blob.getFacingActor(worldMap, 3);
-		this.interface.render(blob, facingActorBlob);
+		const [facingBlock, range] = blob.getFacingBlockWithRange(worldMap, 3);
+		this.interface.render(blob, facingBlock);
 	}
 
 	animate() {
@@ -53096,7 +53118,13 @@ class DungeonCrawlerGame {
 			mainBlob,
 		];
 		const [,, viewZ] = mainBlob.coords;
-		this.dungeonScene.render({ focus, facing, blocks, t: this.renderTime, viewZ });
+		this.dungeonScene.render({
+			focus,
+			facing,
+			blocks,
+			t: this.renderTime,
+			viewZ,
+		});
 		requestAnimationFrame(() => this.animate());
 	}
 
@@ -53249,12 +53277,12 @@ class DungeonCrawlerGame {
 				} else {
 					this.sounds.play('hit');
 				}
-				this.sounds.play(blob.battleYell, { delay: 500, random: 0.4 });
+				// this.sounds.play(blob.battleYell, { delay: 500, random: 0.4 });
 				// const dmg = blob.getDamage();
 				// target.damage(dmg, 'hp');
 
 				const died = target.checkDeath();
-				const hurtSoundChance = (isMainPlayerGettingHit) ? 1 : 0.2;
+				const hurtSoundChance = (isMainPlayerGettingHit) ? 1 : 0.5;
 				if (died) this.sounds.play(target.deathSound, { delay: 100 });
 				else {
 					this.sounds.play(
@@ -53337,9 +53365,11 @@ class DungeonCrawlerGame {
 				return;
 			}
 			let moveToCoords = newCoords;
+			const blockSound = (block) ? block.soundOn || block.sound : null;
+			if (blockSound) this.sounds.play(blockSound);
+			else if (blob.isPlayerBlob) this.sounds.play('walk');
 			if (block && block.teleport) {
 				const [destMapKey, x, y, z, turn] = block.teleport;
-				this.sounds.play(block.soundTeleport || block.soundOn || block.sound);
 				moveToCoords = [x, y, z];
 				blob.turnTo(turn);
 				if (destMapKey !== mapKey) {
@@ -53348,7 +53378,6 @@ class DungeonCrawlerGame {
 			}
 			console.log('\t', blob.name, 'moving to', JSON.stringify(moveToCoords), block);
 			blob.moveTo(moveToCoords);
-			if (blob.isPlayerBlob) this.sounds.play('walk');
 			return;
 		}
 		console.log('Unknown command', command, 'from', blob.name || blob.blockId);

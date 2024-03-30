@@ -110,7 +110,7 @@ class ActorBlob extends BlockEntity {
 	}
 
 	checkFacingWall(worldMap) {
-		const aheadCoords = this.getAheadCoords();
+		const aheadCoords = this.getAheadCoords(1);
 		return worldMap.isBlockedAtCoords(aheadCoords);
 	}
 
@@ -130,11 +130,31 @@ class ActorBlob extends BlockEntity {
 			// console.warn('More than 1 actor ahead of', this.name,
 			// '. that probably should not happen', actorsAhead);
 			if (actorsAhead.length) return actorsAhead[0];
-			// If we ran into a blocked block, then don't look further
-			const blockedBlock = blocksAhead.find((b) => b.blocked);
+			// If we ran into a blocked block that isn't air, then don't look further
+			const blockedBlock = blocksAhead.find((b) => b.blocked && !b.air);
 			if (blockedBlock) return null;
 		}
 		return null;
+	}
+
+	getFacingBlockWithRange(worldMap, range = 3) {
+		for (let i = 1; i <= range; i += 1) {
+			const blocksAhead = this.getFacingBlocks(worldMap, i)
+				.filter((block) => (
+					block.getVisibilityTo(this)
+					&& !block.remove
+				))
+				// put living actors at the front of the list
+				// otherwise we can end up attacking corpses
+				.sort((a, b) => ((a.dead && !b.dead) ? 1 : -1));
+			// if (actorsAhead.length > 1)
+			// console.warn('More than 1 actor ahead of', this.name,
+			// '. that probably should not happen', actorsAhead);
+			// If we ran into a blocked block, then don't look further
+			const blockedBlock = blocksAhead.find((b) => b.blocked && !b.air);
+			if (blocksAhead.length || blockedBlock) return [blocksAhead[0], i];
+		}
+		return [null, range];
 	}
 
 	getKnownAbilities() {

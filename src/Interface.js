@@ -243,9 +243,9 @@ class Interface {
 			html = 'Menu - Not implemented yet';
 		} else if (this.fullView === 'dead') {
 			html = `<div class="you-died">YOU DIED</div><p>💀</p>
-				Switch characters to continue ... or refresh the page to start over.
+				Refresh the page to start over.
 				<div class="dead-options">
-					<button type="button" data-command="switch next-player">Switch</button>
+					<!-- <button type="button" data-command="switch next-player">Switch</button> -->
 					<button type="button" data-command="reload page">Restart</button>
 				</div>
 			`;
@@ -271,7 +271,7 @@ class Interface {
 	}
 
 	getBlobBars(blob) {
-		if (!blob) return [];
+		if (!blob || !blob.isActorBlob) return [];
 		const leader = blob.getLeader();
 		const STYLE_KEYS = {
 			hp: 'hp',
@@ -315,6 +315,8 @@ class Interface {
 		];
 		bars.forEach((bar) => {
 			container.querySelectorAll(`.bar-list-item-${bar.styleKey}`).forEach((li) => {
+				// eslint-disable-next-line no-param-reassign
+				li.style.visibility = (bar.max > 0) ? 'visible' : 'hidden';
 				barSections.forEach(([selector, barPropName]) => {
 					// eslint-disable-next-line no-param-reassign
 					li.querySelector(selector).style.height = `${bar[barPropName]}%`;
@@ -323,7 +325,7 @@ class Interface {
 		});
 	}
 
-	renderDungeoneerRow(blob, facingActorBlob) {
+	renderDungeoneerRow(blob, facingBlock) {
 		let { dungeoneerView } = this;
 		if (this.fullView !== 'closed') dungeoneerView = 'closed';
 		const view = $('#ui-dungeoneer-row');
@@ -331,12 +333,12 @@ class Interface {
 		view.classList.add(`ui-view--${dungeoneerView}`);
 		if (dungeoneerView === 'closed') return;
 		$('#ui-direction-value').innerText = ArrayCoords.getDirectionName(blob.facing);
-		this.renderBars('target-stats', this.getBlobBars(facingActorBlob));
+		this.renderBars('target-stats', this.getBlobBars(facingBlock));
 		this.renderBars('player-stats', this.getBlobBars(blob));
-		$('#ui-target-name').innerText = (facingActorBlob) ? facingActorBlob.name : '';
-		$('#ui-target-mood').innerHTML = (facingActorBlob) ? (
-			`<span class="mood-emoji">${facingActorBlob.getMoodEmoji()}</span>
-			<span class="mood-text">${facingActorBlob.getMoodText()}</span>`
+		$('#ui-target-name').innerText = (facingBlock) ? facingBlock.name : '';
+		$('#ui-target-mood').innerHTML = (facingBlock && facingBlock.isActorBlob) ? (
+			`<span class="mood-emoji">${facingBlock.getMoodEmoji()}</span>
+			<span class="mood-text">${facingBlock.getMoodText()}</span>`
 		) : '';
 	}
 
@@ -365,14 +367,14 @@ class Interface {
 			</div>`;
 	}
 
-	render(blob, facingActorBlob) {
+	render(blob, facingBlock) {
 		this.renderTitle();
 		if (blob.dead) {
 			this.view('dead');
 		}
 		this.renderStaticRow();
-		this.renderInteract(blob, facingActorBlob);
-		this.renderDungeoneerRow(blob, facingActorBlob);
+		this.renderInteract(blob, facingBlock);
+		this.renderDungeoneerRow(blob, facingBlock);
 		this.renderOptions(blob);
 		this.renderFullView(blob);
 		this.renderStats(blob);
