@@ -46,32 +46,34 @@ export default {
 			renderAs: 'billboard',
 			color: shipColor,
 			texture: 'pipes.png',
-			interact: {
-				outcome: {
-					text: 'You turn the wheel and you hear gears clank throughout the ship. The door is now unlocked.',
-					blockChange: { id: 'ship-door', blocked: 0 },
-				},
-			},
 		},
 		'I': {
-			name: 'pipes',
+			name: 'Release Wheel',
 			blocked: 1,
 			renderAs: 'billboard',
 			color: shipColor,
 			texture: 'pipes_wheel.png',
+			interact: {
+				text: 'Unlock Door',
+				action: ['changeOther', 'ship-door', { name: 'Ship Door', blocked: 0 }],
+				// text: 'You turn the wheel and you hear gears clank throughout the ship.
+				// The door is now unlocked.',
+			},
 		},
 		'+': {
-			id: 'ship-door',
-			name: 'door',
-			blocked: 0,
+			legendId: 'ship-door',
+			name: 'Locked Ship Door',
+			blocked: 1,
 			renderAs: 'box',
 			color: shipColor,
 			texture: 'ship_door.png',
 			// textureRange: [0, 3],
-			interact: {
-				outcome: { text: 'The door is unlocked somewhere else.' },
-				//
-			},
+			// interact: {
+			// 	text: 'Unlock',
+			// 	actions: [
+			// 		['change', { interact: null, blocked: 0 }],
+			// 	],
+			// },
 			soundOn: 'shipDoor',
 		},
 		'S': {
@@ -85,6 +87,7 @@ export default {
 		// Event Triggers
 		'1': {
 			...voice,
+			interact: 'talk',
 			dialog: {
 				where: {
 					q: 'Where am I?',
@@ -170,7 +173,7 @@ export default {
 			' H[[[H    &&&  &&& ',
 			'HH   HH  &&&     & ',
 			'H  1  H&&&&&  &  &&',
-			'H|   IH&&Z&&  &XXX&',
+			'H|   IH&&&&&  &XXX&',
 			'[     +       &  X&',
 			'H     H       &   &',
 			'H T T H&&&&&&S&&&>&',

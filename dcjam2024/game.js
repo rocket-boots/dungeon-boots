@@ -35,6 +35,35 @@ const game = new DungeonCrawlerGame({
 			</div>
 		</div>
 	`,
+	roundHook(g) { // Check for win state
+		const blob = g.getMainPlayer();
+		const mapKey = blob.getMapKey();
+		const worldMap = g.world.getMap(mapKey);
+		if (worldMap.mapKey !== 'returnMap') return;
+		if (blob.coords[0] === 5 && blob.coords[1] === 5 && blob.getInventoryItemByKey('relic')) {
+			document.getElementById('main').innerHTML = `
+				<div class="win">
+					<p>You place the relic in the ship.</p>
+					<p>The Voice instructs you: "The docking process has us wedged into the
+					asteroid. Go into the tunnel and loosen the stone."
+					</p>
+					<p>Once out of the ship, you hear the Voice again: "Our King, The Endless
+					Intellect, thanks you for your service. You have shown yourself to be more
+					than a simple automaton. But now that you are awake, it is too risky to take
+					you along for the return trip. You may guard these ruins now. For eternity."
+					</p>
+					<p>The ship undocks from the asteroid and drifts away. The engines engage
+					and it vanishes.
+					</p>
+					<p>You look down at your hands, metallic and cold. As a machine, you realize
+					you will not die. Yet there will be no rescue.</p>
+					<p>You stare off into the dark Void of space...</p>
+					<h1>The End</h1>
+				</div>
+			`;
+			g.stop();
+		}
+	},
 });
 
 window.document.addEventListener('DOMContentLoaded', () => {
@@ -45,16 +74,14 @@ window.document.addEventListener('DOMContentLoaded', () => {
 			texture: 'you.png',
 			battleYell: 'warriorBattleYell',
 			hurtSound: 'hurt',
-			hp: 30,
+			hp: 50,
 			stamina: 10,
 			willpower: 10,
 			balance: 10,
 			facing: 0,
 			faction: 'explorers',
 			light: [1, 4],
-			dialog: {
-				// hi: 'Stay out of my way while I crush all these vile vermin!',
-			},
+			dialog: {},
 			inventory: [{
 				key: 'plasmaRifle',
 				name: 'Cosmoplasma mining rifle',
@@ -67,51 +94,12 @@ window.document.addEventListener('DOMContentLoaded', () => {
 				familiar in your grasp. Maybe you were a miner.
 				<hr style="margin: 1em 0" />`
 			),
-			death: { // TODO: This is not making it onto the character's blob
-				// dialog: {
-				// 	hi: {
-				// 		q: 'You still survive?',
-				// 		a: 'Save me! Heal me... I need to kill more...',
-				// 	},
-				// },
-			},
+			death: {},
 			abilities: [
-				'steadyShot', 'wildShot', 'aim', 'overload', 'bash', 'op',
+				'steadyShot', 'wildShot', 'aim', 'overload', 'bash', // , 'op',
 			],
 		},
 	);
-	// window.pc = game.makeNewPlayer(
-	// 	['town', 17, 9, 1],
-	// 	{
-	// 		name: 'Warmthistle',
-	// 		texture: 'human_new.png',
-	// 		hurtSound: 'hurt',
-	// 		willpower: 20,
-	// 		facing: 3,
-	// 		faction: 'neutral',
-	// 		dialog: {
-	// 			hi: { a: 'I came to Wretchhold because I sensed violence was near.', unlocks: 'wretchhold' },
-	// 			name: 'I am known as Warmthistle.',
-	// 			wretchhold: { a: 'Do the people of Wretchhold deserve to die?', locked: true },
-	// 		},
-	// 		inventory: [{
-	// 			key: 'ghostMask',
-	// 			name: 'Ghost Mask',
-	// 			description: 'It allows you to see and speak with ghosts.',
-	// 		}],
-	// 		characterSheetIntroHtml: (
-	// 			`<img src="./images/Druid_Portrait.jpeg" class="character-sheet-portrait" />
-	// 			Warmthistle, a young man in appearance, is a
-	// 			fragment of the great and ancient pattern of the forest, a song whispered by the
-	// 			wind in the leaves.
-	// 			This druid watches, with benevolent but detched curiosity,
-	// 			the comings and goings of the hot-blooded short-lived things - and sometimes, if the
-	// 			moment seems worthy, chooses to play a part in their stories.
-	// 			<hr style="margin: 1em 0" />`
-	// 		),
-	// 		abilities: ['hack', 'swift', 'reprise', 'heal', 'heal2'],
-	// 	},
-	// );
 	game.start(0);
 	window.game = game;
 	window.g = game;

@@ -11,6 +11,7 @@ import BlockScene from './BlockScene.js';
 const DEFAULT_ABILITY_KEY = 'hack';
 const WORLD_VOXEL_LIMITS = [64, 64, 12];
 const DEFAULT_RENDER_TIME = 0.15; // Higher: faster, lower: slower
+const NOOP = () => {};
 
 const KB_MAPPING = {
 	w: 'forward',
@@ -24,6 +25,7 @@ const KB_MAPPING = {
 	f: 'combat',
 	t: 'talk',
 	i: 'inventory',
+	r: 'interact',
 	v: 'view character',
 	b: 'view abilities',
 	g: 'view spells',
@@ -78,6 +80,7 @@ class DungeonCrawlerGame {
 			clearColor: options.clearColor,
 			imageUrlRoot: options.imageUrlRoot,
 		});
+		this.roundHook = options.roundHook || NOOP;
 	}
 
 	/** The main player is the active player (allows ability to pass-and-play and multiple player) */
@@ -120,7 +123,7 @@ class DungeonCrawlerGame {
 		const mapKey = blob.getMapKey();
 		const worldMap = this.world.getMap(mapKey);
 		const [facingBlock, range] = blob.getFacingBlockWithRange(worldMap, 3);
-		this.interface.render(blob, facingBlock);
+		this.interface.render(blob, facingBlock, range);
 	}
 
 	animate() {
@@ -129,7 +132,8 @@ class DungeonCrawlerGame {
 		const focus = mainBlob.getCoords();
 		const { facing } = mainBlob;
 		const blocks = [ // Blocks to update the position of
-			...this.getNpcs(),
+			// ...this.getNpcs(),
+			...this.getMainPlayerMap().getRenderBlocks(),
 			mainBlob,
 		];
 		const [,, viewZ] = mainBlob.coords;
@@ -259,6 +263,33 @@ class DungeonCrawlerGame {
 		this.render();
 	}
 
+	doInteraction(blob, worldMap) {
+		const [facingBlock, range] = blob.getFacingBlockWithRange(worldMap, blob.maxInteractRange);
+		const { interact } = facingBlock;
+		if (!interact || range > interact.range) {
+			this.sounds.play('dud');
+			return;
+		}
+		interact.actions.forEach((actionArr) => {
+			const [actionVerb, what] = actionArr;
+			if (actionVerb === 'command') {
+				this.handleInputCommand(what);
+			} else if (actionVerb === 'give') {
+				blob.addInventoryItem(what);
+			} else if (actionVerb === 'replace') { // TODO: Fix this (WIP)
+				worldMap.replaceBlock(facingBlock, what);
+				// TODO: Redraw scene?
+			} else if (actionVerb === 'change') {
+				facingBlock.change(what);
+				// this.setupScene(); // TODO: Figure out why the block isn't being redrawn,
+			} else if (actionVerb === 'changeOther') {
+				const otherBlock = worldMap.findBlockByLegendId(what);
+				const [,, changes] = actionArr;
+				otherBlock.change(changes);
+			}
+		});
+	}
+
 	doActorCommand(blob, command) {
 		if (!command) return;
 		const mainBlob = this.getMainPlayer();
@@ -329,6 +360,10 @@ class DungeonCrawlerGame {
 			blob.listenToDialog(dialogOptions[commandIndex], target);
 			this.interface.talkOptions = this.calculateTalkOptions(blob);
 			blob.passiveHeal(1);
+			return;
+		}
+		if (command === 'interact') {
+			this.doInteraction(blob, worldMap);
 			return;
 		}
 		if (command === 'wait') {
@@ -441,6 +476,7 @@ class DungeonCrawlerGame {
 		npcs.forEach((a) => {
 			a.checkDeath();
 		});
+		this.roundHook(this);
 		this.render();
 	}
 

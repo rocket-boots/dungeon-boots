@@ -77,6 +77,11 @@ class VoxelWorldMap {
 		return (this.getBlockedSumAtCoords(coords) >= 1);
 	}
 
+	/** Get blocks that we're likely to want to redraw/re-render */
+	getRenderBlocks() {
+		return this.blocks.filter((block) => block.isNpcBlob || block.redraw);
+	}
+
 	getNpcs() {
 		return this.blocks.filter((block) => block.isNpcBlob);
 	}
@@ -85,8 +90,12 @@ class VoxelWorldMap {
 		return this.blocks.filter((block) => block.isPlayerBlob);
 	}
 
+	findBlockByLegendId(legendId) {
+		return this.blocks.find((block) => block.legendId === legendId);
+	}
+
 	findBlock(block) {
-		const i = this.foundBlockIndex(block);
+		const i = this.findBlockIndex(block);
 		return (i === -1) ? null : this.blocks[i];
 	}
 
@@ -112,10 +121,17 @@ class VoxelWorldMap {
 	}
 
 	removeBlock(block) {
+		// block.remove = true;
 		const i = this.findBlockIndex(block);
 		if (i === -1) return false;
 		this.blocks.splice(i, 1);
 		return true;
+	}
+
+	replaceBlock(block, legendKey) {
+		this.removeBlock(block);
+		console.warn('Not implemented', legendKey);
+		// TODO: addBlock by creating new block based on legendKey
 	}
 }
 

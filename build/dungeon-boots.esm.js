@@ -337,14 +337,7 @@ class BlockEntity {
 		this.tags = [];
 		this.size = [1, 1, 1];
 		this.blockId = Random.uniqueString();
-		// Add all properties from legend
-		Object.keys(blockLegend).forEach((key) => {
-			if (typeof blockLegend[key] === 'object') {
-				this[key] = clone(blockLegend[key]);
-				return;
-			}
-			this[key] = blockLegend[key];
-		});
+		this.addPropertiesFromLegend(blockLegend); // Add all properties from legend
 		// this.name = blockLegend.name;
 		// this.renderAs = blockLegend.renderAs;
 		// this.texture = blockLegend.texture;
@@ -375,6 +368,23 @@ class BlockEntity {
 		this.redraw = false; // Do we need to redraw the thing (likely due to a texture change)
 		this.sceneUUID = null; // Used to connect to the three.js mesh
 		this.remove = false; // a trigger to tell the renderer or game to remove this block
+		// Standardize the interact object (if it exists)
+		this.standardizeInteractObject();
+	}
+
+	standardizeInteractObject() {
+		if (typeof this.interact === 'string') {
+			this.interact = {
+				text: this.interact,
+				command: this.interact,
+			};
+		}
+		if (typeof this.interact !== 'object' || !this.interact) return;
+		const { range, actions, action, command } = this.interact;
+		if (typeof range !== 'number') this.interact.range = 1;
+		if (!actions) this.interact.actions = [];
+		if (action) this.interact.actions.push(action);
+		if (command) this.interact.actions.push(['command', command]);
 	}
 
 	switchMap(mapKey) {
@@ -433,6 +443,21 @@ class BlockEntity {
 		}
 		return false;
 	}
+
+	addPropertiesFromLegend(blockLegend) {
+		Object.keys(blockLegend).forEach((key) => {
+			if (typeof blockLegend[key] === 'object') {
+				this[key] = clone(blockLegend[key]);
+				return;
+			}
+			this[key] = blockLegend[key];
+		});
+	}
+
+	change(blockLegend = {}) {
+		this.addPropertiesFromLegend(blockLegend);
+		this.redraw = true;
+	}
 }
 
 const MAX_COMMAND_QUEUE_SIZE = 1;
@@ -454,7 +479,7 @@ class ActorBlob extends BlockEntity {
 		this.ready = false; // Ready for next turn?
 		this.commandQueue = [];
 		this.blobId = Random.uniqueString();
-		this.inventory = [null, null, null, null, null, null];
+		this.inventory = []; // [null, null, null, null, null, null];
 		if (blockLegend.inventory) this.setInventory(blockLegend.inventory);
 		// Update defaults for some actor-specific legend properties
 		if (typeof this.aggro !== 'number') this.aggro = 0;
@@ -465,6 +490,7 @@ class ActorBlob extends BlockEntity {
 			new Actor(this),
 		];
 		this.maxCombatRange = 5;
+		this.maxInteractRange = 5;
 	}
 
 	clearLastRound() {
@@ -827,6 +853,19 @@ class ActorBlob extends BlockEntity {
 	getInventoryItem(i) {
 		return this.inventory[i];
 	}
+
+	addInventoryItem(obj) {
+		if (!obj) return;
+		this.inventory.push({
+			key: Number(new Date()), // Fallback
+			name: 'Thing', // Default
+			...obj,
+		});
+	}
+
+	getInventoryItemByKey(key) {
+		return this.inventory.find((item) => item.key === key);
+	}
 }
 
 class Observer {
@@ -1163,6 +1202,11 @@ class VoxelWorldMap {
 		return (this.getBlockedSumAtCoords(coords) >= 1);
 	}
 
+	/** Get blocks that we're likely to want to redraw/re-render */
+	getRenderBlocks() {
+		return this.blocks.filter((block) => block.isNpcBlob || block.redraw);
+	}
+
 	getNpcs() {
 		return this.blocks.filter((block) => block.isNpcBlob);
 	}
@@ -1171,8 +1215,12 @@ class VoxelWorldMap {
 		return this.blocks.filter((block) => block.isPlayerBlob);
 	}
 
+	findBlockByLegendId(legendId) {
+		return this.blocks.find((block) => block.legendId === legendId);
+	}
+
 	findBlock(block) {
-		const i = this.foundBlockIndex(block);
+		const i = this.findBlockIndex(block);
 		return (i === -1) ? null : this.blocks[i];
 	}
 
@@ -1198,10 +1246,17 @@ class VoxelWorldMap {
 	}
 
 	removeBlock(block) {
+		// block.remove = true;
 		const i = this.findBlockIndex(block);
 		if (i === -1) return false;
 		this.blocks.splice(i, 1);
 		return true;
+	}
+
+	replaceBlock(block, legendKey) {
+		this.removeBlock(block);
+		console.warn('Not implemented', legendKey);
+		// TODO: addBlock by creating new block based on legendKey
 	}
 }
 
@@ -1392,6 +1447,7 @@ class VoxelWorld {
 
 /* eslint-disable class-methods-use-this */
 
+const POOL_NAMES = ['hp', 'willpower', 'stamina', 'balance'];
 const POOL_ABBREV = {
 	hp: 'HP', willpower: 'WP', balance: 'Ba', stamina: 'St',
 };
@@ -1598,7 +1654,7 @@ class Interface {
 			html = `<h1>Spells</h1>${html}`;
 		} else if (this.fullView === 'character') {
 			html = (
-				`<h1>Character</h1>
+				`<h1>${blob.name || 'Character'}</h1>
 				<div class="character-sheet-intro">
 					${blob.characterSheetIntroHtml || ''}
 				</div>
@@ -1621,6 +1677,8 @@ class Interface {
 					</li>
 				</ul>
 				<div>
+					<button type="button" data-command="inventory">Inventory <i class="key">i</i></button>
+					<button type="button" data-command="map">Map <i class="key">m</i></button>
 					<button type="button" class="ui-close-button" data-command="view character">
 						Close <i class="key">v</i>
 					</button>
@@ -1644,7 +1702,7 @@ class Interface {
 
 	renderStats(blob) {
 		const leader = blob.getLeader();
-		['hp', 'willpower', 'stamina', 'balance'].forEach((key) => {
+		POOL_NAMES.forEach((key) => {
 			const elt = $$1(`#${key}-value`, false);
 			if (!elt) return;
 			elt.innerText = leader[key].getText();
@@ -1731,10 +1789,31 @@ class Interface {
 		) : '';
 	}
 
-	renderInteract(blob, facingActorBlob) {
-		$$1('#ui-interact-view').style.display = (this.fullView === 'closed') ? 'flex' : 'none';
-		$$1('#ui-interact-view').innerHTML = (facingActorBlob && facingActorBlob.lastSpoken)
-			? `<div class="dialog-bubble">${facingActorBlob.lastSpoken}</div>` : '';
+	renderInteract(blob, facingActorBlob, range) {
+		let className = '';
+		if (this.fullView === 'closed') className = 'closed';
+		let interactHtml = '';
+		if (facingActorBlob) {
+			const { lastSpoken, interact } = facingActorBlob;
+			if (lastSpoken) {
+				className = 'dialog';
+				interactHtml = `<div class="dialog-bubble">${lastSpoken}</div>`;
+			} else if (interact) {
+				const interactText = interact.text || 'Interact';
+				className = 'interact';
+				if (range > interact.range) {
+					interactHtml = `(Too far to ${interactText})`;
+				} else {
+					interactHtml = `<button type="button" data-command="interact">
+							${interactText}
+							<span class="key">r</span>
+						</button>`;
+				}
+			}
+		}
+		const elt = $$1('#ui-interact-view');
+		elt.innerHTML = interactHtml;
+		elt.className = className;
 	}
 
 	renderStaticRow() {
@@ -1756,13 +1835,13 @@ class Interface {
 			</div>`;
 	}
 
-	render(blob, facingBlock) {
+	render(blob, facingBlock, range) {
 		this.renderTitle();
 		if (blob.dead) {
 			this.view('dead');
 		}
 		this.renderStaticRow();
-		this.renderInteract(blob, facingBlock);
+		this.renderInteract(blob, facingBlock, range);
 		this.renderDungeoneerRow(blob, facingBlock);
 		this.renderOptions(blob);
 		this.renderFullView(blob);
@@ -52996,6 +53075,7 @@ class BlockScene {
 const DEFAULT_ABILITY_KEY = 'hack';
 const WORLD_VOXEL_LIMITS = [64, 64, 12];
 const DEFAULT_RENDER_TIME = 0.15; // Higher: faster, lower: slower
+const NOOP$1 = () => {};
 
 const KB_MAPPING = {
 	w: 'forward',
@@ -53009,6 +53089,7 @@ const KB_MAPPING = {
 	f: 'combat',
 	t: 'talk',
 	i: 'inventory',
+	r: 'interact',
 	v: 'view character',
 	b: 'view abilities',
 	g: 'view spells',
@@ -53063,6 +53144,7 @@ class DungeonCrawlerGame {
 			clearColor: options.clearColor,
 			imageUrlRoot: options.imageUrlRoot,
 		});
+		this.roundHook = options.roundHook || NOOP$1;
 	}
 
 	/** The main player is the active player (allows ability to pass-and-play and multiple player) */
@@ -53105,7 +53187,7 @@ class DungeonCrawlerGame {
 		const mapKey = blob.getMapKey();
 		const worldMap = this.world.getMap(mapKey);
 		const [facingBlock, range] = blob.getFacingBlockWithRange(worldMap, 3);
-		this.interface.render(blob, facingBlock);
+		this.interface.render(blob, facingBlock, range);
 	}
 
 	animate() {
@@ -53114,7 +53196,8 @@ class DungeonCrawlerGame {
 		const focus = mainBlob.getCoords();
 		const { facing } = mainBlob;
 		const blocks = [ // Blocks to update the position of
-			...this.getNpcs(),
+			// ...this.getNpcs(),
+			...this.getMainPlayerMap().getRenderBlocks(),
 			mainBlob,
 		];
 		const [,, viewZ] = mainBlob.coords;
@@ -53244,6 +53327,33 @@ class DungeonCrawlerGame {
 		this.render();
 	}
 
+	doInteraction(blob, worldMap) {
+		const [facingBlock, range] = blob.getFacingBlockWithRange(worldMap, blob.maxInteractRange);
+		const { interact } = facingBlock;
+		if (!interact || range > interact.range) {
+			this.sounds.play('dud');
+			return;
+		}
+		interact.actions.forEach((actionArr) => {
+			const [actionVerb, what] = actionArr;
+			if (actionVerb === 'command') {
+				this.handleInputCommand(what);
+			} else if (actionVerb === 'give') {
+				blob.addInventoryItem(what);
+			} else if (actionVerb === 'replace') { // TODO: Fix this (WIP)
+				worldMap.replaceBlock(facingBlock, what);
+				// TODO: Redraw scene?
+			} else if (actionVerb === 'change') {
+				facingBlock.change(what);
+				// this.setupScene(); // TODO: Figure out why the block isn't being redrawn,
+			} else if (actionVerb === 'changeOther') {
+				const otherBlock = worldMap.findBlockByLegendId(what);
+				const [,, changes] = actionArr;
+				otherBlock.change(changes);
+			}
+		});
+	}
+
 	doActorCommand(blob, command) {
 		if (!command) return;
 		const mainBlob = this.getMainPlayer();
@@ -53314,6 +53424,10 @@ class DungeonCrawlerGame {
 			blob.listenToDialog(dialogOptions[commandIndex], target);
 			this.interface.talkOptions = this.calculateTalkOptions(blob);
 			blob.passiveHeal(1);
+			return;
+		}
+		if (command === 'interact') {
+			this.doInteraction(blob, worldMap);
 			return;
 		}
 		if (command === 'wait') {
@@ -53426,6 +53540,7 @@ class DungeonCrawlerGame {
 		npcs.forEach((a) => {
 			a.checkDeath();
 		});
+		this.roundHook(this);
 		this.render();
 	}
 

@@ -7,8 +7,14 @@ export const teleportDoor = {
 	name: 'Door',
 	blocked: 0,
 	renderAs: 'box',
-	texture: 'ship_door.png',
+	texture: 'door0.png',
 	// soundOn: 'door',
+};
+
+export const returnTeleportDoor = {
+	...teleportDoor,
+	name: 'Door (Previous Level)',
+	texture: 'door1.png',
 };
 
 export const monster = {
@@ -117,18 +123,32 @@ export const baseLegend = {
 		willpower: 0,
 		balance: 0,
 	},
-	'p': {
+	'r': {
 		name: 'Empty Reliqaury',
 		blocked: 1,
 		renderAs: 'billboard',
 		texture: 'pillar.png',
 	},
-	'P': {
+	'R': {
 		name: 'Reliqaury',
 		blocked: 1,
 		renderAs: 'billboard',
 		texture: 'pillar_relic.png',
 		light: [1, 4],
+		interact: {
+			text: 'Take relic',
+			// once: true,
+			actions: [
+				['give', { key: 'relic', name: 'The Codex of Humanity' }],
+				['change', {
+					name: 'Empty Reliquary',
+					texture: 'pillar.png',
+					interact: null,
+					light: null,
+				}],
+				// ['replace', 'r'],
+			],
+		},
 	},
 	'v': {
 		...obstacle,

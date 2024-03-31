@@ -1,5 +1,5 @@
 /* eslint-disable quote-props */
-import { teleportDoor, voice, baseLegend } from './baseLegend.js';
+import { teleportDoor, returnTeleportDoor, voice, baseLegend } from './baseLegend.js';
 
 export default {
 	// music: 'forest',
@@ -47,8 +47,7 @@ export default {
 			dialog: {},
 		},
 		'<': {
-			...teleportDoor,
-			name: 'Door (Previous Level)',
+			...returnTeleportDoor,
 			teleport: ['mazeMap', 7, 1, 1, 2],
 		},
 		'>': {
@@ -80,10 +79,10 @@ export default {
 			'% X           #',
 			'& %  #.....#  #',
 			'& #   .   .   #',
-			'& #   . P .   #',
+			'& #   . R .   #',
 			'& #   . b .   #',
 			'&x#  C.. ..C  #',
-			'&X#  #v   v#  #',
+			'& #  #v   v#  #',
 			'& #           #',
 			'& #           #',
 			'& ###### ######',

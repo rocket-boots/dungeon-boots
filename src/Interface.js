@@ -1,6 +1,7 @@
 /* eslint-disable class-methods-use-this */
 import { ArrayCoords } from 'rocket-utility-belt';
 
+const POOL_NAMES = ['hp', 'willpower', 'stamina', 'balance'];
 const POOL_ABBREV = {
 	hp: 'HP', willpower: 'WP', balance: 'Ba', stamina: 'St',
 };
@@ -209,7 +210,7 @@ class Interface {
 			html = `<h1>Spells</h1>${html}`;
 		} else if (this.fullView === 'character') {
 			html = (
-				`<h1>Character</h1>
+				`<h1>${blob.name || 'Character'}</h1>
 				<div class="character-sheet-intro">
 					${blob.characterSheetIntroHtml || ''}
 				</div>
@@ -232,6 +233,8 @@ class Interface {
 					</li>
 				</ul>
 				<div>
+					<button type="button" data-command="inventory">Inventory <i class="key">i</i></button>
+					<button type="button" data-command="map">Map <i class="key">m</i></button>
 					<button type="button" class="ui-close-button" data-command="view character">
 						Close <i class="key">v</i>
 					</button>
@@ -255,7 +258,7 @@ class Interface {
 
 	renderStats(blob) {
 		const leader = blob.getLeader();
-		['hp', 'willpower', 'stamina', 'balance'].forEach((key) => {
+		POOL_NAMES.forEach((key) => {
 			const elt = $(`#${key}-value`, false);
 			if (!elt) return;
 			elt.innerText = leader[key].getText();
@@ -342,10 +345,31 @@ class Interface {
 		) : '';
 	}
 
-	renderInteract(blob, facingActorBlob) {
-		$('#ui-interact-view').style.display = (this.fullView === 'closed') ? 'flex' : 'none';
-		$('#ui-interact-view').innerHTML = (facingActorBlob && facingActorBlob.lastSpoken)
-			? `<div class="dialog-bubble">${facingActorBlob.lastSpoken}</div>` : '';
+	renderInteract(blob, facingActorBlob, range) {
+		let className = '';
+		if (this.fullView === 'closed') className = 'closed';
+		let interactHtml = '';
+		if (facingActorBlob) {
+			const { lastSpoken, interact } = facingActorBlob;
+			if (lastSpoken) {
+				className = 'dialog';
+				interactHtml = `<div class="dialog-bubble">${lastSpoken}</div>`;
+			} else if (interact) {
+				const interactText = interact.text || 'Interact';
+				className = 'interact';
+				if (range > interact.range) {
+					interactHtml = `(Too far to ${interactText})`;
+				} else {
+					interactHtml = `<button type="button" data-command="interact">
+							${interactText}
+							<span class="key">r</span>
+						</button>`;
+				}
+			}
+		}
+		const elt = $('#ui-interact-view');
+		elt.innerHTML = interactHtml;
+		elt.className = className;
 	}
 
 	renderStaticRow() {
@@ -367,13 +391,13 @@ class Interface {
 			</div>`;
 	}
 
-	render(blob, facingBlock) {
+	render(blob, facingBlock, range) {
 		this.renderTitle();
 		if (blob.dead) {
 			this.view('dead');
 		}
 		this.renderStaticRow();
-		this.renderInteract(blob, facingBlock);
+		this.renderInteract(blob, facingBlock, range);
 		this.renderDungeoneerRow(blob, facingBlock);
 		this.renderOptions(blob);
 		this.renderFullView(blob);

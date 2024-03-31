@@ -25,6 +25,8 @@ button:active {
 
 #title-screen {
 	padding: 1vmin;
+	background: black;
+	box-shadow: 0 0 10vmin black;
 }
 .splash {
 	background-image: url("./images/vitv-title.png");
@@ -52,8 +54,15 @@ button:active {
 .human-stamp {
 	background-image: url("./images/made-by-humans.png");
 	background-size: cover;
-	height: 20vmin;
-	width: 20vmin;
+	height: 14vmin;
+	width: 14vmin;
+	margin-top: 2vmin;
 	color: transparent;
 	transform: rotate(10deg);
+}
+
+.win {
+	padding: 10vmin;
+	font-size: 110%;
+	background: rgba(0, 0, 0, 0.9);
 }

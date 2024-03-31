@@ -22,7 +22,7 @@ class ActorBlob extends BlockEntity {
 		this.ready = false; // Ready for next turn?
 		this.commandQueue = [];
 		this.blobId = Random.uniqueString();
-		this.inventory = [null, null, null, null, null, null];
+		this.inventory = []; // [null, null, null, null, null, null];
 		if (blockLegend.inventory) this.setInventory(blockLegend.inventory);
 		// Update defaults for some actor-specific legend properties
 		if (typeof this.aggro !== 'number') this.aggro = 0;
@@ -33,6 +33,7 @@ class ActorBlob extends BlockEntity {
 			new Actor(this),
 		];
 		this.maxCombatRange = 5;
+		this.maxInteractRange = 5;
 	}
 
 	clearLastRound() {
@@ -394,6 +395,19 @@ class ActorBlob extends BlockEntity {
 
 	getInventoryItem(i) {
 		return this.inventory[i];
+	}
+
+	addInventoryItem(obj) {
+		if (!obj) return;
+		this.inventory.push({
+			key: Number(new Date()), // Fallback
+			name: 'Thing', // Default
+			...obj,
+		});
+	}
+
+	getInventoryItemByKey(key) {
+		return this.inventory.find((item) => item.key === key);
 	}
 }
 

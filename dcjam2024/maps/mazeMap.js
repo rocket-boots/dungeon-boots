@@ -1,5 +1,5 @@
 /* eslint-disable quote-props */
-import { teleportDoor, monster, voice, baseLegend } from './baseLegend.js';
+import { teleportDoor, returnTeleportDoor, monster, voice, baseLegend } from './baseLegend.js';
 
 export default {
 	// music: 'forest',
@@ -31,8 +31,7 @@ export default {
 			dialog: {},
 		},
 		'<': {
-			...teleportDoor,
-			name: 'Door (Previous Level)',
+			...returnTeleportDoor,
 			teleport: ['revealMap', 10, 1, 1, 2],
 		},
 		'>': {

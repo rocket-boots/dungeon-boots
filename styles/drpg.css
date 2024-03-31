@@ -316,8 +316,19 @@ button:active {
 }
 
 #ui-interact-view {
+	display: flex;
 	height: 50vh;
+	justify-content: center;
+	align-items: flex-start;
 }
+#ui-interact-view.dialog {
+	justify-content: flex-start;
+	align-items: stretch;
+}
+.closed {
+	display: none;
+}
+
 
 .dialog-bubble {
 	--dialog-border-color: rgba(255, 255, 255, 0.5);

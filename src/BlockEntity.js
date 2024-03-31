@@ -18,14 +18,7 @@ class BlockEntity {
 		this.tags = [];
 		this.size = [1, 1, 1];
 		this.blockId = Random.uniqueString();
-		// Add all properties from legend
-		Object.keys(blockLegend).forEach((key) => {
-			if (typeof blockLegend[key] === 'object') {
-				this[key] = clone(blockLegend[key]);
-				return;
-			}
-			this[key] = blockLegend[key];
-		});
+		this.addPropertiesFromLegend(blockLegend); // Add all properties from legend
 		// this.name = blockLegend.name;
 		// this.renderAs = blockLegend.renderAs;
 		// this.texture = blockLegend.texture;
@@ -56,6 +49,23 @@ class BlockEntity {
 		this.redraw = false; // Do we need to redraw the thing (likely due to a texture change)
 		this.sceneUUID = null; // Used to connect to the three.js mesh
 		this.remove = false; // a trigger to tell the renderer or game to remove this block
+		// Standardize the interact object (if it exists)
+		this.standardizeInteractObject();
+	}
+
+	standardizeInteractObject() {
+		if (typeof this.interact === 'string') {
+			this.interact = {
+				text: this.interact,
+				command: this.interact,
+			};
+		}
+		if (typeof this.interact !== 'object' || !this.interact) return;
+		const { range, actions, action, command } = this.interact;
+		if (typeof range !== 'number') this.interact.range = 1;
+		if (!actions) this.interact.actions = [];
+		if (action) this.interact.actions.push(action);
+		if (command) this.interact.actions.push(['command', command]);
 	}
 
 	switchMap(mapKey) {
@@ -113,6 +123,21 @@ class BlockEntity {
 			return lookerBlob.hasOneOfTags(this.invisible);
 		}
 		return false;
+	}
+
+	addPropertiesFromLegend(blockLegend) {
+		Object.keys(blockLegend).forEach((key) => {
+			if (typeof blockLegend[key] === 'object') {
+				this[key] = clone(blockLegend[key]);
+				return;
+			}
+			this[key] = blockLegend[key];
+		});
+	}
+
+	change(blockLegend = {}) {
+		this.addPropertiesFromLegend(blockLegend);
+		this.redraw = true;
 	}
 }
 
